@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BEAUTY REF. Shop</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <nav class="nav-left">
+          <a href="#story" data-home-link>About</a>
+          <a href="#shop" data-home-link>Shop</a>
+          <a href="#categoryBar" data-home-link>Category</a>
+          <a href="#showroom" data-home-link>Showroom</a>
+        </nav>
+        <div class="logo" id="logoHome">BEAUTY<br />REF.</div>
+        <nav class="nav-right">
+          <a href="#review">Review</a>
+          <a href="#shop" data-home-link>Search</a>
+          <a href="#login">Login</a>
+          <button class="bag" id="bagButton" aria-label="장바구니 열기">
+            0
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="home-view" id="homeView">
+      <section class="hero" id="story">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <div class="hero-ambient" aria-hidden="true">
+              <img
+                src="https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1400&q=80"
+                alt=""
+              />
+              <img
+                src="https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1400&q=80"
+                alt=""
+              />
+              <img
+                src="https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=1400&q=80"
+                alt=""
+              />
+              <img
+                src="https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1400&q=80"
+                alt=""
+              />
+            </div>
+            <div class="hero-copy-content">
+              <div class="eyebrow">Beauty Commerce Collection</div>
+              <h1>Small<br />Beauty<br />Shop.</h1>
+              <p class="hero-text">
+                10개의 미용 제품만으로 구성한 감각적인 쇼핑몰 샘플입니다.
+                SleepDino처럼 미니멀한 헤더, 대담한 타이포그래피, 상품형 그리드,
+                고급스러운 상세 구매 페이지를 적용했습니다.
+              </p>
+            </div>
+            <div class="hero-bottom">
+              <div class="small-label">
+                Beauty device · Salon material · Cosmetics<br />
+                Click product card to open purchase page
+              </div>
+              <a class="primary-link" href="#shop">View Shop</a>
+            </div>
+          </div>
+          <div class="hero-visual">
+            <img
+              src="https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1600&q=80"
+              alt="감각적인 뷰티 제품 이미지"
+            />
+            <div class="visual-caption">
+              <span>Beauty edit</span>
+              <span>10 products</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-head" id="shop">
+        <h2>Products</h2>
+        <p>
+          미용기구, 미용재료, 화장품 카테고리로 상품을 분류했습니다. 상품을
+          클릭하면 구매 상세페이지로 이동합니다.
+        </p>
+      </section>
+
+      <section class="category-bar" id="categoryBar">
+        <div class="category-tabs">
+          <button class="category-btn is-active" data-category="all">
+            All
+          </button>
+          <button class="category-btn" data-category="미용기구">
+            미용기구
+          </button>
+          <button class="category-btn" data-category="미용재료">
+            미용재료
+          </button>
+          <button class="category-btn" data-category="화장품">화장품</button>
+        </div>
+        <div class="category-count" id="categoryCount">
+          All products · 10 items
+        </div>
+      </section>
+
+      <section class="product-grid" id="productGrid"></section>
+
+      <section class="showroom" id="showroom">
+        <div class="showroom-image">
+          <img
+            src="https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1400&q=80"
+            alt="화이트톤 스킨케어 제품 이미지"
+          />
+        </div>
+        <div class="showroom-copy">
+          <div>
+            <div class="eyebrow">Showroom</div>
+            <h2>Routine<br />That Feels<br />Calm.</h2>
+          </div>
+          <div class="showroom-detail">
+            <div>
+              <strong>For Category</strong>
+              제품이 10개뿐이어도 미용기구, 미용재료, 화장품으로 나누면
+              전문몰처럼 보입니다.
+            </div>
+            <div>
+              <strong>For Purchase</strong>
+              상세페이지와 장바구니 패널을 연결해 실제 쇼핑몰처럼 탐색-구매
+              흐름을 만들었습니다.
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <main class="detail-view is-hidden" id="detailView"></main>
+
+    <div class="cart-overlay" id="cartOverlay"></div>
+    <aside class="cart-drawer">
+      <div class="cart-head">
+        <h2>Cart</h2>
+        <button class="cart-close" id="cartClose" aria-label="장바구니 닫기">
+          ×
+        </button>
+      </div>
+      <div class="cart-list" id="cartList"></div>
+      <div class="cart-summary" id="cartSummary"></div>
+    </aside>
+
+    <footer>
+      <div class="footer-inner">
+        <div>
+          CUSTOMER CENTER<br />Mon-Fri 10:00-17:00 · beautyref@example.com
+        </div>
+        <div>
+          Company : Your Beauty Brand<br />Copyright © 2026 BEAUTY REF. all
+          rights reserved
+        </div>
+      </div>
+    </footer>
+
+    <div class="toast" id="toast">장바구니에 상품이 담겼습니다.</div>
+    <script src="main.js"></script>
+  </body>
+</html>
