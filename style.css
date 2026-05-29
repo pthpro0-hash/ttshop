@@ -1076,6 +1076,58 @@ h1 {
   font-size: clamp(30px, 4vw, 54px);
   line-height: 1.05;
 }
+.management-view {
+  width: min(var(--max), calc(100% - 44px));
+  margin: 0 auto;
+  padding: 34px 0 84px;
+}
+.management-dashboard {
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+.management-head {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 520px);
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 22px;
+}
+.management-head p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.management-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.management-grid.compact {
+  margin-top: 16px;
+}
+.management-grid article {
+  min-height: 140px;
+  padding: 22px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.management-grid span {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.management-grid strong {
+  font-size: 24px;
+  line-height: 1.25;
+}
+.management-panel {
+  margin-top: 28px;
+}
 .cart-overlay {
   position: fixed;
   inset: 0;
@@ -1090,12 +1142,14 @@ h1 {
   z-index: 130;
   width: min(460px, 100vw);
   height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto 1fr auto;
   transform: translateX(100%);
   transition: 0.24s;
   background: var(--paper);
   border-left: 1px solid var(--ink);
+  overflow: hidden;
 }
 body.cart-open .cart-overlay {
   display: block;
@@ -1126,6 +1180,7 @@ body.cart-open .cart-drawer {
   cursor: pointer;
 }
 .cart-list {
+  min-height: 0;
   overflow: auto;
 }
 .order-list {
@@ -1349,6 +1404,9 @@ footer {
   .detail-content {
     grid-template-columns: 1fr;
   }
+  .management-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 @media (max-width: 760px) {
   .header-inner {
@@ -1423,6 +1481,13 @@ footer {
   }
   .auth-view {
     width: min(100% - 24px, var(--max));
+  }
+  .management-view {
+    width: min(100% - 24px, var(--max));
+  }
+  .management-head,
+  .management-grid {
+    grid-template-columns: 1fr;
   }
   .auth-brand,
   .auth-card {
