@@ -20,7 +20,7 @@ async function createDom() {
   const html = fs
     .readFileSync(path.join(root, "index.html"), "utf8")
     .replace(
-      /<script[\s\S]*?src="scripts\/app\.js\?v=20260529-admin-foundation"[\s\S]*?<\/script>/,
+      /<script[\s\S]*?src="scripts\/app\.js\?v=20260529-auth-management"[\s\S]*?<\/script>/,
       "",
     );
   const errors = [];
@@ -81,7 +81,7 @@ function click(window, element) {
 
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(html, /type="module"/);
-  assert.match(html, /src="scripts\/app\.js\?v=20260529-admin-foundation"/);
+  assert.match(html, /src="scripts\/app\.js\?v=20260529-auth-management"/);
   assert.match(html, /id="managementView"/);
 
   const { dom, errors } = await createDom();
@@ -92,11 +92,23 @@ function click(window, element) {
     10,
     "shop should render 10 products",
   );
+  assert.equal(
+    document.querySelectorAll(".site-header [data-management-link]").length,
+    0,
+    "management links should not be in the global header",
+  );
+
+  click(dom.window, document.querySelector("#loginLink"));
+  assert.equal(
+    document.querySelectorAll("#authView [data-management-link]").length,
+    3,
+    "management links should be inside the auth view",
+  );
 
   for (const [selector, expected] of [
-    ['[data-management-link="admin"]', "Admin Control"],
-    ['[data-management-link="agency"]', "Agency Desk"],
-    ['[data-management-link="member"]', "My Beauty"],
+    ['#authView [data-management-link="admin"]', "Admin Control"],
+    ['#authView [data-management-link="agency"]', "Agency Desk"],
+    ['#authView [data-management-link="member"]', "My Beauty"],
   ]) {
     click(dom.window, document.querySelector(selector));
     assert.match(
@@ -105,7 +117,11 @@ function click(window, element) {
     );
   }
 
-  click(dom.window, document.querySelector('[data-management-link="member"]'));
+  click(dom.window, document.querySelector("#loginLink"));
+  click(
+    dom.window,
+    document.querySelector('#authView [data-management-link="member"]'),
+  );
   const memberText = document.querySelector("#managementView").textContent;
   assert.doesNotMatch(
     memberText,

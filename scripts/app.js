@@ -42,9 +42,10 @@ document.querySelector("#loginLink").addEventListener("click", (event) => {
   auth.openAuth("login");
 });
 
-document.querySelectorAll("[data-management-link]").forEach((link) => {
-  link.addEventListener("click", (event) => {
-    event.preventDefault();
-    management.openManagement(link.dataset.managementLink);
-  });
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-management-link]");
+  if (!link) return;
+
+  event.preventDefault();
+  management.openManagement(link.dataset.managementLink);
 });

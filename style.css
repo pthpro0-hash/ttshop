@@ -1021,6 +1021,21 @@ h1 {
   background: #334eac;
   border-color: #334eac;
 }
+.auth-management {
+  display: flex;
+  justify-content: center;
+  gap: clamp(18px, 4vw, 36px);
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.auth-management a {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
 .auth-check {
   display: flex !important;
   align-items: center;

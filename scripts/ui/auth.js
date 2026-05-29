@@ -38,6 +38,7 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
         </div>
         <div class="auth-mode-label">${modeLabel[mode]}</div>
         ${createAuthPanel(mode)}
+        ${mode !== "complete" ? createManagementAccess() : ""}
       </section>
     </section>
   `;
@@ -140,6 +141,16 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
       <h2>가입/로그인이 완료되었습니다.</h2>
       <p>BEAUTY REF.의 상품과 장바구니, 결제 화면을 계속 둘러볼 수 있습니다.</p>
       <button class="buy-button auth-submit" id="authGoShop">Shop 보러가기</button>
+    </div>
+  `;
+  }
+
+  function createManagementAccess() {
+    return `
+    <div class="auth-management" aria-label="관리 메뉴">
+      <a href="#admin" data-management-link="admin">Admin</a>
+      <a href="#agency" data-management-link="agency">Agency</a>
+      <a href="#member" data-management-link="member">Member</a>
     </div>
   `;
   }
