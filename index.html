@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BEAUTY REF. Shop</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20260529-led-checkout" />
   </head>
   <body>
     <header class="site-header">
@@ -19,7 +19,7 @@
         <nav class="nav-right">
           <a href="#review">Review</a>
           <a href="#shop" data-home-link>Search</a>
-          <a href="#login">Login</a>
+          <a href="#login" id="loginLink">Login</a>
           <button class="bag" id="bagButton" aria-label="장바구니 열기">
             0
           </button>
@@ -136,6 +136,7 @@
     </main>
 
     <main class="detail-view is-hidden" id="detailView"></main>
+    <main class="auth-view is-hidden" id="authView"></main>
 
     <div class="cart-overlay" id="cartOverlay"></div>
     <aside class="cart-drawer">
@@ -162,6 +163,6 @@
     </footer>
 
     <div class="toast" id="toast">장바구니에 상품이 담겼습니다.</div>
-    <script src="main.js"></script>
+    <script src="main.js?v=20260529-led-checkout"></script>
   </body>
 </html>
