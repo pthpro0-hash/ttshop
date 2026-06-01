@@ -4,9 +4,15 @@ import {
   getProduct,
   products,
 } from "../data/catalog.js";
+import { completeBypassPayment } from "../domain/order-processing.js";
 import { formatMoney } from "../utils/format.js";
 
-export function createShopController(dom) {
+export function createShopController({
+  dom,
+  store,
+  persistStore,
+  requireLogin = () => true,
+}) {
   const state = {
     activeCategory: "all",
     cart: [],
@@ -129,8 +135,11 @@ export function createShopController(dom) {
       .querySelector("#addCart")
       .addEventListener("click", () => addToCart(product));
     document.querySelector("#buyNow").addEventListener("click", () => {
-      addToCart(product, "상품을 장바구니에 담고 주문 요약을 열었습니다.");
-      openCart();
+      if (
+        addToCart(product, "상품을 장바구니에 담고 주문 요약을 열었습니다.")
+      ) {
+        openCart();
+      }
     });
   }
 
@@ -175,6 +184,8 @@ export function createShopController(dom) {
   }
 
   function addToCart(product, message) {
+    if (!requireLogin()) return false;
+
     const quantity = getQuantity();
     const item = state.cart.find((cartItem) => cartItem.id === product.id);
 
@@ -188,6 +199,7 @@ export function createShopController(dom) {
     showToast(
       message || `${product.ko} ${quantity}개가 장바구니에 담겼습니다.`,
     );
+    return true;
   }
 
   function updateCart() {
@@ -240,6 +252,8 @@ export function createShopController(dom) {
   }
 
   function openCheckout() {
+    if (!requireLogin()) return;
+
     closeCart();
     const totals = getTotals();
 
@@ -301,9 +315,77 @@ export function createShopController(dom) {
       .addEventListener("click", openCart);
     document
       .querySelector("#finalPay")
-      .addEventListener("click", () =>
-        showToast("결제가 완료되는 샘플 액션입니다."),
-      );
+      .addEventListener("click", completeCheckoutBypass);
+  }
+
+  function completeCheckoutBypass() {
+    if (!requireLogin()) return;
+
+    if (!state.cart.length) {
+      showToast("장바구니에 상품을 먼저 담아주세요.");
+      return;
+    }
+
+    const result = completeBypassPayment({
+      cart: state.cart,
+      store,
+      payment: {
+        memberId: store.currentMemberId,
+        referralSourceType: "none",
+      },
+    });
+    state.cart = [];
+    persistStore(store);
+    updateCart();
+    openPaymentResult(result);
+    showToast(
+      `결제 완료: ${result.earnedPoints.toLocaleString("ko-KR")} 포인트가 적립되었습니다.`,
+    );
+  }
+
+  function openPaymentResult(result) {
+    dom.detail.innerHTML = `
+    <div class="breadcrumb">
+      <button class="back-button" id="backToShop">← Back to shop</button>
+      <span>Home / Checkout / Complete</span>
+    </div>
+    <section class="payment-result" id="paymentResult">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Payment bypass / Paid</div>
+          <h1 class="detail-title">Order<br />Complete.</h1>
+        </div>
+        <p>
+          PG 결제창은 우회 처리했고, 배송비를 제외한 실결제 상품금액 기준으로
+          포인트 적립과 대리점 정산 대기 장부를 생성했습니다.
+        </p>
+      </div>
+      <div class="management-grid">
+        <article><span>주문번호</span><strong>${result.order.id}</strong></article>
+        <article><span>실결제 상품금액</span><strong>${formatMoney(result.totals.paidProductAmount)}</strong></article>
+        <article><span>배송비</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "무료"}</strong></article>
+        <article><span>적립 포인트</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
+        <article><span>대리점 정산 기준</span><strong>${formatMoney(result.agencyProcessing?.baseAmount || 0)}</strong></article>
+        <article><span>영업비 예정</span><strong>${formatMoney(result.agencyProcessing?.commissionAmount || 0)}</strong></article>
+        <article><span>추천 링크 생성</span><strong>${result.referralLinks.length}개</strong></article>
+        <article><span>처리 상태</span><strong>완료</strong></article>
+      </div>
+      <div class="payment-process">
+        <div><strong>01 주문 생성</strong><span>${result.order.id} 주문을 paid 상태로 저장했습니다.</span></div>
+        <div><strong>02 포인트 적립</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}원 × ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
+        <div><strong>03 대리점 처리</strong><span>개인 추천링크 구매가 아니므로 ${result.agencyProcessing ? "대리점 정산 대기 장부에 반영했습니다." : "대리점 정산 대상에서 제외했습니다."}</span></div>
+        <div><strong>04 개인 추천링크</strong><span>구매 상품 수량 기준으로 ${result.referralLinks.length}개 링크를 생성했습니다.</span></div>
+      </div>
+      <div class="buy-actions result-actions">
+        <button class="buy-button" type="button" data-management-link="admin">Admin 처리 확인</button>
+        <button class="cart-button" type="button" data-management-link="agency">Agency 정산 확인</button>
+        <button class="cart-button" type="button" data-management-link="member">Member 포인트 확인</button>
+      </div>
+    </section>
+  `;
+
+    showDetailView();
+    document.querySelector("#backToShop").addEventListener("click", showHome);
   }
 
   function createCheckoutLedDetail() {
@@ -501,6 +583,7 @@ export function createShopController(dom) {
     openCart,
     closeCart,
     openCheckout,
+    completeCheckoutBypass,
     showHome,
     showToast,
     bindShopEvents,

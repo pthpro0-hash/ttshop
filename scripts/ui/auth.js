@@ -1,4 +1,12 @@
-export function createAuthController({ dom, showHome, closeCart, showToast }) {
+export function createAuthController({
+  dom,
+  store,
+  persistStore,
+  updateSessionUi = () => {},
+  showHome,
+  closeCart,
+  showToast,
+}) {
   function openAuth(mode = "login") {
     closeCart();
     dom.auth.innerHTML = createAuthView(mode);
@@ -77,6 +85,8 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
   }
 
   function createGeneralSignupPanel() {
+    const pendingAgency = getPendingAgency();
+
     return `
     <form class="auth-form" data-auth-form="signup">
       <label>아이디<input class="quantity-input" name="userId" placeholder="beauty_user" /></label>
@@ -84,10 +94,11 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
       <label>이름<input class="quantity-input" name="name" placeholder="홍길동" /></label>
       <label>휴대폰<input class="quantity-input" name="phone" placeholder="010-0000-0000" /></label>
       <label>이메일<input class="quantity-input" name="email" placeholder="beauty@example.com" /></label>
+      <label>대리점코드<input class="quantity-input" name="agencyCode" value="${pendingAgency?.code || ""}" placeholder="예: GNBEAUTY" /></label>
       ${createAddressFields()}
       <label class="auth-check"><input type="checkbox" checked /> 뷰티 혜택 및 첫 구매 쿠폰 안내 받기</label>
       <button class="buy-button auth-submit" type="submit">일반회원가입 완료</button>
-      <p class="auth-note">비밀번호는 데모 화면용 입력값이며 저장/인증 로직은 구현하지 않았습니다.</p>
+      <p class="auth-note">대리점코드가 없거나 일치하지 않으면 본사 대리점 고객으로 등록됩니다.</p>
     </form>
   `;
   }
@@ -129,17 +140,20 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
         </div>
         <button class="buy-button" type="button" data-auth-mode="signup">회원가입</button>
       </div>
-      <p class="auth-note">실제 로그인 검증 없이 다음 화면으로 이동하는 데모입니다.</p>
+      <p class="auth-note">아이디가 기존 회원과 일치하면 해당 회원으로 로그인됩니다.</p>
     </form>
   `;
   }
 
   function createAuthCompletePanel() {
+    const member = getCurrentMember();
+    const agency = getMemberAgency(member);
+
     return `
     <div class="auth-complete">
       <div class="auth-mark">B</div>
       <h2>가입/로그인이 완료되었습니다.</h2>
-      <p>BEAUTY REF.의 상품과 장바구니, 결제 화면을 계속 둘러볼 수 있습니다.</p>
+      <p>${member?.name || "회원"}님은 ${agency?.name || "본사"} 고객으로 쇼핑을 진행합니다.</p>
       <button class="buy-button auth-submit" id="authGoShop">Shop 보러가기</button>
     </div>
   `;
@@ -184,15 +198,22 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
     });
     document.querySelectorAll("[data-auth-complete]").forEach((button) => {
       button.addEventListener("click", () => {
-        openAuth("complete");
+        ensureQuickMember(button.dataset.authComplete);
         showToast(`${button.dataset.authComplete} 화면 이동이 완료되었습니다.`);
+        openAuth("complete");
       });
     });
     document.querySelectorAll("[data-auth-form]").forEach((form) => {
       form.addEventListener("submit", (event) => {
         event.preventDefault();
+        if (form.dataset.authForm === "signup") {
+          registerMember(form);
+          showToast("회원가입이 완료되었습니다.");
+        } else {
+          loginMember(form);
+          showToast("로그인이 완료되었습니다.");
+        }
         openAuth("complete");
-        showToast("데모 회원 화면 이동이 완료되었습니다.");
       });
     });
     document.querySelector("#authGoShop")?.addEventListener("click", showHome);
@@ -201,6 +222,106 @@ export function createAuthController({ dom, showHome, closeCart, showToast }) {
         showToast("우편번호 검색 UI 샘플입니다."),
       );
     });
+  }
+
+  function registerMember(form) {
+    const agency =
+      findAgencyByCode(getFormValue(form, "agencyCode")) ||
+      getPendingAgency() ||
+      getHeadquartersAgency();
+    const memberId = `member-${Date.now()}`;
+    const userId =
+      getFormValue(form, "userId") || `user_${store.members.length + 1}`;
+
+    store.members.push({
+      id: memberId,
+      userId,
+      name: getFormValue(form, "name") || userId || "신규회원",
+      phone: getFormValue(form, "phone"),
+      email: getFormValue(form, "email"),
+      agencyId: agency.id,
+      points: 0,
+      status: "active",
+      joinedAt: new Date().toISOString().slice(0, 10),
+      address: {
+        postcode: getFormValue(form, "postcode"),
+        address: getFormValue(form, "address"),
+        addressDetail: getFormValue(form, "addressDetail"),
+      },
+    });
+    store.currentMemberId = memberId;
+    store.pendingAgencySlug = "";
+    persistStore(store);
+    updateSessionUi();
+  }
+
+  function loginMember(form) {
+    const userId = getFormValue(form, "userId");
+    const member =
+      store.members.find((item) => item.userId === userId) ||
+      store.members.find((item) => item.id === store.currentMemberId) ||
+      store.members[0];
+
+    store.currentMemberId = member.id;
+    persistStore(store);
+    updateSessionUi();
+  }
+
+  function getFormValue(form, name) {
+    return String(form.querySelector(`[name="${name}"]`)?.value || "").trim();
+  }
+
+  function ensureQuickMember(label) {
+    const existing = getCurrentMember();
+    if (existing) return;
+
+    const agency = getPendingAgency() || getHeadquartersAgency();
+    const memberId = `member-${Date.now()}`;
+    store.members.push({
+      id: memberId,
+      userId: `quick_${store.members.length + 1}`,
+      name: label,
+      phone: "",
+      email: "",
+      agencyId: agency.id,
+      points: 0,
+      status: "active",
+      joinedAt: new Date().toISOString().slice(0, 10),
+      address: {},
+    });
+    store.currentMemberId = memberId;
+    persistStore(store);
+    updateSessionUi();
+  }
+
+  function getCurrentMember() {
+    return store.members.find((member) => member.id === store.currentMemberId);
+  }
+
+  function getMemberAgency(member) {
+    return store.agencies.find((agency) => agency.id === member?.agencyId);
+  }
+
+  function findAgencyByCode(code) {
+    const normalized = String(code || "")
+      .trim()
+      .toUpperCase();
+    if (!normalized) return null;
+    return store.agencies.find(
+      (agency) => agency.code.toUpperCase() === normalized,
+    );
+  }
+
+  function getPendingAgency() {
+    const slug = store.pendingAgencySlug;
+    if (!slug) return null;
+    return store.agencies.find(
+      (agency) => agency.linkSlug === slug || agency.code === slug,
+    );
+  }
+
+  function getHeadquartersAgency() {
+    return store.agencies.find((agency) => agency.isHeadquarters);
   }
 
   function showAuthView() {

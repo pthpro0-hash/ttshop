@@ -1,0 +1,2249 @@
+(() => {
+  // scripts/data/demo-store.js
+  var STORE_KEY = "beauty-ref-demo-store-v1";
+  var defaultStore = {
+    currentMemberId: "",
+    settings: {
+      purchasePointRate: 5,
+      maxPointUseRate: 50,
+      friendSignupPoint: 3e3,
+      personalReferrerRewardRate: 10,
+      personalBuyerBonusRate: 5,
+    },
+    agencies: [
+      {
+        id: "agency-hq",
+        name: "\uBCF8\uC0AC",
+        code: "HQ",
+        linkSlug: "hq",
+        commissionRate: 0,
+        status: "active",
+        isHeadquarters: true,
+      },
+      {
+        id: "agency-gangnam",
+        name: "\uAC15\uB0A8 \uBDF0\uD2F0 \uB300\uB9AC\uC810",
+        code: "GNBEAUTY",
+        linkSlug: "gangnam-beauty",
+        commissionRate: 12,
+        status: "active",
+        isHeadquarters: false,
+      },
+    ],
+    members: [
+      {
+        id: "member-a",
+        userId: "beauty_user",
+        name: "\uD64D\uAE38\uB3D9",
+        phone: "010-0000-0000",
+        email: "beauty@example.com",
+        agencyId: "agency-gangnam",
+        points: 18e3,
+        status: "active",
+        joinedAt: "2026-05-29",
+        address: {
+          postcode: "06236",
+          address:
+            "\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000",
+          addressDetail: "",
+        },
+      },
+    ],
+    orders: [
+      {
+        id: "order-001",
+        memberId: "member-a",
+        agencyIdAtOrder: "agency-gangnam",
+        referralSourceType: "none",
+        paidProductAmount: 76e3,
+        shippingAmount: 0,
+        paidAmount: 76e3,
+        pointEarned: 3800,
+        status: "paid",
+        paidAt: "2026-05-29",
+        items: [
+          {
+            productId: "device-led",
+            productName: "LED Skin Lifting Device",
+            productKo:
+              "LED \uC2A4\uD0A8 \uB9AC\uD504\uD305 \uB514\uBC14\uC774\uC2A4",
+            sale: 76e3,
+            qty: 1,
+            option: "1ea / Warm White",
+          },
+        ],
+      },
+    ],
+    pointLedger: [
+      {
+        id: "point-001",
+        memberId: "member-a",
+        orderId: "order-001",
+        type: "purchase_earn",
+        amount: 3800,
+        baseAmount: 76e3,
+        rate: 5,
+        note: "\uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900 \uAD6C\uB9E4 \uC801\uB9BD",
+        createdAt: "2026-05-29",
+      },
+    ],
+    agencySettlementLedger: [
+      {
+        id: "agency-settlement-001",
+        agencyId: "agency-gangnam",
+        orderId: "order-001",
+        baseAmount: 76e3,
+        commissionRate: 12,
+        commissionAmount: 9120,
+        status: "pending_next_month_15",
+        note: "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C \uB300\uB9AC\uC810 \uC804\uC6D4 \uB9E4\uCD9C \uC815\uC0B0 \uB300\uC0C1",
+        createdAt: "2026-05-29",
+      },
+    ],
+    personalReferralLinks: [
+      {
+        id: "ref-led-001",
+        ownerMemberId: "member-a",
+        productId: "device-led",
+        orderId: "order-001",
+        unitIndex: 1,
+        code: "LED-A-001",
+        status: "active",
+      },
+    ],
+  };
+  function cloneDefaultStore() {
+    return JSON.parse(JSON.stringify(defaultStore));
+  }
+  function getStorage() {
+    try {
+      return globalThis.localStorage;
+    } catch (e) {
+      return null;
+    }
+  }
+  function loadStore() {
+    const storage = getStorage();
+    const saved = storage == null ? void 0 : storage.getItem(STORE_KEY);
+    if (!saved) return cloneDefaultStore();
+    try {
+      return { ...cloneDefaultStore(), ...JSON.parse(saved) };
+    } catch (e) {
+      return cloneDefaultStore();
+    }
+  }
+  function saveStore(store2) {
+    var _a;
+    (_a = getStorage()) == null
+      ? void 0
+      : _a.setItem(STORE_KEY, JSON.stringify(store2));
+  }
+
+  // scripts/ui/auth.js
+  function createAuthController({
+    dom: dom2,
+    store: store2,
+    persistStore,
+    updateSessionUi: updateSessionUi2 = () => {},
+    showHome,
+    closeCart,
+    showToast,
+  }) {
+    function openAuth(mode = "login") {
+      closeCart();
+      dom2.auth.innerHTML = createAuthView(mode);
+      showAuthView();
+      bindAuthEvents();
+    }
+    function createAuthView(mode) {
+      const modeLabel = {
+        login: "\uB85C\uADF8\uC778",
+        signup: "\uD68C\uC6D0\uAC00\uC785",
+        complete: "Welcome",
+      };
+      return `
+    <section class="auth-layout">
+      <aside class="auth-brand">
+        <button class="back-button" id="authBack">\u2190 Back to shop</button>
+        <div>
+          <div class="eyebrow">Beauty membership</div>
+          <h1 class="auth-title">Join<br />The<br />Routine.</h1>
+          <p class="auth-copy">
+            \uCCAB \uAD6C\uB9E4 \uCFE0\uD3F0, \uAD00\uC2EC \uCE74\uD14C\uACE0\uB9AC \uCD94\uCC9C, \uBC30\uC1A1\uC9C0 \uC800\uC7A5\uC744 \uC704\uD55C \uC1FC\uD551\uBAB0 \uD68C\uC6D0 \uD654\uBA74\uC785\uB2C8\uB2E4.
+            \uAC04\uD3B8 \uAC00\uC785\uC740 \uC678\uBD80 \uC5F0\uB3D9 \uC5C6\uC774 \uB370\uBAA8 \uD654\uBA74 \uC774\uB3D9\uB9CC \uC81C\uACF5\uD569\uB2C8\uB2E4.
+          </p>
+        </div>
+        <div class="auth-benefits">
+          <span>Welcome coupon</span>
+          <span>Beauty picks</span>
+          <span>Saved address</span>
+        </div>
+      </aside>
+      <section class="auth-card">
+        <div class="auth-tabs" aria-label="\uD68C\uC6D0 \uBA54\uB274">
+          ${createAuthTab("login", "\uB85C\uADF8\uC778", mode)}
+          ${createAuthTab("signup", "\uD68C\uC6D0\uAC00\uC785", mode)}
+        </div>
+        <div class="auth-mode-label">${modeLabel[mode]}</div>
+        ${createAuthPanel(mode)}
+        ${mode !== "complete" ? createManagementAccess() : ""}
+      </section>
+    </section>
+  `;
+    }
+    function createAuthTab(mode, label, activeMode) {
+      return `<button class="auth-tab ${mode === activeMode ? "is-active" : ""}" data-auth-mode="${mode}">${label}</button>`;
+    }
+    function createAuthPanel(mode) {
+      if (mode === "signup") return createSignupPanel();
+      if (mode === "complete") return createAuthCompletePanel();
+      return createLoginPanel();
+    }
+    function createSignupPanel() {
+      return `
+    <div class="signup-grid">
+      <section class="signup-simple auth-panel">
+        <div class="auth-intro">
+          <strong>\uAC04\uD3B8\uD68C\uC6D0\uAC00\uC785</strong>
+          <p>\uC790\uC8FC \uC0AC\uC6A9\uD558\uB294 \uACC4\uC815\uC73C\uB85C \uBE60\uB974\uAC8C \uAC00\uC785\uD558\uC138\uC694. \uBC84\uD2BC \uD074\uB9AD \uC2DC \uC644\uB8CC \uD654\uBA74\uC73C\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.</p>
+        </div>
+        <div class="social-stack">
+          ${createSocialButton("kakao", "\uCE74\uCE74\uC624\uB85C \uD68C\uC6D0\uAC00\uC785", "\u25CF")}
+          ${createSocialButton("naver", "\uB124\uC774\uBC84\uB85C \uD68C\uC6D0\uAC00\uC785", "N")}
+          ${createSocialButton("apple", "Apple\uB85C \uACC4\uC18D\uD558\uAE30", "\uF8FF")}
+        </div>
+      </section>
+      <section class="signup-general">
+        ${createGeneralSignupPanel()}
+      </section>
+    </div>
+  `;
+    }
+    function createGeneralSignupPanel() {
+      const pendingAgency = getPendingAgency();
+      return `
+    <form class="auth-form" data-auth-form="signup">
+      <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" placeholder="beauty_user" /></label>
+      <label>\uBE44\uBC00\uBC88\uD638<input class="quantity-input" name="password" type="password" placeholder="8\uC790 \uC774\uC0C1" /></label>
+      <label>\uC774\uB984<input class="quantity-input" name="name" placeholder="\uD64D\uAE38\uB3D9" /></label>
+      <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" placeholder="010-0000-0000" /></label>
+      <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" placeholder="beauty@example.com" /></label>
+      <label>\uB300\uB9AC\uC810\uCF54\uB4DC<input class="quantity-input" name="agencyCode" value="${(pendingAgency == null ? void 0 : pendingAgency.code) || ""}" placeholder="\uC608: GNBEAUTY" /></label>
+      ${createAddressFields()}
+      <label class="auth-check"><input type="checkbox" checked /> \uBDF0\uD2F0 \uD61C\uD0DD \uBC0F \uCCAB \uAD6C\uB9E4 \uCFE0\uD3F0 \uC548\uB0B4 \uBC1B\uAE30</label>
+      <button class="buy-button auth-submit" type="submit">\uC77C\uBC18\uD68C\uC6D0\uAC00\uC785 \uC644\uB8CC</button>
+      <p class="auth-note">\uB300\uB9AC\uC810\uCF54\uB4DC\uAC00 \uC5C6\uAC70\uB098 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC73C\uBA74 \uBCF8\uC0AC \uB300\uB9AC\uC810 \uACE0\uAC1D\uC73C\uB85C \uB4F1\uB85D\uB429\uB2C8\uB2E4.</p>
+    </form>
+  `;
+    }
+    function createLoginPanel() {
+      return `
+    <form class="auth-form login-form" data-auth-form="login">
+      <div class="login-section-title">\uC77C\uBC18 \uB85C\uADF8\uC778</div>
+      <div class="login-box">
+        <div class="login-visual" aria-hidden="true">
+          <span></span>
+        </div>
+        <div class="login-fields">
+          <label class="sr-only" for="loginUserId">\uC544\uC774\uB514</label>
+          <input class="quantity-input" id="loginUserId" name="userId" placeholder="\uC544\uC774\uB514\uB97C \uC785\uB825\uD558\uC138\uC694." />
+          <label class="sr-only" for="loginPassword">\uBE44\uBC00\uBC88\uD638</label>
+          <input class="quantity-input" id="loginPassword" name="password" type="password" placeholder="\uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694." />
+        </div>
+        <button class="buy-button login-submit" type="submit">\uB85C\uADF8\uC778</button>
+      </div>
+      <div class="login-options">
+        <label class="login-save"><input type="checkbox" /> \uC544\uC774\uB514 \uC800\uC7A5</label>
+        <div>
+          <button type="button" data-auth-complete="\uC544\uC774\uB514 \uCC3E\uAE30">\uC544\uC774\uB514 \uCC3E\uAE30</button>
+          <span>|</span>
+          <button type="button" data-auth-complete="\uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30">\uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30</button>
+        </div>
+      </div>
+      <div class="quick-login-row">
+        ${createSocialButton("kakao", "\uCE74\uCE74\uC624 \uB85C\uADF8\uC778", "\u25CF")}
+        ${createSocialButton("naver", "\uB124\uC774\uBC84 \uB85C\uADF8\uC778", "N")}
+        ${createSocialButton("apple", "Apple \uB85C\uADF8\uC778", "\uF8FF")}
+        ${createSocialButton("google", "Google \uB85C\uADF8\uC778", "G")}
+      </div>
+      <div class="signup-callout">
+        <div>
+          <strong>\uC7A0\uAE50! \uC544\uC9C1 \uD68C\uC6D0\uC774 \uC544\uB2C8\uC2E0\uAC00\uC694?</strong>
+          <p>\uCCAB \uAD6C\uB9E4 \uCFE0\uD3F0\uACFC \uD68C\uC6D0 \uC804\uC6A9 \uD61C\uD0DD\uC744 \uBC1B\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>
+        </div>
+        <button class="buy-button" type="button" data-auth-mode="signup">\uD68C\uC6D0\uAC00\uC785</button>
+      </div>
+      <p class="auth-note">\uC544\uC774\uB514\uAC00 \uAE30\uC874 \uD68C\uC6D0\uACFC \uC77C\uCE58\uD558\uBA74 \uD574\uB2F9 \uD68C\uC6D0\uC73C\uB85C \uB85C\uADF8\uC778\uB429\uB2C8\uB2E4.</p>
+    </form>
+  `;
+    }
+    function createAuthCompletePanel() {
+      const member = getCurrentMember2();
+      const agency = getMemberAgency(member);
+      return `
+    <div class="auth-complete">
+      <div class="auth-mark">B</div>
+      <h2>\uAC00\uC785/\uB85C\uADF8\uC778\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.</h2>
+      <p>${(member == null ? void 0 : member.name) || "\uD68C\uC6D0"}\uB2D8\uC740 ${(agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC"} \uACE0\uAC1D\uC73C\uB85C \uC1FC\uD551\uC744 \uC9C4\uD589\uD569\uB2C8\uB2E4.</p>
+      <button class="buy-button auth-submit" id="authGoShop">Shop \uBCF4\uB7EC\uAC00\uAE30</button>
+    </div>
+  `;
+    }
+    function createManagementAccess() {
+      return `
+    <div class="auth-management" aria-label="\uAD00\uB9AC \uBA54\uB274">
+      <a href="#admin" data-management-link="admin">Admin</a>
+      <a href="#agency" data-management-link="agency">Agency</a>
+      <a href="#member" data-management-link="member">Member</a>
+    </div>
+  `;
+    }
+    function createSocialButton(provider, label, mark) {
+      return `
+    <button class="social-button social-${provider}" type="button" data-auth-complete="${label}">
+      <span>${mark}</span>${label}
+    </button>
+  `;
+    }
+    function createAddressFields() {
+      return `
+    <div class="address-box">
+      <div class="address-title">\uC120\uD0DD \uBC30\uC1A1\uC9C0</div>
+      <div class="quantity-row">
+        <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="postcode" placeholder="06236" /></label>
+        <button class="cart-button address-search" type="button">\uAC80\uC0C9</button>
+      </div>
+      <label>\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" placeholder="\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000" /></label>
+      <label>\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" placeholder="\uB3D9/\uD638\uC218 \uB610\uB294 \uC694\uCCAD\uC0AC\uD56D" /></label>
+    </div>
+  `;
+    }
+    function bindAuthEvents() {
+      var _a;
+      document.querySelector("#authBack").addEventListener("click", showHome);
+      document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+        button.addEventListener("click", () =>
+          openAuth(button.dataset.authMode),
+        );
+      });
+      document.querySelectorAll("[data-auth-complete]").forEach((button) => {
+        button.addEventListener("click", () => {
+          ensureQuickMember(button.dataset.authComplete);
+          showToast(
+            `${button.dataset.authComplete} \uD654\uBA74 \uC774\uB3D9\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
+          );
+          openAuth("complete");
+        });
+      });
+      document.querySelectorAll("[data-auth-form]").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (form.dataset.authForm === "signup") {
+            registerMember(form);
+            showToast(
+              "\uD68C\uC6D0\uAC00\uC785\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+            );
+          } else {
+            loginMember(form);
+            showToast(
+              "\uB85C\uADF8\uC778\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+            );
+          }
+          openAuth("complete");
+        });
+      });
+      (_a = document.querySelector("#authGoShop")) == null
+        ? void 0
+        : _a.addEventListener("click", showHome);
+      document.querySelectorAll(".address-search").forEach((button) => {
+        button.addEventListener("click", () =>
+          showToast(
+            "\uC6B0\uD3B8\uBC88\uD638 \uAC80\uC0C9 UI \uC0D8\uD50C\uC785\uB2C8\uB2E4.",
+          ),
+        );
+      });
+    }
+    function registerMember(form) {
+      const agency =
+        findAgencyByCode(getFormValue(form, "agencyCode")) ||
+        getPendingAgency() ||
+        getHeadquartersAgency2();
+      const memberId = `member-${Date.now()}`;
+      const userId =
+        getFormValue(form, "userId") || `user_${store2.members.length + 1}`;
+      store2.members.push({
+        id: memberId,
+        userId,
+        name:
+          getFormValue(form, "name") || userId || "\uC2E0\uADDC\uD68C\uC6D0",
+        phone: getFormValue(form, "phone"),
+        email: getFormValue(form, "email"),
+        agencyId: agency.id,
+        points: 0,
+        status: "active",
+        joinedAt: /* @__PURE__ */ new Date().toISOString().slice(0, 10),
+        address: {
+          postcode: getFormValue(form, "postcode"),
+          address: getFormValue(form, "address"),
+          addressDetail: getFormValue(form, "addressDetail"),
+        },
+      });
+      store2.currentMemberId = memberId;
+      store2.pendingAgencySlug = "";
+      persistStore(store2);
+      updateSessionUi2();
+    }
+    function loginMember(form) {
+      const userId = getFormValue(form, "userId");
+      const member =
+        store2.members.find((item) => item.userId === userId) ||
+        store2.members.find((item) => item.id === store2.currentMemberId) ||
+        store2.members[0];
+      store2.currentMemberId = member.id;
+      persistStore(store2);
+      updateSessionUi2();
+    }
+    function getFormValue(form, name) {
+      var _a;
+      return String(
+        ((_a = form.querySelector(`[name="${name}"]`)) == null
+          ? void 0
+          : _a.value) || "",
+      ).trim();
+    }
+    function ensureQuickMember(label) {
+      const existing = getCurrentMember2();
+      if (existing) return;
+      const agency = getPendingAgency() || getHeadquartersAgency2();
+      const memberId = `member-${Date.now()}`;
+      store2.members.push({
+        id: memberId,
+        userId: `quick_${store2.members.length + 1}`,
+        name: label,
+        phone: "",
+        email: "",
+        agencyId: agency.id,
+        points: 0,
+        status: "active",
+        joinedAt: /* @__PURE__ */ new Date().toISOString().slice(0, 10),
+        address: {},
+      });
+      store2.currentMemberId = memberId;
+      persistStore(store2);
+      updateSessionUi2();
+    }
+    function getCurrentMember2() {
+      return store2.members.find(
+        (member) => member.id === store2.currentMemberId,
+      );
+    }
+    function getMemberAgency(member) {
+      return store2.agencies.find(
+        (agency) => agency.id === (member == null ? void 0 : member.agencyId),
+      );
+    }
+    function findAgencyByCode(code) {
+      const normalized = String(code || "")
+        .trim()
+        .toUpperCase();
+      if (!normalized) return null;
+      return store2.agencies.find(
+        (agency) => agency.code.toUpperCase() === normalized,
+      );
+    }
+    function getPendingAgency() {
+      const slug = store2.pendingAgencySlug;
+      if (!slug) return null;
+      return store2.agencies.find(
+        (agency) => agency.linkSlug === slug || agency.code === slug,
+      );
+    }
+    function getHeadquartersAgency2() {
+      return store2.agencies.find((agency) => agency.isHeadquarters);
+    }
+    function showAuthView() {
+      var _a;
+      dom2.home.classList.add("is-hidden");
+      dom2.detail.classList.add("is-hidden");
+      (_a = dom2.management) == null ? void 0 : _a.classList.add("is-hidden");
+      dom2.auth.classList.remove("is-hidden");
+      scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return { openAuth, showAuthView };
+  }
+
+  // scripts/utils/format.js
+  var formatMoney = (value) => `${Number(value).toLocaleString("ko-KR")}\uC6D0`;
+
+  // scripts/ui/management.js
+  function createManagementController({
+    dom: dom2,
+    store: store2,
+    closeCart,
+    persistStore = () => {},
+  }) {
+    function openManagement(role = "admin") {
+      closeCart();
+      dom2.management.innerHTML = createManagementView(role, store2);
+      bindManagementEvents(role);
+      dom2.home.classList.add("is-hidden");
+      dom2.detail.classList.add("is-hidden");
+      dom2.auth.classList.add("is-hidden");
+      dom2.management.classList.remove("is-hidden");
+      scrollTo({ top: 0, behavior: "smooth" });
+    }
+    function bindManagementEvents(role) {
+      if (role === "admin") {
+        bindMetricModal("[data-admin-detail]", "#adminDetailModal", (type) =>
+          createAdminDetailContent(type, store2),
+        );
+      }
+      if (role === "agency") {
+        bindMetricModal("[data-agency-detail]", "#agencyDetailModal", (type) =>
+          createAgencyDetailContent(type, store2),
+        );
+      }
+    }
+    function bindMetricModal(cardSelector, modalSelector, createContent) {
+      const modal = dom2.management.querySelector(modalSelector);
+      if (!modal) return;
+      dom2.management.querySelectorAll(cardSelector).forEach((card) => {
+        const open = () => {
+          const detailType =
+            card.dataset.adminDetail || card.dataset.agencyDetail;
+          openDetailModal(modal, createContent(detailType));
+          if (
+            modalSelector === "#adminDetailModal" &&
+            detailType === "agencies"
+          ) {
+            bindAgencyAdminForm(modal);
+          }
+        };
+        card.addEventListener("click", open);
+        card.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          open();
+        });
+      });
+      modal.addEventListener("click", (event) => {
+        if (
+          event.target.matches("[data-modal-close]") ||
+          event.target === modal
+        ) {
+          closeDetailModal(modal);
+        }
+      });
+    }
+    function bindAgencyAdminForm(modal) {
+      const formBox = modal.querySelector("[data-agency-form]");
+      if (!formBox) return;
+      formBox
+        .querySelector("[data-agency-submit]")
+        .addEventListener("click", () => {
+          saveAgencyFromForm(formBox);
+          persistStore(store2);
+          reopenAdminDetail("agencies");
+        });
+      formBox.querySelector('[name="name"]').addEventListener("input", () => {
+        const generated = createAgencyIdentifiers(
+          getAgencyField(formBox, "name").value,
+        );
+        const codeInput = getAgencyField(formBox, "code");
+        const linkInput = getAgencyField(formBox, "linkSlug");
+        if (!codeInput.dataset.manual || !codeInput.value.trim()) {
+          codeInput.value = generated.code;
+        }
+        if (!linkInput.dataset.manual || !linkInput.value.trim()) {
+          linkInput.value = generated.linkSlug;
+        }
+      });
+      ["code", "linkSlug"].forEach((name) => {
+        getAgencyField(formBox, name).addEventListener("input", (event) => {
+          event.target.dataset.manual = "true";
+        });
+      });
+      modal.querySelectorAll("[data-agency-edit]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const agency = store2.agencies.find(
+            (item) => item.id === button.dataset.agencyEdit,
+          );
+          if (!agency) return;
+          getAgencyField(formBox, "agencyId").value = agency.id;
+          getAgencyField(formBox, "name").value = agency.name;
+          getAgencyField(formBox, "code").value = agency.code;
+          getAgencyField(formBox, "linkSlug").value = agency.linkSlug;
+          getAgencyField(formBox, "commissionRate").value =
+            agency.commissionRate;
+          getAgencyField(formBox, "status").value = agency.status;
+          getAgencyField(formBox, "code").dataset.manual = "true";
+          getAgencyField(formBox, "linkSlug").dataset.manual = "true";
+          formBox.querySelector("[data-agency-submit]").textContent =
+            "\uB300\uB9AC\uC810 \uC218\uC815";
+        });
+      });
+      modal.querySelectorAll("[data-agency-delete]").forEach((button) => {
+        button.addEventListener("click", () => {
+          deleteAgency(button.dataset.agencyDelete);
+          persistStore(store2);
+          reopenAdminDetail("agencies");
+        });
+      });
+      formBox
+        .querySelector("[data-agency-reset]")
+        .addEventListener("click", () => {
+          formBox.querySelectorAll("input").forEach((input) => {
+            input.value = input.name === "commissionRate" ? "10" : "";
+            delete input.dataset.manual;
+          });
+          getAgencyField(formBox, "status").value = "active";
+          formBox.querySelector("[data-agency-submit]").textContent =
+            "\uB300\uB9AC\uC810 \uB4F1\uB85D";
+        });
+    }
+    function getAgencyField(formBox, name) {
+      return formBox.querySelector(`[name="${name}"]`);
+    }
+    function saveAgencyFromForm(formBox) {
+      const agencyId = getAgencyField(formBox, "agencyId").value;
+      const payload = {
+        name: getAgencyField(formBox, "name").value.trim(),
+        code: getAgencyField(formBox, "code").value.trim().toUpperCase(),
+        linkSlug: getAgencyField(formBox, "linkSlug").value.trim(),
+        commissionRate: Math.max(
+          0,
+          Number(getAgencyField(formBox, "commissionRate").value || 0),
+        ),
+        status: getAgencyField(formBox, "status").value || "active",
+      };
+      if (!payload.name || !payload.code || !payload.linkSlug) return;
+      if (agencyId) {
+        const agency = store2.agencies.find((item) => item.id === agencyId);
+        if (!agency || agency.isHeadquarters) return;
+        Object.assign(agency, payload);
+        return;
+      }
+      store2.agencies.push({
+        id: `agency-${payload.linkSlug.replace(/[^a-z0-9-]/gi, "-").toLowerCase()}-${store2.agencies.length + 1}`,
+        ...payload,
+        isHeadquarters: false,
+      });
+    }
+    function deleteAgency(agencyId) {
+      const agency = store2.agencies.find((item) => item.id === agencyId);
+      const headquarters = store2.agencies.find((item) => item.isHeadquarters);
+      if (!agency || agency.isHeadquarters || !headquarters) return;
+      store2.members.forEach((member) => {
+        if (member.agencyId === agency.id) {
+          member.agencyId = headquarters.id;
+        }
+      });
+      store2.agencies = store2.agencies.filter((item) => item.id !== agency.id);
+    }
+    function reopenAdminDetail(type) {
+      dom2.management.innerHTML = createAdminDashboard(store2);
+      bindManagementEvents("admin");
+      const modal = dom2.management.querySelector("#adminDetailModal");
+      openDetailModal(modal, createAdminDetailContent(type, store2));
+      bindAgencyAdminForm(modal);
+    }
+    return { openManagement };
+  }
+  function createManagementView(role, store2) {
+    if (role === "agency") return createAgencyDashboard(store2);
+    if (role === "member") return createMemberDashboard(store2);
+    return createAdminDashboard(store2);
+  }
+  function createAdminDashboard(store2) {
+    const headquarters = store2.agencies.find(
+      (agency) => agency.isHeadquarters,
+    );
+    const agencyCount = store2.agencies.length;
+    const memberCount = store2.members.length;
+    const latestOrder = store2.orders[0];
+    const latestPoint = store2.pointLedger[0];
+    const settlementPending = store2.agencySettlementLedger.reduce(
+      (sum, item) => sum + item.commissionAmount,
+      0,
+    );
+    return `
+    <section class="management-dashboard">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Admin / Headquarters</div>
+          <h1 class="detail-title">Admin Control.</h1>
+        </div>
+        <p>\uD3EC\uC778\uD2B8, \uB300\uB9AC\uC810, \uC0C1\uD488, \uCD94\uCC9C\uB9C1\uD06C, \uC815\uC0B0\uC744 \uB2E8\uACC4\uBCC4\uB85C \uAD00\uB9AC\uD558\uAE30 \uC704\uD55C \uAD00\uB9AC\uC790 \uD654\uBA74 \uACE8\uACA9\uC785\uB2C8\uB2E4.</p>
+      </div>
+      <div class="management-grid">
+        ${createMetricCard("admin", "headquarters", "\uBCF8\uC0AC \uB300\uB9AC\uC810", headquarters.name)}
+        ${createMetricCard("admin", "agencies", "\uB300\uB9AC\uC810 \uC218", `${agencyCount}`)}
+        ${createMetricCard("admin", "members", "\uD68C\uC6D0 \uC218", `${memberCount}`)}
+        ${createMetricCard("admin", "orders", "\uCD5C\uADFC \uC8FC\uBB38", latestOrder.id)}
+        ${createMetricCard("admin", "points", "\uCD5C\uADFC \uC801\uB9BD", `${latestPoint.amount.toLocaleString("ko-KR")}P`)}
+        ${createMetricCard("admin", "settlements", "\uC815\uC0B0 \uB300\uAE30 \uC601\uC5C5\uBE44", formatMoney(settlementPending))}
+      </div>
+      ${createSettingsPanel(store2)}
+      ${createDetailModal("adminDetailModal", "adminModalContent")}
+    </section>
+  `;
+  }
+  function createMetricCard(scope, type, label, value) {
+    const attribute =
+      scope === "agency" ? "data-agency-detail" : "data-admin-detail";
+    return `
+    <article class="management-card-action" tabindex="0" role="button" ${attribute}="${type}" aria-label="${label} \uC0C1\uC138 \uBCF4\uAE30">
+      <span>${label}</span>
+      <strong>${value}</strong>
+    </article>
+  `;
+  }
+  function createSettingsPanel(store2) {
+    const settings = store2.settings;
+    return `
+    <section class="management-panel">
+      <div class="product-category">Admin settings</div>
+      <div class="management-grid compact">
+        <article><span>\uAD6C\uB9E4 \uC801\uB9BD\uB960</span><strong>${settings.purchasePointRate}%</strong></article>
+        <article><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9 \uD55C\uB3C4</span><strong>${settings.maxPointUseRate}%</strong></article>
+        <article><span>\uAC1C\uC778 \uCD94\uCC9C\uC790 \uC9C0\uAE09\uB960</span><strong>${settings.personalReferrerRewardRate}%</strong></article>
+        <article><span>\uAD6C\uB9E4\uC790 \uCD94\uAC00 \uC9C0\uAE09\uB960</span><strong>${settings.personalBuyerBonusRate}%</strong></article>
+      </div>
+    </section>
+  `;
+  }
+  function createDetailModal(modalId, contentId) {
+    return `
+    <div class="admin-modal" id="${modalId}" aria-hidden="true" hidden>
+      <div class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
+        <button class="cart-close admin-modal-close" type="button" data-modal-close aria-label="\uC0C1\uC138 \uD31D\uC5C5 \uB2EB\uAE30">\xD7</button>
+        <div class="admin-modal-content" id="${contentId}">
+          <div class="admin-detail-empty">
+            \uB300\uC2DC\uBCF4\uB4DC \uD56D\uBAA9\uC744 \uC120\uD0DD\uD558\uBA74 \uAD00\uB828 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8\uAC00 \uD45C\uC2DC\uB429\uB2C8\uB2E4.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  }
+  function openDetailModal(modal, html) {
+    const content = modal.querySelector(".admin-modal-content");
+    if (!content) return;
+    content.innerHTML = html;
+    modal.hidden = false;
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    modal.querySelector("[data-modal-close]").focus();
+  }
+  function closeDetailModal(modal) {
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+  function createAdminDetailContent(type, store2) {
+    const detail = getAdminDetail(type, store2);
+    return `
+    <div class="detail-panel-head">
+      <div>
+        <div class="product-category">Admin detail / ${detail.label}</div>
+        <h2 id="adminModalTitle">${detail.title}</h2>
+      </div>
+      <p>${detail.description}</p>
+    </div>
+    <div class="process-list">
+      ${detail.extra || ""}
+      ${detail.rows.join("") || '<div class="admin-detail-empty">\uD45C\uC2DC\uD560 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+    </div>
+  `;
+  }
+  function getAdminDetail(type, store2) {
+    const detailMap = {
+      headquarters: {
+        label: "Headquarters",
+        title: "\uBCF8\uC0AC \uB300\uB9AC\uC810 \uC0C1\uC138",
+        description:
+          "\uB300\uB9AC\uC810 \uCF54\uB4DC \uC5C6\uC774 \uAC00\uC785\uD55C \uD68C\uC6D0\uC774 \uADC0\uC18D\uB418\uB294 \uBCF8\uC0AC \uB300\uB9AC\uC810 \uC815\uBCF4\uC785\uB2C8\uB2E4.",
+        rows: store2.agencies
+          .filter((agency) => agency.isHeadquarters)
+          .map(createAgencyDetailRow),
+      },
+      agencies: {
+        label: "Agencies",
+        title: "\uB300\uB9AC\uC810 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        description:
+          "\uBCF8\uC0AC\uC640 \uACC4\uC57D\uB41C \uB300\uB9AC\uC810 \uCF54\uB4DC, \uC804\uC6A9 \uB9C1\uD06C, \uC601\uC5C5\uBE44\uC728, \uC0C1\uD0DC\uB97C \uB4F1\uB85D/\uBCC0\uACBD/\uC0AD\uC81C\uD569\uB2C8\uB2E4.",
+        extra: createAgencyAdminForm(),
+        rows: store2.agencies.map(createAgencyManageRow),
+      },
+      members: {
+        label: "Members",
+        title: "\uD68C\uC6D0 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        description:
+          "\uD68C\uC6D0\uBCC4 \uD3EC\uC778\uD2B8, \uC8FC\uBB38 \uC218, \uB0B4\uBD80 \uB300\uB9AC\uC810 \uADC0\uC18D \uC815\uBCF4\uB97C \uAD00\uB9AC\uC790\uC6A9\uC73C\uB85C \uD655\uC778\uD569\uB2C8\uB2E4.",
+        rows: store2.members.map((member) =>
+          createMemberDetailRow(member, store2),
+        ),
+      },
+      orders: {
+        label: "Orders",
+        title: "\uC8FC\uBB38 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        description:
+          "\uACB0\uC81C \uC6B0\uD68C \uCC98\uB9AC\uB85C \uC0DD\uC131\uB41C \uC8FC\uBB38\uACFC \uC0C1\uD488 \uC2E4\uACB0\uC81C\uAE08\uC561, \uC801\uB9BD/\uC815\uC0B0 \uC5F0\uACB0 \uC0C1\uD0DC\uC785\uB2C8\uB2E4.",
+        rows: store2.orders.map((order) => createOrderDetailRow(order, store2)),
+      },
+      points: {
+        label: "Points",
+        title:
+          "\uD3EC\uC778\uD2B8 \uC801\uB9BD \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        description:
+          "\uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900\uC73C\uB85C \uC0DD\uC131\uB41C \uD3EC\uC778\uD2B8 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
+        rows: store2.pointLedger.map(createPointDetailRow),
+      },
+      settlements: {
+        label: "Settlements",
+        title:
+          "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        description:
+          "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uB97C \uC81C\uC678\uD558\uACE0 \uB300\uB9AC\uC810 \uC601\uC5C5\uBE44 \uC9C0\uAE09 \uB300\uC0C1\uC73C\uB85C \uC7A1\uD78C \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
+        rows: store2.agencySettlementLedger.map((item) =>
+          createSettlementDetailRow(item, store2),
+        ),
+      },
+    };
+    return detailMap[type] || detailMap.orders;
+  }
+  function createAgencyDetailRow(agency) {
+    return `
+    <article class="process-row">
+      <div><strong>${agency.name}</strong><span>${agency.isHeadquarters ? "\uBCF8\uC0AC \uB300\uB9AC\uC810" : "\uACC4\uC57D \uB300\uB9AC\uC810"}</span></div>
+      <div><span>\uC804\uC6A9 \uCF54\uB4DC</span><strong>${agency.code}</strong></div>
+      <div><span>\uC804\uC6A9 \uB9C1\uD06C</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></div>
+      <div><span>\uC601\uC5C5\uBE44\uC728 / \uC0C1\uD0DC</span><strong>${agency.commissionRate}% \xB7 ${agency.status}</strong></div>
+    </article>
+  `;
+  }
+  function createMemberDetailRow(member, store2) {
+    const agency = store2.agencies.find((item) => item.id === member.agencyId);
+    const orders = store2.orders.filter(
+      (order) => order.memberId === member.id,
+    );
+    return `
+    <article class="process-row">
+      <div><strong>${member.name}</strong><span>${member.phone}</span></div>
+      <div><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></div>
+      <div><span>\uC8FC\uBB38 \uC218</span><strong>${orders.length}\uAC74</strong></div>
+      <div><span>\uB0B4\uBD80 \uB300\uB9AC\uC810</span><strong>${(agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC"}</strong></div>
+    </article>
+  `;
+  }
+  function createOrderDetailRow(order, store2) {
+    const point = store2.pointLedger.find((item) => item.orderId === order.id);
+    const settlement = store2.agencySettlementLedger.find(
+      (item) => item.orderId === order.id,
+    );
+    return `
+    <article class="process-row">
+      <div><strong>${order.id}</strong><span>${order.status} \xB7 ${order.paidAt}</span></div>
+      <div><span>\uC0C1\uD488 \uC2E4\uACB0\uC81C</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+      <div><span>\uD3EC\uC778\uD2B8 \uC801\uB9BD</span><strong>${((point == null ? void 0 : point.amount) || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>\uB300\uB9AC\uC810 \uC601\uC5C5\uBE44</span><strong>${formatMoney((settlement == null ? void 0 : settlement.commissionAmount) || 0)}</strong></div>
+    </article>
+  `;
+  }
+  function createPointDetailRow(point) {
+    return `
+    <article class="process-row">
+      <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
+      <div><span>\uAE30\uC900 \uAE08\uC561</span><strong>${formatMoney(point.baseAmount)}</strong></div>
+      <div><span>\uC801\uB9BD\uB960</span><strong>${point.rate}%</strong></div>
+      <div><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+    </article>
+  `;
+  }
+  function createSettlementDetailRow(item, store2) {
+    const agency = store2.agencies.find(
+      (agencyItem) => agencyItem.id === item.agencyId,
+    );
+    return `
+    <article class="process-row">
+      <div><strong>${item.orderId}</strong><span>${(agency == null ? void 0 : agency.name) || "\uB300\uB9AC\uC810"} \xB7 ${item.status}</span></div>
+      <div><span>\uAE30\uC900 \uB9E4\uCD9C</span><strong>${formatMoney(item.baseAmount)}</strong></div>
+      <div><span>\uC601\uC5C5\uBE44\uC728</span><strong>${item.commissionRate}%</strong></div>
+      <div><span>\uC9C0\uAE09 \uC608\uC815</span><strong>${formatMoney(item.commissionAmount)}</strong></div>
+    </article>
+  `;
+  }
+  function createSimpleDetailRow(title, value, note) {
+    return `
+    <article class="process-row">
+      <div><strong>${title}</strong><span>${note}</span></div>
+      <div><span>\uAC12</span><strong>${value}</strong></div>
+      <div><span>\uC0C1\uD0DC</span><strong>active</strong></div>
+      <div><span>\uAD00\uB9AC</span><strong>\uB0B4\uBD80 \uAD00\uB9AC\uC6A9</strong></div>
+    </article>
+  `;
+  }
+  function createAgencyLinkDetailRow(agency) {
+    return `
+    <article class="process-row">
+      <div><strong>\uB300\uB9AC\uC810 \uAC00\uC785 \uB9C1\uD06C</strong><span>\uD68C\uC6D0\uAC00\uC785 \uC2DC \uB300\uB9AC\uC810 \uCF54\uB4DC \uC790\uB3D9 \uB4F1\uB85D</span></div>
+      <div><span>\uB9C1\uD06C</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></div>
+      <div><span>\uB300\uB9AC\uC810 \uCF54\uB4DC</span><strong>${agency.code}</strong></div>
+      <div><span>\uC0C1\uD0DC</span><strong>${agency.status}</strong></div>
+    </article>
+  `;
+  }
+  function createAgencyDashboard(store2) {
+    const agency = store2.agencies.find((item) => !item.isHeadquarters);
+    const members = store2.members.filter(
+      (member) => member.agencyId === agency.id,
+    );
+    const sales = store2.orders
+      .filter(
+        (order) =>
+          order.agencyIdAtOrder === agency.id &&
+          order.referralSourceType !== "personal_product",
+      )
+      .reduce((sum, order) => sum + order.paidProductAmount, 0);
+    const settlements = store2.agencySettlementLedger.filter(
+      (item) => item.agencyId === agency.id,
+    );
+    const commission = settlements.reduce(
+      (sum, item) => sum + item.commissionAmount,
+      0,
+    );
+    return `
+    <section class="management-dashboard">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Agency / ${agency.code}</div>
+          <h1 class="detail-title">Agency Desk.</h1>
+        </div>
+        <p>\uB300\uB9AC\uC810 \uB9C1\uD06C, \uC18C\uC18D \uACE0\uAC1D, \uB9E4\uCD9C, \uC815\uC0B0 \uC608\uC815\uC561\uC744 \uD655\uC778\uD558\uB294 \uB300\uB9AC\uC810 \uD654\uBA74 \uACE8\uACA9\uC785\uB2C8\uB2E4.</p>
+      </div>
+      <div class="management-grid">
+        ${createMetricCard("agency", "code", "\uC804\uC6A9 \uCF54\uB4DC", agency.code)}
+        ${createMetricCard("agency", "link", "\uC804\uC6A9 \uB9C1\uD06C", `/join/${agency.linkSlug}`)}
+        ${createMetricCard("agency", "members", "\uC18C\uC18D \uACE0\uAC1D", `${members.length}\uBA85`)}
+        ${createMetricCard("agency", "rate", "\uC601\uC5C5\uBE44\uC728", `${agency.commissionRate}%`)}
+        ${createMetricCard("agency", "sales", "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C", formatMoney(sales))}
+        ${createMetricCard("agency", "commission", "\uC601\uC5C5\uBE44 \uC608\uC815", formatMoney(commission))}
+        ${createMetricCard("agency", "status", "\uC815\uC0B0 \uC0C1\uD0DC", "\uC815\uC0B0 \uC900\uBE44\uC911")}
+      </div>
+      <section class="management-panel">
+        <div class="product-category">Settlement queue</div>
+        <div class="process-list">
+          ${settlements
+            .slice(0, 4)
+            .map(
+              (item) => `
+              <article class="process-row">
+                <div><strong>${item.orderId}</strong><span>${item.status}</span></div>
+                <div><span>\uAE30\uC900 \uB9E4\uCD9C</span><strong>${formatMoney(item.baseAmount)}</strong></div>
+                <div><span>\uC601\uC5C5\uBE44\uC728</span><strong>${item.commissionRate}%</strong></div>
+                <div><span>\uC9C0\uAE09 \uC608\uC815</span><strong>${formatMoney(item.commissionAmount)}</strong></div>
+              </article>
+            `,
+            )
+            .join("")}
+        </div>
+      </section>
+      ${createDetailModal("agencyDetailModal", "agencyModalContent")}
+    </section>
+  `;
+  }
+  function createAgencyDetailContent(type, store2) {
+    const agency = store2.agencies.find((item) => !item.isHeadquarters);
+    const members = store2.members.filter(
+      (member) => member.agencyId === agency.id,
+    );
+    const orders = store2.orders.filter(
+      (order) =>
+        order.agencyIdAtOrder === agency.id &&
+        order.referralSourceType !== "personal_product",
+    );
+    const settlements = store2.agencySettlementLedger.filter(
+      (item) => item.agencyId === agency.id,
+    );
+    const details = {
+      code: {
+        label: "Code",
+        title: "\uC804\uC6A9 \uCF54\uB4DC \uC0C1\uC138",
+        description:
+          "\uD574\uB2F9 \uB300\uB9AC\uC810\uC73C\uB85C \uD68C\uC6D0\uC744 \uADC0\uC18D\uC2DC\uD0A4\uB294 \uB0B4\uBD80 \uB300\uB9AC\uC810 \uCF54\uB4DC\uC785\uB2C8\uB2E4.",
+        rows: [createAgencyDetailRow(agency)],
+      },
+      link: {
+        label: "Link",
+        title: "\uC804\uC6A9 \uB9C1\uD06C \uC0C1\uC138",
+        description:
+          "\uC774 \uB9C1\uD06C\uB85C \uAC00\uC785\uD55C \uD68C\uC6D0\uC740 \uACC4\uC18D \uD574\uB2F9 \uB300\uB9AC\uC810 \uACE0\uAC1D\uC73C\uB85C \uCC98\uB9AC\uB429\uB2C8\uB2E4.",
+        rows: [createAgencyLinkDetailRow(agency)],
+      },
+      members: {
+        label: "Customers",
+        title: "\uC18C\uC18D \uACE0\uAC1D \uC0C1\uC138",
+        description:
+          "\uB300\uB9AC\uC810 \uB9C1\uD06C\uB85C \uAC00\uC785\uB418\uC5B4 \uBCC0\uACBD \uBD88\uAC00 \uC0C1\uD0DC\uC778 \uACE0\uAC1D \uBAA9\uB85D\uC785\uB2C8\uB2E4.",
+        rows: members.map((member) => createMemberDetailRow(member, store2)),
+      },
+      rate: {
+        label: "Commission rate",
+        title: "\uC601\uC5C5\uBE44\uC728 \uC0C1\uC138",
+        description:
+          "\uC804\uC6D4 \uB300\uB9AC\uC810 \uD68C\uC6D0 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC5D0 \uC801\uC6A9\uB418\uB294 \uB300\uB9AC\uC810\uBCC4 \uC601\uC5C5\uBE44\uC728\uC785\uB2C8\uB2E4.",
+        rows: [
+          createSimpleDetailRow(
+            "\uD604\uC7AC \uC601\uC5C5\uBE44\uC728",
+            `${agency.commissionRate}%`,
+            "\uB300\uB9AC\uC810\uBCC4 \uAC1C\uBCC4 \uAD00\uB9AC \uAC12",
+          ),
+        ],
+      },
+      sales: {
+        label: "Sales",
+        title: "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C \uC0C1\uC138",
+        description:
+          "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uB97C \uC81C\uC678\uD55C \uB300\uB9AC\uC810 \uD68C\uC6D0\uC758 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC785\uB2C8\uB2E4.",
+        rows: orders.map((order) => createOrderDetailRow(order, store2)),
+      },
+      commission: {
+        label: "Commission",
+        title: "\uC601\uC5C5\uBE44 \uC608\uC815 \uC0C1\uC138",
+        description:
+          "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C\uC5D0 \uB300\uB9AC\uC810 \uC601\uC5C5\uBE44\uC728\uC744 \uC801\uC6A9\uD55C \uC9C0\uAE09 \uC608\uC815 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
+        rows: settlements.map((item) =>
+          createSettlementDetailRow(item, store2),
+        ),
+      },
+      status: {
+        label: "Status",
+        title: "\uC815\uC0B0 \uC0C1\uD0DC \uC0C1\uC138",
+        description:
+          "\uC775\uC6D4 15\uC77C \uC815\uC0B0 \uCC98\uB9AC \uC804 \uB300\uAE30 \uC0C1\uD0DC\uC758 \uC815\uC0B0 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
+        rows: settlements.map((item) =>
+          createSettlementDetailRow(item, store2),
+        ),
+      },
+    };
+    const detail = details[type] || details.sales;
+    return `
+    <div class="detail-panel-head">
+      <div>
+        <div class="product-category">Agency detail / ${detail.label}</div>
+        <h2 id="adminModalTitle">${detail.title}</h2>
+      </div>
+      <p>${detail.description}</p>
+    </div>
+    <div class="process-list">
+      ${detail.extra || ""}
+      ${detail.rows.join("") || '<div class="admin-detail-empty">\uD45C\uC2DC\uD560 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+    </div>
+  `;
+  }
+  function createAgencyAdminForm() {
+    return `
+    <div class="agency-admin-form" data-agency-form>
+      <input type="hidden" name="agencyId" />
+      <label>\uB300\uB9AC\uC810\uBA85<input class="quantity-input" name="name" placeholder="\uC608: \uBD80\uC0B0 \uBDF0\uD2F0 \uB300\uB9AC\uC810" required /></label>
+      <label>\uB300\uB9AC\uC810 \uCF54\uB4DC<input class="quantity-input" name="code" placeholder="\uC608: BUSANBEAUTY" required /></label>
+      <label>\uC804\uC6A9 \uB9C1\uD06C<input class="quantity-input" name="linkSlug" placeholder="\uC608: busan-beauty" required /></label>
+      <label>\uC601\uC5C5\uBE44\uC728<input class="quantity-input" name="commissionRate" type="number" min="0" max="100" value="10" required /></label>
+      <label>\uC0C1\uD0DC
+        <select class="option-select" name="status">
+          <option value="active">active</option>
+          <option value="paused">paused</option>
+          <option value="terminated">terminated</option>
+        </select>
+      </label>
+      <div class="agency-form-actions">
+        <button class="buy-button" type="button" data-agency-submit>\uB300\uB9AC\uC810 \uB4F1\uB85D</button>
+        <button class="cart-button" type="button" data-agency-reset>\uC785\uB825 \uCD08\uAE30\uD654</button>
+      </div>
+    </div>
+  `;
+  }
+  function createAgencyManageRow(agency) {
+    const controls = agency.isHeadquarters
+      ? "<strong>\uAE30\uBCF8\uAC12</strong>"
+      : `
+      <button class="cart-button mini-button" type="button" data-agency-edit="${agency.id}">\uC218\uC815</button>
+      <button class="cart-button mini-button" type="button" data-agency-delete="${agency.id}">\uC0AD\uC81C</button>
+    `;
+    return `
+    <article class="agency-table-row">
+      <div><strong>${agency.name}</strong><span>${agency.isHeadquarters ? "\uBCF8\uC0AC" : "\uACC4\uC57D"}</span></div>
+      <div>${agency.code}</div>
+      <div><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></div>
+      <div>${agency.commissionRate}%</div>
+      <div>${agency.status}</div>
+      <div class="agency-row-actions">${controls}</div>
+    </article>
+  `;
+  }
+  function createAgencyIdentifiers(name) {
+    const romanized = romanizeText(name)
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((token) => !["daerijeom", "agency"].includes(token));
+    const baseTokens = romanized.length ? romanized.slice(0, 2) : ["agency"];
+    const slug = baseTokens.join("-").replace(/-+/g, "-");
+    return {
+      code: slug.replace(/-/g, "").toUpperCase(),
+      linkSlug: slug.toLowerCase(),
+    };
+  }
+  function romanizeText(value) {
+    return value
+      .trim()
+      .toLowerCase()
+      .split("")
+      .map(romanizeCharacter)
+      .join("")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+  function romanizeCharacter(character) {
+    const code = character.charCodeAt(0);
+    if (code < 44032 || code > 55203) return character;
+    const initial = [
+      "g",
+      "kk",
+      "n",
+      "d",
+      "tt",
+      "r",
+      "m",
+      "b",
+      "pp",
+      "s",
+      "ss",
+      "",
+      "j",
+      "jj",
+      "ch",
+      "k",
+      "t",
+      "p",
+      "h",
+    ];
+    const medial = [
+      "a",
+      "ae",
+      "ya",
+      "yae",
+      "eo",
+      "e",
+      "yeo",
+      "ye",
+      "o",
+      "wa",
+      "wae",
+      "oe",
+      "yo",
+      "u",
+      "wo",
+      "we",
+      "wi",
+      "yu",
+      "eu",
+      "ui",
+      "i",
+    ];
+    const final = [
+      "",
+      "k",
+      "k",
+      "ks",
+      "n",
+      "nj",
+      "nh",
+      "t",
+      "l",
+      "lk",
+      "lm",
+      "lb",
+      "ls",
+      "lt",
+      "lp",
+      "lh",
+      "m",
+      "p",
+      "ps",
+      "t",
+      "t",
+      "ng",
+      "t",
+      "t",
+      "k",
+      "t",
+      "p",
+      "h",
+    ];
+    const index = code - 44032;
+    const initialIndex = Math.floor(index / 588);
+    const medialIndex = Math.floor((index % 588) / 28);
+    const finalIndex = index % 28;
+    return `${initial[initialIndex]}${medial[medialIndex]}${final[finalIndex]}`;
+  }
+  function createMemberDashboard(store2) {
+    var _a;
+    const member =
+      store2.members.find((item) => item.id === store2.currentMemberId) ||
+      store2.members[0];
+    const memberOrders = store2.orders.filter(
+      (order) => order.memberId === member.id,
+    );
+    const links = store2.personalReferralLinks.filter(
+      (link) => link.ownerMemberId === member.id,
+    );
+    const points = store2.pointLedger.filter(
+      (item) => item.memberId === member.id,
+    );
+    return `
+    <section class="management-dashboard">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Member / My page</div>
+          <h1 class="detail-title">My Beauty.</h1>
+        </div>
+        <p>\uD68C\uC6D0\uC5D0\uAC8C\uB294 \uB300\uB9AC\uC810 \uC18C\uC18D\uC744 \uB178\uCD9C\uD558\uC9C0 \uC54A\uACE0 \uD3EC\uC778\uD2B8, \uC8FC\uBB38, \uC0C1\uD488\uBCC4 \uCD94\uCC9C\uB9C1\uD06C\uB9CC \uBCF4\uC5EC\uC90D\uB2C8\uB2E4.</p>
+      </div>
+      <div class="management-grid">
+        <article><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></article>
+        <article><span>\uC8FC\uBB38 \uC218</span><strong>${memberOrders.length}\uAC74</strong></article>
+        <article><span>\uCD94\uCC9C \uB9C1\uD06C</span><strong>${links.length}\uAC1C</strong></article>
+        <article><span>\uB300\uD45C \uB9C1\uD06C</span><strong>${((_a = links[0]) == null ? void 0 : _a.code) || "-"}</strong></article>
+        <article><span>\uACE0\uAC1D \uC0C1\uD0DC</span><strong>${member.status}</strong></article>
+      </div>
+      <section class="management-panel">
+        <div class="product-category">Point history</div>
+        <div class="process-list">
+          ${points
+            .slice(0, 4)
+            .map(
+              (point) => `
+              <article class="process-row">
+                <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
+                <div><span>\uAE30\uC900 \uAE08\uC561</span><strong>${formatMoney(point.baseAmount)}</strong></div>
+                <div><span>\uC801\uB9BD\uB960</span><strong>${point.rate}%</strong></div>
+                <div><span>\uC801\uB9BD</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+              </article>
+            `,
+            )
+            .join("")}
+        </div>
+      </section>
+    </section>
+  `;
+  }
+
+  // scripts/data/catalog.js
+  var CATEGORIES = [
+    "\uBBF8\uC6A9\uAE30\uAD6C",
+    "\uBBF8\uC6A9\uC7AC\uB8CC",
+    "\uD654\uC7A5\uD488",
+  ];
+  var products = [
+    {
+      id: "device-led",
+      name: "LED Skin Lifting Device",
+      ko: "LED \uC2A4\uD0A8 \uB9AC\uD504\uD305 \uB514\uBC14\uC774\uC2A4",
+      category: "\uBBF8\uC6A9\uAE30\uAD6C",
+      type: "Home Beauty Device",
+      badge: "Best",
+      price: 89e3,
+      sale: 76e3,
+      option: "1ea / Warm White",
+      short:
+        "\uC9D1\uC5D0\uC11C\uB3C4 \uAC04\uD3B8\uD558\uAC8C \uC0AC\uC6A9\uD558\uB294 \uD648\uCF00\uC5B4 \uBBF8\uC6A9\uAE30\uAE30.",
+      desc: "\uD53C\uBD80 \uD0C4\uB825 \uCF00\uC5B4\uC640 \uB370\uC77C\uB9AC \uD648\uCF00\uC5B4 \uB8E8\uD2F4\uC744 \uC704\uD574 \uC124\uACC4\uD55C \uAC10\uAC01\uC801\uC778 LED \uBBF8\uC6A9\uAE30\uAE30\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "device-brush",
+      name: "Scalp Massage Brush",
+      ko: "\uC2A4\uCE7C\uD504 \uB9C8\uC0AC\uC9C0 \uBE0C\uB7EC\uC2DC",
+      category: "\uBBF8\uC6A9\uAE30\uAD6C",
+      type: "Scalp Care Tool",
+      badge: "New",
+      price: 18e3,
+      sale: 15e3,
+      option: "1ea / Soft Silicone",
+      short:
+        "\uB450\uD53C\uB97C \uBD80\uB4DC\uB7FD\uAC8C \uB9C8\uC0AC\uC9C0\uD574\uC8FC\uB294 \uC2E4\uB9AC\uCF58 \uBE0C\uB7EC\uC2DC.",
+      desc: "\uC0F4\uD478\uC640 \uD568\uAED8 \uC0AC\uC6A9\uD558\uBA74 \uB450\uD53C\uB97C \uAC1C\uC6B4\uD558\uAC8C \uCF00\uC5B4\uD560 \uC218 \uC788\uB294 \uC18C\uD504\uD2B8 \uC2E4\uB9AC\uCF58 \uB9C8\uC0AC\uC9C0 \uBE0C\uB7EC\uC2DC\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "device-nail",
+      name: "Nail Care Tool Set",
+      ko: "\uB124\uC77C \uCF00\uC5B4 \uD234 \uC138\uD2B8",
+      category: "\uBBF8\uC6A9\uAE30\uAD6C",
+      type: "Nail Tool Set",
+      badge: "Hot",
+      price: 22e3,
+      sale: 18e3,
+      option: "3pcs Set / Silver",
+      short:
+        "\uC140\uD504 \uB124\uC77C \uAD00\uB9AC\uB97C \uC704\uD55C \uAE30\uBCF8 \uD234 \uC138\uD2B8.",
+      desc: "\uD050\uD2F0\uD074 \uC815\uB9AC\uC640 \uC190\uD1B1 \uB77C\uC778 \uCF00\uC5B4\uB97C \uC9D1\uC5D0\uC11C\uB3C4 \uAE54\uB054\uD558\uAC8C \uD560 \uC218 \uC788\uB294 \uAE30\uBCF8 \uB124\uC77C \uD234 \uAD6C\uC131\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "mat-ampoule",
+      name: "Salon Hair Ampoule Pack",
+      ko: "\uC0B4\uB871 \uD5E4\uC5B4 \uC570\uD50C \uD329",
+      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
+      type: "Hair Treatment Material",
+      badge: "Best",
+      price: 32e3,
+      sale: 27e3,
+      option: "10ea / Repair",
+      short:
+        "\uC190\uC0C1 \uBAA8\uBC1C \uC9D1\uC911 \uCF00\uC5B4\uC6A9 \uC0B4\uB871 \uC570\uD50C.",
+      desc: "\uAC70\uCE60\uACE0 \uD478\uC11D\uD55C \uBAA8\uBC1C\uC5D0 \uC601\uC591\uAC10\uC744 \uCC44\uC6CC\uC8FC\uB294 \uC0B4\uB871 \uC2A4\uD0C0\uC77C\uC758 \uC9D1\uC911 \uD5E4\uC5B4 \uCF00\uC5B4 \uC570\uD50C \uD329\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "mat-glue",
+      name: "Professional Eyelash Glue",
+      ko: "\uD504\uB85C\uD398\uC154\uB110 \uC18D\uB208\uC379 \uAE00\uB8E8",
+      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
+      type: "Eyelash Material",
+      badge: "New",
+      price: 16e3,
+      sale: 13e3,
+      option: "5ml / Clear",
+      short:
+        "\uC18D\uB208\uC379 \uC5F0\uC7A5\uACFC \uC140\uD504 \uC5F0\uCD9C\uC744 \uC704\uD55C \uC804\uC6A9 \uAE00\uB8E8.",
+      desc: "\uAE54\uB054\uD55C \uB9C8\uBB34\uB9AC\uC640 \uC548\uC815\uC801\uC778 \uACE0\uC815\uAC10\uC744 \uACE0\uB824\uD55C \uC18D\uB208\uC379 \uC804\uC6A9 \uAE00\uB8E8\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "mat-pack",
+      name: "Moisture Modeling Pack",
+      ko: "\uBAA8\uC774\uC2A4\uCC98 \uBAA8\uB378\uB9C1 \uD329",
+      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
+      type: "Esthetic Pack Material",
+      badge: "Hot",
+      price: 28e3,
+      sale: 23e3,
+      option: "5ea / Hydration",
+      short:
+        "\uC5D0\uC2A4\uD14C\uD2F1 \uB290\uB08C\uC758 \uACE0\uBCF4\uC2B5 \uBAA8\uB378\uB9C1 \uD329.",
+      desc: "\uD53C\uBD80\uC5D0 \uCFE8\uB9C1\uAC10\uACFC \uC218\uBD84\uAC10\uC744 \uBE60\uB974\uAC8C \uC804\uB2EC\uD558\uB294 \uD648 \uC5D0\uC2A4\uD14C\uD2F1\uC6A9 \uBAA8\uB378\uB9C1 \uD329\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-cream",
+      name: "Calm Dew Barrier Cream",
+      ko: "\uCE84 \uB4C0 \uBC30\uB9AC\uC5B4 \uD06C\uB9BC",
+      category: "\uD654\uC7A5\uD488",
+      type: "Skincare Cream",
+      badge: "Best",
+      price: 38e3,
+      sale: 32e3,
+      option: "50ml / \uBB34\uD5A5",
+      short:
+        "\uC18D\uAC74\uC870\uC640 \uC7A5\uBCBD \uCF00\uC5B4\uB97C \uC704\uD55C \uCD09\uCD09\uD55C \uB370\uC77C\uB9AC \uD06C\uB9BC.",
+      desc: "\uBBFC\uAC10\uD55C \uD53C\uBD80\uB3C4 \uB9E4\uC77C \uD3B8\uC548\uD558\uAC8C \uC0AC\uC6A9\uD560 \uC218 \uC788\uB3C4\uB85D \uBB34\uAC81\uC9C0 \uC54A\uC740 \uBCF4\uC2B5\uB9C9\uC744 \uB0A8\uAE30\uB294 \uC7A5\uBCBD \uCF00\uC5B4 \uD06C\uB9BC\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-serum",
+      name: "Glass Skin Glow Serum",
+      ko: "\uAE00\uB798\uC2A4 \uC2A4\uD0A8 \uAE00\uB85C\uC6B0 \uC138\uB7FC",
+      category: "\uD654\uC7A5\uD488",
+      type: "Skincare Serum",
+      badge: "New",
+      price: 42e3,
+      sale: 36e3,
+      option: "30ml / \uC724\uAD11 \uCF00\uC5B4",
+      short:
+        "\uD53C\uBD80\uACB0\uACFC \uAD11\uCC44\uB97C \uB9E4\uB044\uB7FD\uAC8C \uC815\uB3C8\uD558\uB294 \uC218\uBD84 \uC138\uB7FC.",
+      desc: "\uB048\uC801\uC784 \uC5C6\uC774 \uD761\uC218\uB418\uB294 \uC6CC\uD130 \uC824 \uD14D\uC2A4\uCC98\uB85C \uD53C\uBD80\uACB0\uC744 \uC815\uB3C8\uD558\uACE0 \uC740\uC740\uD55C \uC724\uAE30\uB97C \uB354\uD574\uC8FC\uB294 \uB370\uC77C\uB9AC \uC138\uB7FC\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-lip",
+      name: "Velvet Tint Balm",
+      ko: "\uBCA8\uBCB3 \uD2F4\uD2B8 \uBC24",
+      category: "\uD654\uC7A5\uD488",
+      type: "Makeup Lip Balm",
+      badge: "Hot",
+      price: 24e3,
+      sale: 19e3,
+      option: "03 Rose Fig",
+      short:
+        "\uC785\uC220\uC740 \uD3B8\uC548\uD558\uAC8C, \uCEEC\uB7EC\uB294 \uBD84\uC704\uAE30 \uC788\uAC8C \uB0A8\uAE30\uB294 \uD2F4\uD2B8 \uBC24.",
+      desc: "\uBC24\uCC98\uB7FC \uBD80\uB4DC\uB7FD\uAC8C \uBC1C\uB9AC\uBA74\uC11C \uC740\uC740\uD55C \uCEEC\uB7EC\uAC00 \uB0A8\uC544 \uB370\uC77C\uB9AC \uBA54\uC774\uD06C\uC5C5\uC5D0 \uC5B4\uC6B8\uB9AC\uB294 \uB9BD \uC81C\uD488\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-sun",
+      name: "Daily Tone Up Sunscreen",
+      ko: "\uB370\uC77C\uB9AC \uD1A4\uC5C5 \uC120\uC2A4\uD06C\uB9B0",
+      category: "\uD654\uC7A5\uD488",
+      type: "Sun Care SPF",
+      badge: "Best",
+      price: 3e4,
+      sale: 25e3,
+      option: "50ml / SPF50+ PA++++",
+      short:
+        "\uBC31\uD0C1\uC740 \uC904\uC774\uACE0 \uD53C\uBD80\uD1A4\uC740 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uC815\uB3C8\uD558\uB294 \uC120\uD06C\uB9BC.",
+      desc: "\uC2A4\uD0A8\uCF00\uC5B4 \uB9C8\uC9C0\uB9C9 \uB2E8\uACC4\uC5D0\uC11C \uD53C\uBD80\uD1A4\uC744 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uBC1D\uD600\uC8FC\uACE0 \uC790\uC678\uC120 \uCC28\uB2E8\uAE4C\uC9C0 \uB3D5\uB294 \uB370\uC77C\uB9AC \uC120\uCF00\uC5B4\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=1200&q=80",
+    },
+  ];
+  var categoryCopy = {
+    미용기구: {
+      benefits: [
+        "\uAC04\uD3B8\uD55C \uD648\uCF00\uC5B4 \uB8E8\uD2F4",
+        "\uAE54\uB054\uD55C \uB514\uC790\uC778\uACFC \uBCF4\uAD00\uC131",
+        "\uCD08\uBCF4\uC790\uB3C4 \uC26C\uC6B4 \uC0AC\uC6A9\uAC10",
+      ],
+      material:
+        "\uBBF8\uC6A9\uAE30\uAE30 \uBCF8\uCCB4, \uC804\uC6A9 \uD328\uD0A4\uC9C0, \uC0AC\uC6A9 \uC124\uBA85\uC11C",
+      usage:
+        "\uC138\uC548 \uB610\uB294 \uC0F4\uD478 \uD6C4 \uD544\uC694\uD55C \uBD80\uC704\uC5D0 \uBD80\uB4DC\uB7FD\uAC8C \uC0AC\uC6A9\uD558\uC138\uC694. \uC0AC\uC6A9 \uD6C4\uC5D0\uB294 \uB9C8\uB978 \uCC9C\uC73C\uB85C \uB2E6\uC544 \uBCF4\uAD00\uD569\uB2C8\uB2E4.",
+      review:
+        "\uB514\uC790\uC778\uC774 \uAE54\uB054\uD558\uACE0 \uC9D1\uC5D0\uC11C \uAD00\uB9AC\uD558\uAE30 \uC88B\uC544 \uB9E4\uC77C \uC190\uC774 \uAC04\uB2E4\uB294 \uBC18\uC751\uC774 \uB9CE\uC2B5\uB2C8\uB2E4.",
+    },
+    미용재료: {
+      benefits: [
+        "\uC0B4\uB871\uAE09 \uCF00\uC5B4 \uB8E8\uD2F4",
+        "\uC804\uBB38\uC801\uC778 \uC0AC\uC6A9\uAC10",
+        "\uD648\uCF00\uC5B4\uC640 \uB9E4\uC7A5 \uC0AC\uC6A9 \uBAA8\uB450 \uC801\uD569",
+      ],
+      material:
+        "\uC804\uBB38 \uBBF8\uC6A9\uC7AC\uB8CC \uBCA0\uC774\uC2A4, \uBCF4\uC2B5/\uCF00\uC5B4 \uC131\uBD84, \uC804\uC6A9 \uD328\uD0A4\uC9C0",
+      usage:
+        "\uC81C\uD488 \uD2B9\uC131\uC5D0 \uB9DE\uAC8C \uC801\uC815\uB7C9\uC744 \uB35C\uC5B4 \uC0AC\uC6A9\uD558\uACE0, \uD544\uC694\uD55C \uACBD\uC6B0 \uCDA9\uBD84\uD788 \uD5F9\uAD88 \uB9C8\uBB34\uB9AC\uD569\uB2C8\uB2E4.",
+      review:
+        "\uC9D1\uC5D0\uC11C\uB3C4 \uAD00\uB9AC\uBC1B\uC740 \uB4EF\uD55C \uB290\uB08C\uC774 \uB098\uACE0 \uC0AC\uC6A9\uBC95\uC774 \uC5B4\uB835\uC9C0 \uC54A\uB2E4\uB294 \uD6C4\uAE30\uAC00 \uB9CE\uC2B5\uB2C8\uB2E4.",
+    },
+    화장품: {
+      benefits: [
+        "\uB370\uC77C\uB9AC \uBDF0\uD2F0 \uB8E8\uD2F4",
+        "\uCD09\uCD09\uD558\uACE0 \uD3B8\uC548\uD55C \uC0AC\uC6A9\uAC10",
+        "\uAC10\uAC01\uC801\uC778 \uD328\uD0A4\uC9C0",
+      ],
+      material:
+        "\uBCF4\uC2B5 \uC131\uBD84, \uD53C\uBD80 \uCEE8\uB514\uC154\uB2DD \uC131\uBD84, \uC2DD\uBB3C \uC720\uB798 \uCD94\uCD9C\uBB3C",
+      usage:
+        "\uAE30\uCD08 \uB8E8\uD2F4 \uB610\uB294 \uBA54\uC774\uD06C\uC5C5 \uB2E8\uACC4\uC5D0 \uB9DE\uCDB0 \uC801\uB2F9\uB7C9\uC744 \uBD80\uB4DC\uB7FD\uAC8C \uD3B4 \uBC1C\uB77C\uC8FC\uC138\uC694.",
+      review:
+        "\uBC1C\uB9BC\uC131\uC774 \uC88B\uACE0 \uB9E4\uC77C \uC4F0\uAE30 \uBD80\uB2F4 \uC5C6\uB294 \uC81C\uD488\uC774\uB77C\uB294 \uBC18\uC751\uC774 \uB9CE\uC2B5\uB2C8\uB2E4.",
+    },
+  };
+  var getProduct = (id) => products.find((item) => item.id === id);
+
+  // scripts/domain/order-processing.js
+  function completeBypassPayment({ cart, store: store2, payment }) {
+    var _a;
+    const member = store2.members.find((item) => item.id === payment.memberId);
+    if (!member) {
+      throw new Error(
+        "\uACB0\uC81C \uCC98\uB9AC \uB300\uC0C1 \uD68C\uC6D0\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      );
+    }
+    const paidProductAmount = cart.reduce(
+      (sum, item) => sum + item.sale * item.qty,
+      0,
+    );
+    const shippingAmount =
+      paidProductAmount > 0 && paidProductAmount < 5e4 ? 3e3 : 0;
+    const paidAmount = paidProductAmount + shippingAmount;
+    const pointRate = store2.settings.purchasePointRate;
+    const earnedPoints = Math.floor((paidProductAmount * pointRate) / 100);
+    const orderId = createId("order", store2.orders.length + 1);
+    const paidAt = /* @__PURE__ */ new Date().toISOString().slice(0, 10);
+    const agencyIdAtOrder =
+      member.agencyId ||
+      ((_a = getHeadquartersAgency(store2)) == null ? void 0 : _a.id);
+    const referralSourceType = payment.referralSourceType || "none";
+    const order = {
+      id: orderId,
+      memberId: member.id,
+      agencyIdAtOrder,
+      referralSourceType,
+      paidProductAmount,
+      shippingAmount,
+      paidAmount,
+      pointEarned: earnedPoints,
+      status: "paid",
+      paidAt,
+      items: cart.map((item) => ({
+        productId: item.id,
+        productName: item.name,
+        productKo: item.ko,
+        sale: item.sale,
+        qty: item.qty,
+        option: item.option,
+      })),
+    };
+    store2.orders.unshift(order);
+    member.points += earnedPoints;
+    store2.pointLedger.unshift({
+      id: createId("point", store2.pointLedger.length + 1),
+      memberId: member.id,
+      orderId,
+      type: "purchase_earn",
+      amount: earnedPoints,
+      baseAmount: paidProductAmount,
+      rate: pointRate,
+      note: "\uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900 \uAD6C\uB9E4 \uC801\uB9BD",
+      createdAt: paidAt,
+    });
+    const referralLinks = createPurchasedProductReferralLinks({
+      cart,
+      memberId: member.id,
+      orderId,
+      store: store2,
+    });
+    store2.personalReferralLinks.unshift(...referralLinks);
+    const agencyProcessing = createAgencyProcessing({ order, store: store2 });
+    if (agencyProcessing) {
+      store2.agencySettlementLedger.unshift(agencyProcessing);
+    }
+    return {
+      order,
+      member,
+      earnedPoints,
+      referralLinks,
+      agencyProcessing,
+      totals: {
+        paidProductAmount,
+        shippingAmount,
+        paidAmount,
+      },
+    };
+  }
+  function createPurchasedProductReferralLinks({
+    cart,
+    memberId,
+    orderId,
+    store: store2,
+  }) {
+    const links = [];
+    const nextNumber = store2.personalReferralLinks.length + 1;
+    cart.forEach((item) => {
+      for (let unitIndex = 1; unitIndex <= item.qty; unitIndex += 1) {
+        const sequence = nextNumber + links.length;
+        links.push({
+          id: createId("ref", sequence),
+          ownerMemberId: memberId,
+          productId: item.id,
+          orderId,
+          unitIndex,
+          code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
+          status: "active",
+        });
+      }
+    });
+    return links;
+  }
+  function createAgencyProcessing({ order, store: store2 }) {
+    if (order.referralSourceType === "personal_product") return null;
+    const agency = store2.agencies.find(
+      (item) => item.id === order.agencyIdAtOrder,
+    );
+    if (!agency) return null;
+    const commissionAmount = Math.floor(
+      (order.paidProductAmount * agency.commissionRate) / 100,
+    );
+    return {
+      id: createId(
+        "agency-settlement",
+        store2.agencySettlementLedger.length + 1,
+      ),
+      agencyId: agency.id,
+      orderId: order.id,
+      baseAmount: order.paidProductAmount,
+      commissionRate: agency.commissionRate,
+      commissionAmount,
+      status: "pending_next_month_15",
+      note: "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C \uB300\uB9AC\uC810 \uC804\uC6D4 \uB9E4\uCD9C \uC815\uC0B0 \uB300\uC0C1",
+      createdAt: order.paidAt,
+    };
+  }
+  function getHeadquartersAgency(store2) {
+    return store2.agencies.find((agency) => agency.isHeadquarters);
+  }
+  function createId(prefix, sequence) {
+    return `${prefix}-${sequence.toString().padStart(3, "0")}`;
+  }
+
+  // scripts/ui/shop.js
+  function createShopController({
+    dom: dom2,
+    store: store2,
+    persistStore,
+    requireLogin: requireLogin2 = () => true,
+  }) {
+    const state = {
+      activeCategory: "all",
+      cart: [],
+    };
+    const getQuantity = () => {
+      var _a;
+      return Math.max(
+        1,
+        Number(
+          ((_a = document.querySelector("#quantity")) == null
+            ? void 0
+            : _a.value) || 1,
+        ),
+      );
+    };
+    function getTotals() {
+      const subtotal = state.cart.reduce(
+        (sum, item) => sum + item.sale * item.qty,
+        0,
+      );
+      const shipping = subtotal > 0 && subtotal < 5e4 ? 3e3 : 0;
+      return {
+        subtotal,
+        shipping,
+        reward: Math.floor(subtotal * 0.03),
+        total: subtotal + shipping,
+        count: state.cart.reduce((sum, item) => sum + item.qty, 0),
+      };
+    }
+    function renderProducts(category = "all") {
+      state.activeCategory = category;
+      document.querySelectorAll(".category-btn").forEach((button) => {
+        button.classList.toggle(
+          "is-active",
+          button.dataset.category === category,
+        );
+      });
+      const list =
+        category === "all"
+          ? products
+          : products.filter((product) => product.category === category);
+      dom2.count.textContent =
+        category === "all"
+          ? `All products \xB7 ${list.length} items`
+          : `${category} \xB7 ${list.length} items`;
+      dom2.grid.innerHTML = list.map(createProductCard).join("");
+    }
+    function createProductCard(product) {
+      return `
+    <article class="product-card" tabindex="0" data-id="${product.id}">
+      <div class="image-wrap">
+        <div class="badge">${product.badge}</div>
+        <img src="${product.image}" alt="${product.ko}" />
+      </div>
+      <div class="product-info">
+        <h3 class="product-name">${product.name}<br />\u3163${product.ko}</h3>
+        <p class="price-row"><strong>\uBD84\uB958 :</strong> ${product.category}</p>
+        <p class="price-row"><strong>\uD0C0\uC785 :</strong> ${product.type}</p>
+        <p class="price-row"><strong>\uD310\uB9E4\uAC00 :</strong> ${formatMoney(product.price)}</p>
+        <p class="price-row sale"><strong>\uD560\uC778\uD310\uB9E4\uAC00 :</strong> ${formatMoney(product.sale)}</p>
+        <p class="desc">${product.short}</p>
+        <div class="click-line">Buy now \u2192</div>
+      </div>
+    </article>
+  `;
+    }
+    function openDetail(product) {
+      if (!product) return;
+      const copy = categoryCopy[product.category];
+      dom2.detail.innerHTML = `
+    <div class="breadcrumb">
+      <button class="back-button" id="backToShop">\u2190 Back to shop</button>
+      <span>Home / Shop / ${product.ko}</span>
+    </div>
+    <section class="detail-layout">
+      <div class="detail-gallery">
+        <figure class="large"><img src="${product.image}" alt="${product.ko}" /></figure>
+        <figure><img src="${product.image}" alt="${product.ko}" /></figure>
+        <figure><img src="${product.image}" alt="${product.ko}" /></figure>
+      </div>
+      <aside class="purchase-panel">
+        <div class="product-category">${product.category} / ${product.type}</div>
+        <h1 class="detail-title">${product.name}</h1>
+        <p class="detail-subtitle">${product.desc}</p>
+        ${createPriceBox(product)}
+        <div class="option-box">
+          <label class="option-label" for="optionSelect">Option</label>
+          <select class="option-select" id="optionSelect">
+            <option>${product.option}</option>
+            <option>Gift wrap \uCD94\uAC00 +3,000\uC6D0</option>
+          </select>
+          <div class="quantity-row">
+            <div>
+              <label class="option-label" for="quantity">Quantity</label>
+              <input class="quantity-input" id="quantity" type="number" value="1" min="1" max="20" />
+            </div>
+            <div>
+              <label class="option-label" for="stockStatus">Stock</label>
+              <input class="quantity-input" id="stockStatus" value="Available" readonly />
+            </div>
+          </div>
+        </div>
+        <div class="buy-actions">
+          <button class="buy-button" id="buyNow">Buy now</button>
+          <button class="cart-button" id="addCart">Add to cart</button>
+        </div>
+        <p class="detail-note">
+          \uACB0\uC81C \uAE30\uB2A5\uC740 \uC0D8\uD50C UI\uC785\uB2C8\uB2E4. \uC2E4\uC81C \uC1FC\uD551\uBAB0\uC5D0\uC11C\uB294 PG \uACB0\uC81C, \uC7AC\uACE0, \uBC30\uC1A1 \uC815\uCC45,
+          \uD68C\uC6D0/\uBE44\uD68C\uC6D0 \uAD6C\uB9E4 \uD50C\uB85C\uC6B0\uB97C \uC5F0\uACB0\uD558\uBA74 \uB429\uB2C8\uB2E4.
+        </p>
+      </aside>
+    </section>
+    ${createDetailContent(copy)}
+  `;
+      showDetailView();
+      document.querySelector("#backToShop").addEventListener("click", showHome);
+      document
+        .querySelector("#addCart")
+        .addEventListener("click", () => addToCart(product));
+      document.querySelector("#buyNow").addEventListener("click", () => {
+        if (
+          addToCart(
+            product,
+            "\uC0C1\uD488\uC744 \uC7A5\uBC14\uAD6C\uB2C8\uC5D0 \uB2F4\uACE0 \uC8FC\uBB38 \uC694\uC57D\uC744 \uC5F4\uC5C8\uC2B5\uB2C8\uB2E4.",
+          )
+        ) {
+          openCart();
+        }
+      });
+    }
+    function createPriceBox(product) {
+      return `
+    <div class="detail-price-box">
+      <div class="detail-price-item"><span>\uD310\uB9E4\uAC00</span><strong>${formatMoney(product.price)}</strong></div>
+      <div class="detail-price-item"><span>\uD560\uC778\uD310\uB9E4\uAC00</span><strong>${formatMoney(product.sale)}</strong></div>
+      <div class="detail-price-item"><span>\uBC30\uC1A1</span><strong>3,000\uC6D0 / 5\uB9CC\uC6D0 \uC774\uC0C1 \uBB34\uB8CC</strong></div>
+      <div class="detail-price-item"><span>\uC801\uB9BD</span><strong>\uAD6C\uB9E4\uAE08\uC561 3%</strong></div>
+    </div>
+  `;
+    }
+    function createDetailContent(copy) {
+      return `
+    <section class="detail-content">
+      <div class="content-block">
+        <h3>Key Benefits</h3>
+        <ul>${copy.benefits.map((item) => `<li>${item}</li>`).join("")}</ul>
+      </div>
+      <div class="content-block">
+        <h3>Ingredients / Material</h3>
+        <p>${copy.material}</p>
+      </div>
+      <div class="content-block">
+        <h3>How to Use</h3>
+        <p>${copy.usage}</p>
+      </div>
+    </section>
+    <section class="review-strip" id="review">
+      <div>
+        <div class="review-score">4.8</div>
+        <div class="small-label">Customer review</div>
+      </div>
+      <div class="review-copy">
+        \u201C${copy.review}\u201D<br />
+        \uBBF8\uB2C8\uBA40\uD55C \uC0C1\uC138 \uAD6C\uC870 \uC548\uC5D0\uC11C \uC81C\uD488 \uD6A8\uB2A5, \uC0AC\uC6A9\uBC95, \uB9AC\uBDF0, \uAD6C\uB9E4 \uBC84\uD2BC\uC744 \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uAC8C \uAD6C\uC131\uD588\uC2B5\uB2C8\uB2E4.
+      </div>
+    </section>
+  `;
+    }
+    function addToCart(product, message) {
+      if (!requireLogin2()) return false;
+      const quantity = getQuantity();
+      const item = state.cart.find((cartItem) => cartItem.id === product.id);
+      if (item) {
+        item.qty += quantity;
+      } else {
+        state.cart.push({ ...product, qty: quantity });
+      }
+      updateCart();
+      showToast(
+        message ||
+          `${product.ko} ${quantity}\uAC1C\uAC00 \uC7A5\uBC14\uAD6C\uB2C8\uC5D0 \uB2F4\uACBC\uC2B5\uB2C8\uB2E4.`,
+      );
+      return true;
+    }
+    function updateCart() {
+      const totals = getTotals();
+      dom2.bag.textContent = totals.count;
+      dom2.cartList.innerHTML = state.cart.length
+        ? state.cart.map(createCartItem).join("")
+        : createEmptyCart();
+      dom2.cartSummary.innerHTML = createCartSummary(totals);
+      document
+        .querySelector("#checkoutButton")
+        .addEventListener("click", () => {
+          state.cart.length
+            ? openCheckout()
+            : showToast(
+                "\uC7A5\uBC14\uAD6C\uB2C8\uC5D0 \uC0C1\uD488\uC744 \uBA3C\uC800 \uB2F4\uC544\uC8FC\uC138\uC694.",
+              );
+        });
+    }
+    function createCartItem(item) {
+      return `
+    <div class="cart-item">
+      <img src="${item.image}" alt="${item.ko}" />
+      <div>
+        <h3>${item.name}<br />\u3163${item.ko}</h3>
+        <p>${item.category} / ${item.type}</p>
+        <p>${item.option}</p>
+        <div class="cart-item-bottom">
+          <div class="qty-control">
+            <button data-id="${item.id}" data-d="-1" aria-label="${item.ko} \uC218\uB7C9 \uC904\uC774\uAE30">\u2212</button>
+            <span>${item.qty}</span>
+            <button data-id="${item.id}" data-d="1" aria-label="${item.ko} \uC218\uB7C9 \uB298\uB9AC\uAE30">+</button>
+          </div>
+          <strong>${formatMoney(item.sale * item.qty)}</strong>
+        </div>
+      </div>
+    </div>
+  `;
+    }
+    function createEmptyCart() {
+      return '<div class="cart-empty">\uC7A5\uBC14\uAD6C\uB2C8\uAC00 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.<br />Shop\uC5D0\uC11C \uC0C1\uD488\uC744 \uC120\uD0DD\uD574\uBCF4\uC138\uC694.</div>';
+    }
+    function createCartSummary({ subtotal, shipping, reward, total }) {
+      return `
+    <div class="summary-row"><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(subtotal)}</strong></div>
+    <div class="summary-row"><span>\uBC30\uC1A1\uBE44</span><strong>${shipping ? formatMoney(shipping) : "\uBB34\uB8CC"}</strong></div>
+    <div class="summary-row"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatMoney(reward)}</strong></div>
+    <div class="summary-row total"><span>\uACB0\uC81C\uC608\uC815\uAE08\uC561</span><strong>${formatMoney(total)}</strong></div>
+    <button class="checkout-button" id="checkoutButton">Checkout</button>
+  `;
+    }
+    function openCheckout() {
+      if (!requireLogin2()) return;
+      closeCart();
+      const totals = getTotals();
+      dom2.detail.innerHTML = `
+    <div class="breadcrumb">
+      <button class="back-button" id="backToShop">\u2190 Back to shop</button>
+      <span>Home / Checkout</span>
+    </div>
+    <section class="detail-layout">
+      <div class="purchase-panel static-panel">
+        <div class="product-category">Checkout / Order Form</div>
+        <h1 class="detail-title">Payment<br />Page.</h1>
+        <p class="detail-subtitle">\uC8FC\uBB38\uC790 \uC815\uBCF4, \uBC30\uC1A1\uC9C0, \uACB0\uC81C\uC218\uB2E8\uC744 \uD655\uC778\uD558\uB294 \uC0D8\uD50C \uACB0\uC81C \uD398\uC774\uC9C0\uC785\uB2C8\uB2E4.</p>
+        <div class="option-box">
+          <label class="option-label" for="customerName">\uC8FC\uBB38\uC790\uBA85</label>
+          <input class="quantity-input" id="customerName" value="\uD64D\uAE38\uB3D9" />
+          <div class="quantity-row">
+            <div>
+              <label class="option-label" for="customerPhone">\uC5F0\uB77D\uCC98</label>
+              <input class="quantity-input" id="customerPhone" value="010-0000-0000" />
+            </div>
+            <div>
+              <label class="option-label" for="zipCode">\uC6B0\uD3B8\uBC88\uD638</label>
+              <input class="quantity-input" id="zipCode" value="06236" />
+            </div>
+          </div>
+          <label class="option-label" for="address">\uBC30\uC1A1\uC9C0</label>
+          <input class="quantity-input" id="address" value="\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000" />
+          <label class="option-label" for="paymentMethod">\uACB0\uC81C\uC218\uB2E8</label>
+          <select class="option-select" id="paymentMethod">
+            <option>\uC2E0\uC6A9\uCE74\uB4DC</option>
+            <option>\uCE74\uCE74\uC624\uD398\uC774</option>
+            <option>\uB124\uC774\uBC84\uD398\uC774</option>
+            <option>\uBB34\uD1B5\uC7A5\uC785\uAE08</option>
+          </select>
+        </div>
+        <div class="buy-actions">
+          <button class="buy-button" id="finalPay">Pay now</button>
+          <button class="cart-button" id="openCartAgain">Cart</button>
+        </div>
+        <p class="detail-note">
+          \uC0D8\uD50C \uD654\uBA74\uC785\uB2C8\uB2E4. \uC2E4\uC81C \uC6B4\uC601 \uC2DC PG\uC0AC \uACB0\uC81C\uCC3D, \uC8FC\uBB38\uBC88\uD638 \uC0DD\uC131, \uC7AC\uACE0 \uCC28\uAC10,
+          \uBC30\uC1A1\uC9C0 \uAC80\uC99D \uB85C\uC9C1\uC744 \uC5F0\uACB0\uD558\uBA74 \uB429\uB2C8\uB2E4.
+        </p>
+      </div>
+      <aside class="purchase-panel static-panel">
+        <div class="product-category">Order Summary</div>
+        <div class="order-list">${state.cart.map(createCheckoutItem).join("")}</div>
+        ${createCheckoutTotals(totals)}
+      </aside>
+    </section>
+    ${createCheckoutLedDetail()}
+  `;
+      showDetailView();
+      document.querySelector("#backToShop").addEventListener("click", showHome);
+      document
+        .querySelector("#openCartAgain")
+        .addEventListener("click", openCart);
+      document
+        .querySelector("#finalPay")
+        .addEventListener("click", completeCheckoutBypass);
+    }
+    function completeCheckoutBypass() {
+      if (!requireLogin2()) return;
+      if (!state.cart.length) {
+        showToast(
+          "\uC7A5\uBC14\uAD6C\uB2C8\uC5D0 \uC0C1\uD488\uC744 \uBA3C\uC800 \uB2F4\uC544\uC8FC\uC138\uC694.",
+        );
+        return;
+      }
+      const result = completeBypassPayment({
+        cart: state.cart,
+        store: store2,
+        payment: {
+          memberId: store2.currentMemberId,
+          referralSourceType: "none",
+        },
+      });
+      state.cart = [];
+      persistStore(store2);
+      updateCart();
+      openPaymentResult(result);
+      showToast(
+        `\uACB0\uC81C \uC644\uB8CC: ${result.earnedPoints.toLocaleString("ko-KR")} \uD3EC\uC778\uD2B8\uAC00 \uC801\uB9BD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
+      );
+    }
+    function openPaymentResult(result) {
+      var _a, _b;
+      dom2.detail.innerHTML = `
+    <div class="breadcrumb">
+      <button class="back-button" id="backToShop">\u2190 Back to shop</button>
+      <span>Home / Checkout / Complete</span>
+    </div>
+    <section class="payment-result" id="paymentResult">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Payment bypass / Paid</div>
+          <h1 class="detail-title">Order<br />Complete.</h1>
+        </div>
+        <p>
+          PG \uACB0\uC81C\uCC3D\uC740 \uC6B0\uD68C \uCC98\uB9AC\uD588\uACE0, \uBC30\uC1A1\uBE44\uB97C \uC81C\uC678\uD55C \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900\uC73C\uB85C
+          \uD3EC\uC778\uD2B8 \uC801\uB9BD\uACFC \uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC7A5\uBD80\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.
+        </p>
+      </div>
+      <div class="management-grid">
+        <article><span>\uC8FC\uBB38\uBC88\uD638</span><strong>${result.order.id}</strong></article>
+        <article><span>\uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(result.totals.paidProductAmount)}</strong></article>
+        <article><span>\uBC30\uC1A1\uBE44</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "\uBB34\uB8CC"}</strong></article>
+        <article><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
+        <article><span>\uB300\uB9AC\uC810 \uC815\uC0B0 \uAE30\uC900</span><strong>${formatMoney(((_a = result.agencyProcessing) == null ? void 0 : _a.baseAmount) || 0)}</strong></article>
+        <article><span>\uC601\uC5C5\uBE44 \uC608\uC815</span><strong>${formatMoney(((_b = result.agencyProcessing) == null ? void 0 : _b.commissionAmount) || 0)}</strong></article>
+        <article><span>\uCD94\uCC9C \uB9C1\uD06C \uC0DD\uC131</span><strong>${result.referralLinks.length}\uAC1C</strong></article>
+        <article><span>\uCC98\uB9AC \uC0C1\uD0DC</span><strong>\uC644\uB8CC</strong></article>
+      </div>
+      <div class="payment-process">
+        <div><strong>01 \uC8FC\uBB38 \uC0DD\uC131</strong><span>${result.order.id} \uC8FC\uBB38\uC744 paid \uC0C1\uD0DC\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.</span></div>
+        <div><strong>02 \uD3EC\uC778\uD2B8 \uC801\uB9BD</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store2.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
+        <div><strong>03 \uB300\uB9AC\uC810 \uCC98\uB9AC</strong><span>\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C ${result.agencyProcessing ? "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC7A5\uBD80\uC5D0 \uBC18\uC601\uD588\uC2B5\uB2C8\uB2E4." : "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uC0C1\uC5D0\uC11C \uC81C\uC678\uD588\uC2B5\uB2C8\uB2E4."}</span></div>
+        <div><strong>04 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC218\uB7C9 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
+      </div>
+      <div class="buy-actions result-actions">
+        <button class="buy-button" type="button" data-management-link="admin">Admin \uCC98\uB9AC \uD655\uC778</button>
+        <button class="cart-button" type="button" data-management-link="agency">Agency \uC815\uC0B0 \uD655\uC778</button>
+        <button class="cart-button" type="button" data-management-link="member">Member \uD3EC\uC778\uD2B8 \uD655\uC778</button>
+      </div>
+    </section>
+  `;
+      showDetailView();
+      document.querySelector("#backToShop").addEventListener("click", showHome);
+    }
+    function createCheckoutLedDetail() {
+      const ledItem = state.cart.find((item) => item.id === "device-led");
+      if (!ledItem) return "";
+      const product = getProduct("device-led");
+      return `
+    <section class="checkout-product-detail" id="checkoutLedDetail">
+      <div class="checkout-detail-media">
+        <img src="${product.image}" alt="${product.ko} \uC0C1\uC138 \uC774\uBBF8\uC9C0" />
+        <div class="visual-caption">
+          <span>Only for checkout</span>
+          <span>${product.badge}</span>
+        </div>
+      </div>
+      <div class="checkout-detail-copy">
+        <div class="product-category">${product.category} / ${product.type}</div>
+        <h2>LED Skin<br />Lifting Device</h2>
+        <p>
+          \uACB0\uC81C \uC804 \uD55C \uBC88 \uB354 \uD655\uC778\uD560 \uC218 \uC788\uB3C4\uB85D LED \uC2A4\uD0A8 \uB9AC\uD504\uD305 \uB514\uBC14\uC774\uC2A4 \uC804\uC6A9 \uC0C1\uC138 \uC815\uBCF4\uB97C
+          \uACB0\uC81C \uD654\uBA74 \uD558\uB2E8\uC5D0 \uBC30\uCE58\uD588\uC2B5\uB2C8\uB2E4. \uD648\uCF00\uC5B4 \uB8E8\uD2F4, \uC0AC\uC6A9 \uD3B8\uC758\uC131, \uBC30\uC1A1 \uC815\uBCF4\uB97C
+          \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.
+        </p>
+        <div class="checkout-detail-grid">
+          <div>
+            <strong>\uAD6C\uB9E4 \uC218\uB7C9</strong>
+            <span>${ledItem.qty}\uAC1C</span>
+          </div>
+          <div>
+            <strong>\uC0C1\uD488 \uAE08\uC561</strong>
+            <span>${formatMoney(product.sale * ledItem.qty)}</span>
+          </div>
+          <div>
+            <strong>\uC635\uC158</strong>
+            <span>${product.option}</span>
+          </div>
+          <div>
+            <strong>\uCD94\uCC9C \uB8E8\uD2F4</strong>
+            <span>\uC138\uC548 \uD6C4 5\uBD84 \uD0C4\uB825 \uD648\uCF00\uC5B4</span>
+          </div>
+        </div>
+        <div class="checkout-care-list">
+          <div><strong>01</strong> \uD53C\uBD80 \uD0C4\uB825 \uCF00\uC5B4\uC640 \uB370\uC77C\uB9AC \uD648\uCF00\uC5B4 \uB8E8\uD2F4\uC5D0 \uC801\uD569\uD569\uB2C8\uB2E4.</div>
+          <div><strong>02</strong> \uC190\uC5D0 \uC7A1\uD788\uB294 \uC2AC\uB9BC\uD55C \uD615\uD0DC\uB85C \uBCF4\uAD00\uACFC \uC0AC\uC6A9\uC774 \uAC04\uD3B8\uD569\uB2C8\uB2E4.</div>
+          <div><strong>03</strong> \uC0AC\uC6A9 \uD6C4\uC5D0\uB294 \uB9C8\uB978 \uCC9C\uC73C\uB85C \uB2E6\uC544 \uAC74\uC870\uD55C \uACF3\uC5D0 \uBCF4\uAD00\uD558\uC138\uC694.</div>
+        </div>
+      </div>
+    </section>
+  `;
+    }
+    function createCheckoutItem(item) {
+      return `
+    <div class="cart-item">
+      <img src="${item.image}" alt="${item.ko}" />
+      <div>
+        <h3>${item.name}<br />\u3163${item.ko}</h3>
+        <p>${item.category} / ${item.type}</p>
+        <p>\uC218\uB7C9 ${item.qty}</p>
+        <div class="cart-item-bottom">
+          <span>${item.option}</span>
+          <strong>${formatMoney(item.sale * item.qty)}</strong>
+        </div>
+      </div>
+    </div>
+  `;
+    }
+    function createCheckoutTotals({ subtotal, shipping, reward, total }) {
+      return `
+    <div class="detail-price-box">
+      <div class="detail-price-item"><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(subtotal)}</strong></div>
+      <div class="detail-price-item"><span>\uBC30\uC1A1\uBE44</span><strong>${shipping ? formatMoney(shipping) : "\uBB34\uB8CC"}</strong></div>
+      <div class="detail-price-item"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatMoney(reward)}</strong></div>
+      <div class="detail-price-item"><span>\uACB0\uC81C\uC608\uC815\uAE08\uC561</span><strong>${formatMoney(total)}</strong></div>
+    </div>
+  `;
+    }
+    function showHome() {
+      var _a;
+      dom2.detail.classList.add("is-hidden");
+      dom2.auth.classList.add("is-hidden");
+      (_a = dom2.management) == null ? void 0 : _a.classList.add("is-hidden");
+      dom2.home.classList.remove("is-hidden");
+      renderProducts(state.activeCategory);
+      setTimeout(
+        () =>
+          document
+            .querySelector("#shop")
+            .scrollIntoView({ behavior: "smooth" }),
+        0,
+      );
+    }
+    function showDetailView() {
+      var _a;
+      dom2.home.classList.add("is-hidden");
+      dom2.auth.classList.add("is-hidden");
+      (_a = dom2.management) == null ? void 0 : _a.classList.add("is-hidden");
+      dom2.detail.classList.remove("is-hidden");
+      scrollTo({ top: 0, behavior: "smooth" });
+    }
+    function openCart() {
+      updateCart();
+      document.body.classList.add("cart-open");
+    }
+    function closeCart() {
+      document.body.classList.remove("cart-open");
+    }
+    function showToast(message) {
+      dom2.toast.textContent = message;
+      dom2.toast.classList.add("is-open");
+      setTimeout(() => dom2.toast.classList.remove("is-open"), 2300);
+    }
+    function bindShopEvents() {
+      document.querySelectorAll(".category-btn").forEach((button) => {
+        button.addEventListener("click", () =>
+          renderProducts(button.dataset.category),
+        );
+      });
+      dom2.grid.addEventListener("click", (event) => {
+        const card = event.target.closest(".product-card");
+        if (card) openDetail(getProduct(card.dataset.id));
+      });
+      dom2.grid.addEventListener("keydown", (event) => {
+        const card = event.target.closest(".product-card");
+        if (!card || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        openDetail(getProduct(card.dataset.id));
+      });
+      dom2.cartList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-id]");
+        if (!button) return;
+        const item = state.cart.find(
+          (cartItem) => cartItem.id === button.dataset.id,
+        );
+        if (!item) return;
+        item.qty += Number(button.dataset.d);
+        state.cart = state.cart.filter((cartItem) => cartItem.qty > 0);
+        updateCart();
+      });
+      dom2.bag.addEventListener("click", openCart);
+      document
+        .querySelector("#cartOverlay")
+        .addEventListener("click", closeCart);
+      document.querySelector("#cartClose").addEventListener("click", closeCart);
+      document.querySelector("#logoHome").addEventListener("click", () => {
+        dom2.detail.classList.add("is-hidden");
+        dom2.auth.classList.add("is-hidden");
+        dom2.home.classList.remove("is-hidden");
+        renderProducts(state.activeCategory);
+        scrollTo({ top: 0, behavior: "smooth" });
+      });
+      document.querySelectorAll("[data-home-link]").forEach((link) => {
+        link.addEventListener("click", () => {
+          dom2.detail.classList.add("is-hidden");
+          dom2.auth.classList.add("is-hidden");
+          dom2.home.classList.remove("is-hidden");
+          renderProducts(state.activeCategory);
+        });
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeCart();
+      });
+    }
+    function validateCatalog() {
+      const categorySet = new Set(products.map((product) => product.category));
+      const hasRequiredCategories = CATEGORIES.every((category) =>
+        categorySet.has(category),
+      );
+      if (products.length !== 10 || !hasRequiredCategories) {
+        console.warn(
+          "\uC0C1\uD488 \uB370\uC774\uD130\uB294 \uCD1D 10\uAC1C\uC640 \uC9C0\uC815\uB41C 3\uAC1C \uCE74\uD14C\uACE0\uB9AC\uB97C \uC720\uC9C0\uD574\uC57C \uD569\uB2C8\uB2E4.",
+        );
+      }
+    }
+    return {
+      state,
+      renderProducts,
+      openDetail,
+      addToCart,
+      updateCart,
+      openCart,
+      closeCart,
+      openCheckout,
+      completeCheckoutBypass,
+      showHome,
+      showToast,
+      bindShopEvents,
+      validateCatalog,
+    };
+  }
+
+  // scripts/app.js
+  var dom = {
+    grid: document.querySelector("#productGrid"),
+    home: document.querySelector("#homeView"),
+    detail: document.querySelector("#detailView"),
+    auth: document.querySelector("#authView"),
+    management: document.querySelector("#managementView"),
+    count: document.querySelector("#categoryCount"),
+    bag: document.querySelector("#bagButton"),
+    cartList: document.querySelector("#cartList"),
+    cartSummary: document.querySelector("#cartSummary"),
+    toast: document.querySelector("#toast"),
+    loginLink: document.querySelector("#loginLink"),
+    sessionUser: document.querySelector("#sessionUser"),
+    logoutButton: document.querySelector("#logoutButton"),
+  };
+  var store = loadStore();
+  saveStore(store);
+  var shop = createShopController({
+    dom,
+    store,
+    persistStore: saveStore,
+    requireLogin,
+  });
+  var auth = createAuthController({
+    dom,
+    store,
+    persistStore: saveStore,
+    updateSessionUi,
+    showHome: shop.showHome,
+    closeCart: shop.closeCart,
+    showToast: shop.showToast,
+  });
+  var management = createManagementController({
+    dom,
+    store,
+    closeCart: shop.closeCart,
+    persistStore: saveStore,
+  });
+  shop.validateCatalog();
+  shop.bindShopEvents();
+  shop.renderProducts();
+  shop.updateCart();
+  dom.loginLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    auth.openAuth("login");
+  });
+  dom.logoutButton.addEventListener("click", () => {
+    store.currentMemberId = "";
+    saveStore(store);
+    updateSessionUi();
+    shop.showToast("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
+  });
+  document.addEventListener("click", (event) => {
+    const agencyJoinLink = event.target.closest("[data-agency-join-link]");
+    if (agencyJoinLink) {
+      event.preventDefault();
+      store.pendingAgencySlug = agencyJoinLink.dataset.agencyJoinLink;
+      saveStore(store);
+      auth.openAuth("signup");
+      return;
+    }
+    const link = event.target.closest("[data-management-link]");
+    if (!link) return;
+    event.preventDefault();
+    management.openManagement(link.dataset.managementLink);
+  });
+  initializeAgencyJoinContext();
+  updateSessionUi();
+  function initializeAgencyJoinContext() {
+    var _a;
+    const params = new URLSearchParams(window.location.search);
+    const agencySlug =
+      params.get("agency") ||
+      ((_a = window.location.hash.match(/^#join\/(.+)$/)) == null
+        ? void 0
+        : _a[1]);
+    if (!agencySlug) return;
+    store.pendingAgencySlug = decodeURIComponent(agencySlug);
+    saveStore(store);
+    auth.openAuth("signup");
+  }
+  function getCurrentMember() {
+    return store.members.find((member) => member.id === store.currentMemberId);
+  }
+  function updateSessionUi() {
+    const member = getCurrentMember();
+    dom.loginLink.classList.toggle("is-hidden", Boolean(member));
+    dom.sessionUser.classList.toggle("is-hidden", !member);
+    dom.logoutButton.classList.toggle("is-hidden", !member);
+    dom.sessionUser.textContent = member ? `${member.name}\uB2D8` : "";
+  }
+  function requireLogin() {
+    if (getCurrentMember()) return true;
+    shop.showToast(
+      "\uB85C\uADF8\uC778 \uD6C4 \uAD6C\uB9E4\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+    );
+    auth.openAuth("login");
+    return false;
+  }
+})();
