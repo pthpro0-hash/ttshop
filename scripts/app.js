@@ -3,115 +3,122 @@ import { createAuthController } from "./ui/auth.js";
 import { createManagementController } from "./ui/management.js";
 import { createShopController } from "./ui/shop.js";
 
-const dom = {
-  grid: document.querySelector("#productGrid"),
-  home: document.querySelector("#homeView"),
-  detail: document.querySelector("#detailView"),
-  auth: document.querySelector("#authView"),
-  management: document.querySelector("#managementView"),
-  count: document.querySelector("#categoryCount"),
-  bag: document.querySelector("#bagButton"),
-  cartList: document.querySelector("#cartList"),
-  cartSummary: document.querySelector("#cartSummary"),
-  toast: document.querySelector("#toast"),
-  loginLink: document.querySelector("#loginLink"),
-  sessionUser: document.querySelector("#sessionUser"),
-  logoutButton: document.querySelector("#logoutButton"),
-};
+const appReady = initializeApp();
+window.__beautyAppReady = appReady;
 
-const store = loadStore();
-saveStore(store);
+async function initializeApp() {
+  const dom = {
+    grid: document.querySelector("#productGrid"),
+    home: document.querySelector("#homeView"),
+    detail: document.querySelector("#detailView"),
+    auth: document.querySelector("#authView"),
+    management: document.querySelector("#managementView"),
+    count: document.querySelector("#categoryCount"),
+    bag: document.querySelector("#bagButton"),
+    cartList: document.querySelector("#cartList"),
+    cartSummary: document.querySelector("#cartSummary"),
+    toast: document.querySelector("#toast"),
+    loginLink: document.querySelector("#loginLink"),
+    sessionUser: document.querySelector("#sessionUser"),
+    logoutButton: document.querySelector("#logoutButton"),
+  };
 
-const shop = createShopController({
-  dom,
-  store,
-  persistStore: saveStore,
-  requireLogin,
-});
-const auth = createAuthController({
-  dom,
-  store,
-  persistStore: saveStore,
-  updateSessionUi,
-  showHome: shop.showHome,
-  closeCart: shop.closeCart,
-  showToast: shop.showToast,
-});
-const management = createManagementController({
-  dom,
-  store,
-  closeCart: shop.closeCart,
-  persistStore: saveStore,
-});
+  const store = await loadStore();
+  await saveStore(store);
 
-shop.validateCatalog();
-shop.bindShopEvents();
-shop.renderProducts();
-shop.updateCart();
+  const getCurrentMember = () =>
+    store.members.find((member) => member.id === store.currentMemberId);
 
-dom.loginLink.addEventListener("click", (event) => {
-  event.preventDefault();
-  auth.openAuth("login");
-});
-dom.sessionUser.addEventListener("click", () => {
-  auth.openProfile();
-});
-dom.logoutButton.addEventListener("click", () => {
-  store.currentMemberId = "";
-  saveStore(store);
-  updateSessionUi();
-  auth.closeAuth();
-  shop.showToast("로그아웃되었습니다.");
-});
+  let shop;
+  let auth;
 
-document.addEventListener("click", (event) => {
-  const agencyJoinLink = event.target.closest("[data-agency-join-link]");
-  if (agencyJoinLink) {
-    event.preventDefault();
-    store.pendingAgencySlug = agencyJoinLink.dataset.agencyJoinLink;
-    saveStore(store);
-    auth.openAuth("signup");
-    return;
+  function updateSessionUi() {
+    const member = getCurrentMember();
+    dom.loginLink.classList.toggle("is-hidden", Boolean(member));
+    dom.sessionUser.classList.toggle("is-hidden", !member);
+    dom.logoutButton.classList.toggle("is-hidden", !member);
+    dom.sessionUser.textContent = member ? `${member.name}님` : "";
   }
 
-  const link = event.target.closest("[data-management-link]");
-  if (!link) return;
+  function requireLogin() {
+    if (getCurrentMember()) return true;
 
-  event.preventDefault();
-  auth.closeAuth();
-  management.openManagement(link.dataset.managementLink);
-});
+    shop.showToast("로그인 후 구매할 수 있습니다.");
+    auth.openAuth("login");
+    return false;
+  }
 
-initializeAgencyJoinContext();
-updateSessionUi();
+  shop = createShopController({
+    dom,
+    store,
+    persistStore: saveStore,
+    requireLogin,
+  });
+  auth = createAuthController({
+    dom,
+    store,
+    persistStore: saveStore,
+    updateSessionUi,
+    showHome: shop.showHome,
+    closeCart: shop.closeCart,
+    showToast: shop.showToast,
+  });
+  const management = createManagementController({
+    dom,
+    store,
+    closeCart: shop.closeCart,
+    persistStore: saveStore,
+  });
 
-function initializeAgencyJoinContext() {
-  const params = new URLSearchParams(window.location.search);
-  const agencySlug =
-    params.get("agency") || window.location.hash.match(/^#join\/(.+)$/)?.[1];
-  if (!agencySlug) return;
+  shop.validateCatalog();
+  shop.bindShopEvents();
+  shop.renderProducts();
+  shop.updateCart();
 
-  store.pendingAgencySlug = decodeURIComponent(agencySlug);
-  saveStore(store);
-  auth.openAuth("signup");
-}
+  dom.loginLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    auth.openAuth("login");
+  });
+  dom.sessionUser.addEventListener("click", () => {
+    auth.openProfile();
+  });
+  dom.logoutButton.addEventListener("click", () => {
+    store.currentMemberId = "";
+    saveStore(store);
+    updateSessionUi();
+    auth.closeAuth();
+    shop.showToast("로그아웃되었습니다.");
+  });
 
-function getCurrentMember() {
-  return store.members.find((member) => member.id === store.currentMemberId);
-}
+  document.addEventListener("click", (event) => {
+    const agencyJoinLink = event.target.closest("[data-agency-join-link]");
+    if (agencyJoinLink) {
+      event.preventDefault();
+      store.pendingAgencySlug = agencyJoinLink.dataset.agencyJoinLink;
+      saveStore(store);
+      auth.openAuth("signup");
+      return;
+    }
 
-function updateSessionUi() {
-  const member = getCurrentMember();
-  dom.loginLink.classList.toggle("is-hidden", Boolean(member));
-  dom.sessionUser.classList.toggle("is-hidden", !member);
-  dom.logoutButton.classList.toggle("is-hidden", !member);
-  dom.sessionUser.textContent = member ? `${member.name}님` : "";
-}
+    const link = event.target.closest("[data-management-link]");
+    if (!link) return;
 
-function requireLogin() {
-  if (getCurrentMember()) return true;
+    event.preventDefault();
+    auth.closeAuth();
+    management.openManagement(link.dataset.managementLink);
+  });
 
-  shop.showToast("로그인 후 구매할 수 있습니다.");
-  auth.openAuth("login");
-  return false;
+  initializeAgencyJoinContext();
+  updateSessionUi();
+
+  function initializeAgencyJoinContext() {
+    const params = new URLSearchParams(window.location.search);
+    const agencySlug =
+      params.get("agency") || window.location.hash.match(/^#join\/(.+)$/)?.[1];
+    if (!agencySlug) return;
+
+    store.pendingAgencySlug = decodeURIComponent(agencySlug);
+    saveStore(store);
+    auth.openAuth("signup");
+  }
 }

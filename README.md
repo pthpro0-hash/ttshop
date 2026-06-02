@@ -4,21 +4,27 @@
 
 ## 실행 방법
 
-브라우저에서 `index.html`을 직접 열어 실행할 수 있습니다.
-
-로컬 서버로 확인하려면 프로젝트 폴더에서 아래 명령어를 실행하세요.
+데이터 유지를 확인하려면 로컬 서버로 실행하세요. 프로젝트 폴더에서 아래 명령어를 실행합니다.
 
 ```bash
-npx serve .
+npm start
 ```
 
-또는 Python이 설치되어 있다면 아래 명령어도 사용할 수 있습니다.
+그 다음 브라우저에서 `http://localhost:8000`으로 접속합니다. 회원, 주문, 포인트, 대리점 정산 데이터는 `data/beauty-shop.sqlite`에 저장됩니다.
+
+탐색기에서 `index.html`을 직접 열어도 화면은 동작하지만, 이 경우 서버 API를 사용할 수 없으므로 브라우저 IndexedDB fallback으로 저장됩니다.
+
+번들을 다시 생성하려면 아래 명령어를 실행합니다.
 
 ```bash
-python -m http.server 8000
+npm run build
 ```
 
-그 다음 브라우저에서 `http://localhost:8000`으로 접속합니다.
+DB 저장소 테스트는 아래 명령어로 실행합니다.
+
+```bash
+npm test
+```
 
 ## 파일 구조
 
@@ -27,11 +33,15 @@ python -m http.server 8000
 - `scripts/app.js`: DOM 연결, 화면 전환, 모듈 초기화
 - `scripts/app.bundle.js`: 탐색기에서 `index.html`을 직접 열어도 동작하도록 만든 브라우저 실행용 번들
 - `scripts/data/catalog.js`: 상품 10개와 카테고리 데이터
-- `scripts/data/demo-store.js`: 관리자/대리점/회원 데모 데이터와 `localStorage` 저장소
+- `scripts/data/demo-store.js`: 관리자/대리점/회원 데모 데이터, 서버 API 저장소, IndexedDB fallback
 - `scripts/ui/shop.js`: 상품 목록, 상세페이지, 장바구니, 결제 화면 로직
 - `scripts/ui/auth.js`: 로그인/회원가입 데모 화면
 - `scripts/ui/management.js`: Admin / Agency / Member 관리 화면
 - `scripts/utils/format.js`: 공통 포맷 유틸리티
+- `server/server.mjs`: 정적 파일 제공과 `/api/store` API를 담당하는 로컬 서버
+- `server/db.mjs`: SQLite 테이블 저장/조회 로직
+- `server/schema.sql`: 로컬 DB 테이블 스키마
+- `data/beauty-shop.sqlite`: 로컬 서버 실행 시 생성되는 SQLite DB 파일
 
 ## 구현 기능
 
@@ -75,7 +85,7 @@ python -m http.server 8000
 
 ## 회원 기능 안내
 
-회원가입과 로그인은 브라우저 `localStorage` 기반 데모 세션으로 처리합니다. 실제 소셜 인증, 아이디/비밀번호 검증, 서버 DB 저장 로직은 구현하지 않았습니다.
+회원가입과 로그인은 로컬 서버 실행 시 SQLite DB 기반 데모 세션으로 처리합니다. 실제 소셜 인증은 구현하지 않았지만, 일반 회원가입/로그인은 입력한 계정과 비밀번호로 검증합니다.
 
 - 로그인: 일반 로그인과 간편 로그인을 한 화면에서 제공
 - 회원가입: 간편회원가입과 일반회원가입을 한 화면에서 제공
@@ -89,6 +99,17 @@ python -m http.server 8000
 - 내정보 이력: 구매이력과 포인트 적립/사용 이력 확인 가능
 - 미로그인 구매 시도: Add to cart, Buy now, Checkout, Pay now 진입을 차단하고 로그인 화면 표시
 
+## 로컬 서버 DB 처리
+
+쇼핑몰에서 생성되는 회원, 로그인 세션, 주문, 포인트 장부, 대리점 정산, 개인 추천링크 데이터는 로컬 서버의 SQLite DB에 저장합니다.
+
+- DB 파일: `data/beauty-shop.sqlite`
+- API: `GET /api/store`, `PUT /api/store`
+- 주요 테이블: `settings`, `agencies`, `members`, `orders`, `order_items`, `point_ledger`, `agency_settlement_ledger`, `personal_referral_links`, `app_meta`
+- 브라우저에서 서버로 접속하면 SQLite DB가 우선 사용됨
+- 탐색기에서 `file://`로 직접 실행하거나 서버 API가 응답하지 않으면 IndexedDB fallback 사용
+- IndexedDB/localStorage는 fallback과 호환 백업용이며, 서버 실행 기준의 원본 데이터는 SQLite 파일
+
 ## 상품 데이터 조건
 
 - 카테고리 3개 유지: 미용기구, 미용재료, 화장품
@@ -97,7 +118,7 @@ python -m http.server 8000
 
 ## 관리 기능 1단계 안내
 
-관리자/대리점/회원 기능은 1단계 기반 화면입니다. 실제 포인트 계산, 대리점 정산 생성, 추천 보상 지급, 상품 옵션 관리, 서버 DB 저장은 다음 단계에서 분리된 모듈 기준으로 구현합니다.
+관리자/대리점/회원 기능은 1단계 기반 화면입니다. 포인트 계산, 대리점 정산 생성, 회원/주문/추천링크 저장은 로컬 SQLite DB에 반영됩니다. 상품 옵션 관리와 실제 PG 결제 연동은 다음 단계에서 확장합니다.
 
 - 추천 링크 정책: 상품 1개당 개인 추천 링크 1개
 - 계산 기준: 배송비를 제외한 실결제 상품금액

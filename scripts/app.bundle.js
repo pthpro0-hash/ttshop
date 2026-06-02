@@ -1,6 +1,10 @@
 (() => {
   // scripts/data/demo-store.js
   var STORE_KEY = "beauty-ref-demo-store-v1";
+  var DB_NAME = "beauty-ref-local-db";
+  var DB_VERSION = 1;
+  var DB_STORE = "app-state";
+  var DB_STATE_KEY = "store";
   var defaultStore = {
     currentMemberId: "",
     settings: {
@@ -124,7 +128,47 @@
       return null;
     }
   }
-  function loadStore() {
+  async function loadStore() {
+    var _a, _b;
+    const serverStore = await loadStoreFromServer();
+    if (serverStore) {
+      const localStore = await getBestLocalStore();
+      const shouldMigrate = shouldMigrateLocalStoreToServer(
+        serverStore,
+        localStore,
+      );
+      const snapshot = shouldMigrate
+        ? normalizeStore(localStore)
+        : normalizeStore(serverStore);
+      if (shouldMigrate) await saveStoreToServer(snapshot);
+      (_a = getStorage()) == null
+        ? void 0
+        : _a.setItem(STORE_KEY, JSON.stringify(snapshot));
+      await saveStoreToDatabase(snapshot);
+      return snapshot;
+    }
+    const databaseStore = await loadStoreFromDatabase();
+    if (databaseStore) {
+      const snapshot = normalizeStore(databaseStore);
+      (_b = getStorage()) == null
+        ? void 0
+        : _b.setItem(STORE_KEY, JSON.stringify(snapshot));
+      return snapshot;
+    }
+    const legacyStore = loadStoreFromLegacyStorage();
+    await saveStore(legacyStore);
+    return normalizeStore(legacyStore);
+  }
+  async function saveStore(store) {
+    var _a;
+    const snapshot = normalizeStore(store);
+    (_a = getStorage()) == null
+      ? void 0
+      : _a.setItem(STORE_KEY, JSON.stringify(snapshot));
+    if (await saveStoreToServer(snapshot)) return;
+    await saveStoreToDatabase(snapshot);
+  }
+  function loadStoreFromLegacyStorage() {
     const storage = getStorage();
     const saved = storage == null ? void 0 : storage.getItem(STORE_KEY);
     if (!saved) return cloneDefaultStore();
@@ -134,11 +178,145 @@
       return cloneDefaultStore();
     }
   }
-  function saveStore(store2) {
+  async function getBestLocalStore() {
+    const databaseStore = await loadStoreFromDatabase();
+    const legacyStore = loadStoreFromLegacyStorage();
+    if (getStoreWeight(databaseStore) >= getStoreWeight(legacyStore)) {
+      return databaseStore;
+    }
+    return legacyStore;
+  }
+  function shouldMigrateLocalStoreToServer(serverStore, localStore) {
+    if (!localStore) return false;
+    return getStoreWeight(localStore) > getStoreWeight(serverStore);
+  }
+  function getStoreWeight(store) {
+    if (!store) return 0;
+    const snapshot = normalizeStore(store);
+    return (
+      snapshot.members.length * 10 +
+      snapshot.orders.length * 8 +
+      snapshot.pointLedger.length * 5 +
+      snapshot.agencySettlementLedger.length * 4 +
+      snapshot.personalReferralLinks.length * 3 +
+      snapshot.agencies.length +
+      (snapshot.currentMemberId ? 2 : 0) +
+      (snapshot.pendingAgencySlug ? 1 : 0)
+    );
+  }
+  function normalizeStore(store) {
+    return {
+      ...cloneDefaultStore(),
+      ...store,
+      settings: {
+        ...cloneDefaultStore().settings,
+        ...(store == null ? void 0 : store.settings),
+      },
+      agencies:
+        (store == null ? void 0 : store.agencies) ||
+        cloneDefaultStore().agencies,
+      members:
+        (store == null ? void 0 : store.members) || cloneDefaultStore().members,
+      orders:
+        (store == null ? void 0 : store.orders) || cloneDefaultStore().orders,
+      pointLedger:
+        (store == null ? void 0 : store.pointLedger) ||
+        cloneDefaultStore().pointLedger,
+      agencySettlementLedger:
+        (store == null ? void 0 : store.agencySettlementLedger) ||
+        cloneDefaultStore().agencySettlementLedger,
+      personalReferralLinks:
+        (store == null ? void 0 : store.personalReferralLinks) ||
+        cloneDefaultStore().personalReferralLinks,
+    };
+  }
+  async function loadStoreFromServer() {
+    if (!shouldUseServerStore()) return null;
+    try {
+      const response = await fetchWithTimeout("/api/store", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return null;
+      return response.json();
+    } catch (e) {
+      return null;
+    }
+  }
+  async function saveStoreToServer(store) {
+    if (!shouldUseServerStore()) return false;
+    try {
+      const response = await fetchWithTimeout("/api/store", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(store),
+      });
+      return response.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+  function shouldUseServerStore() {
     var _a;
-    (_a = getStorage()) == null
-      ? void 0
-      : _a.setItem(STORE_KEY, JSON.stringify(store2));
+    const browserWindow = globalThis.window || null;
+    return Boolean(
+      browserWindow &&
+      !browserWindow.__BEAUTY_DISABLE_SERVER_STORE &&
+      ((_a = browserWindow.location) == null ? void 0 : _a.protocol) !==
+        "file:" &&
+      browserWindow.fetch,
+    );
+  }
+  function fetchWithTimeout(url, options = {}) {
+    const browserWindow = globalThis.window;
+    const controller = new AbortController();
+    const timeout = browserWindow.setTimeout(() => controller.abort(), 800);
+    return browserWindow
+      .fetch(url, { ...options, signal: controller.signal })
+      .finally(() => browserWindow.clearTimeout(timeout));
+  }
+  async function loadStoreFromDatabase() {
+    const database = await openDatabase();
+    if (!database) return null;
+    return new Promise((resolve) => {
+      const transaction = database.transaction(DB_STORE, "readonly");
+      const request = transaction.objectStore(DB_STORE).get(DB_STATE_KEY);
+      request.onsuccess = () => {
+        var _a;
+        return resolve(
+          ((_a = request.result) == null ? void 0 : _a.value) || null,
+        );
+      };
+      request.onerror = () => resolve(null);
+    });
+  }
+  async function saveStoreToDatabase(store) {
+    const database = await openDatabase();
+    if (!database) return;
+    await new Promise((resolve) => {
+      const transaction = database.transaction(DB_STORE, "readwrite");
+      transaction.objectStore(DB_STORE).put({
+        id: DB_STATE_KEY,
+        value: store,
+        updatedAt: /* @__PURE__ */ new Date().toISOString(),
+      });
+      transaction.oncomplete = resolve;
+      transaction.onerror = resolve;
+    });
+  }
+  function openDatabase() {
+    if (!globalThis.indexedDB) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const request = globalThis.indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains(DB_STORE)) {
+          database.createObjectStore(DB_STORE, { keyPath: "id" });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    });
   }
 
   // scripts/utils/format.js
@@ -146,10 +324,10 @@
 
   // scripts/ui/auth.js
   function createAuthController({
-    dom: dom2,
-    store: store2,
+    dom,
+    store,
     persistStore,
-    updateSessionUi: updateSessionUi2 = () => {},
+    updateSessionUi = () => {},
     showHome,
     closeCart,
     showToast,
@@ -157,23 +335,23 @@
     migrateMemberAuthDefaults();
     function openAuth(mode = "login") {
       closeCart();
-      dom2.auth.innerHTML = createAuthView(mode);
+      dom.auth.innerHTML = createAuthView(mode);
       showAuthView();
       bindAuthEvents();
     }
     function closeAuth() {
-      dom2.auth.classList.add("is-hidden");
-      dom2.auth.innerHTML = "";
+      dom.auth.classList.add("is-hidden");
+      dom.auth.innerHTML = "";
       document.body.classList.remove("modal-open");
     }
     function openProfile() {
-      const member = getCurrentMember2();
+      const member = getCurrentMember();
       if (!member) {
         openAuth("login");
         return;
       }
       closeCart();
-      dom2.auth.innerHTML = createProfileView(member);
+      dom.auth.innerHTML = createProfileView(member);
       showAuthView();
       bindProfileEvents();
     }
@@ -287,7 +465,7 @@
   `;
     }
     function createAuthCompletePanel() {
-      const member = getCurrentMember2();
+      const member = getCurrentMember();
       const agency = getMemberAgency(member);
       return `
     <div class="auth-complete">
@@ -329,13 +507,13 @@
     }
     function createProfileView(member) {
       var _a, _b, _c;
-      const orders = store2.orders.filter(
+      const orders = store.orders.filter(
         (order) => order.memberId === member.id,
       );
-      const points = store2.pointLedger.filter(
+      const points = store.pointLedger.filter(
         (point) => point.memberId === member.id,
       );
-      const links = store2.personalReferralLinks.filter(
+      const links = store.personalReferralLinks.filter(
         (link) => link.ownerMemberId === member.id,
       );
       return `
@@ -476,8 +654,8 @@
       (_a = document.querySelector("#profileClose")) == null
         ? void 0
         : _a.addEventListener("click", closeAuth);
-      dom2.auth.addEventListener("click", (event) => {
-        if (event.target === dom2.auth) closeAuth();
+      dom.auth.addEventListener("click", (event) => {
+        if (event.target === dom.auth) closeAuth();
       });
       (_b = document.querySelector("[data-profile-close]")) == null
         ? void 0
@@ -487,8 +665,8 @@
         : _c.addEventListener("submit", (event) => {
             event.preventDefault();
             saveProfile(event.currentTarget);
-            persistStore(store2);
-            updateSessionUi2();
+            persistStore(store);
+            updateSessionUi();
             showToast(
               "\uB0B4\uC815\uBCF4\uAC00 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
             );
@@ -536,7 +714,7 @@
     }
     function saveProfile(form) {
       var _a;
-      const member = getCurrentMember2();
+      const member = getCurrentMember();
       if (!member) return;
       member.name = getFormValue(form, "name") || member.name;
       member.phone = getFormValue(form, "phone");
@@ -555,7 +733,7 @@
       };
     }
     function changePassword(form) {
-      const member = getCurrentMember2();
+      const member = getCurrentMember();
       if (!member) return;
       const currentPassword = getFormValue(form, "currentPassword");
       const newPassword = getFormValue(form, "newPassword");
@@ -586,7 +764,7 @@
       }
       member.passwordHash = hashPassword(member.userId, newPassword);
       member.authProvider = "password";
-      persistStore(store2);
+      persistStore(store);
       showToast(
         "\uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
       );
@@ -597,8 +775,8 @@
       (_a = document.querySelector("#authClose")) == null
         ? void 0
         : _a.addEventListener("click", closeAuth);
-      dom2.auth.addEventListener("click", (event) => {
-        if (event.target === dom2.auth) closeAuth();
+      dom.auth.addEventListener("click", (event) => {
+        if (event.target === dom.auth) closeAuth();
       });
       document.querySelectorAll("[data-auth-mode]").forEach((button) => {
         button.addEventListener("click", () =>
@@ -676,7 +854,7 @@
         getPendingAgency() ||
         getHeadquartersAgency2();
       const memberId = `member-${Date.now()}`;
-      store2.members.push({
+      store.members.push({
         id: memberId,
         userId,
         passwordHash: hashPassword(userId, password),
@@ -695,10 +873,10 @@
           addressDetail: getFormValue(form, "addressDetail"),
         },
       });
-      store2.currentMemberId = memberId;
-      store2.pendingAgencySlug = "";
-      persistStore(store2);
-      updateSessionUi2();
+      store.currentMemberId = memberId;
+      store.pendingAgencySlug = "";
+      persistStore(store);
+      updateSessionUi();
       return true;
     }
     function loginMember(form) {
@@ -725,9 +903,9 @@
         );
         return false;
       }
-      store2.currentMemberId = member.id;
-      persistStore(store2);
-      updateSessionUi2();
+      store.currentMemberId = member.id;
+      persistStore(store);
+      updateSessionUi();
       return true;
     }
     function getFormValue(form, name) {
@@ -758,7 +936,7 @@
     }
     function findMemberByUserId(userId) {
       const normalized = normalizeUserId(userId);
-      return store2.members.find(
+      return store.members.find(
         (member) => normalizeUserId(member.userId) === normalized,
       );
     }
@@ -792,7 +970,7 @@
     }
     function migrateMemberAuthDefaults() {
       let changed = false;
-      store2.members.forEach((member) => {
+      store.members.forEach((member) => {
         if (member.userId === "beauty_user") {
           member.userId = "beauty01";
           member.passwordHash = hashPassword(member.userId, "password123");
@@ -804,7 +982,7 @@
           changed = true;
         }
       });
-      if (changed) persistStore(store2);
+      if (changed) persistStore(store);
     }
     function escapeAttribute(value) {
       return String(value || "")
@@ -814,13 +992,13 @@
         .replace(/>/g, "&gt;");
     }
     function ensureQuickMember(label) {
-      const existing = getCurrentMember2();
+      const existing = getCurrentMember();
       if (existing) return;
       const agency = getPendingAgency() || getHeadquartersAgency2();
       const memberId = `member-${Date.now()}`;
-      store2.members.push({
+      store.members.push({
         id: memberId,
-        userId: `quick_${store2.members.length + 1}`,
+        userId: `quick_${store.members.length + 1}`,
         name: label,
         phone: "",
         email: "",
@@ -831,17 +1009,17 @@
         joinedAt: /* @__PURE__ */ new Date().toISOString().slice(0, 10),
         address: {},
       });
-      store2.currentMemberId = memberId;
-      persistStore(store2);
-      updateSessionUi2();
+      store.currentMemberId = memberId;
+      persistStore(store);
+      updateSessionUi();
     }
-    function getCurrentMember2() {
-      return store2.members.find(
-        (member) => member.id === store2.currentMemberId,
+    function getCurrentMember() {
+      return store.members.find(
+        (member) => member.id === store.currentMemberId,
       );
     }
     function getMemberAgency(member) {
-      return store2.agencies.find(
+      return store.agencies.find(
         (agency) => agency.id === (member == null ? void 0 : member.agencyId),
       );
     }
@@ -850,22 +1028,22 @@
         .trim()
         .toUpperCase();
       if (!normalized) return null;
-      return store2.agencies.find(
+      return store.agencies.find(
         (agency) => agency.code.toUpperCase() === normalized,
       );
     }
     function getPendingAgency() {
-      const slug = store2.pendingAgencySlug;
+      const slug = store.pendingAgencySlug;
       if (!slug) return null;
-      return store2.agencies.find(
+      return store.agencies.find(
         (agency) => agency.linkSlug === slug || agency.code === slug,
       );
     }
     function getHeadquartersAgency2() {
-      return store2.agencies.find((agency) => agency.isHeadquarters);
+      return store.agencies.find((agency) => agency.isHeadquarters);
     }
     function showAuthView() {
-      dom2.auth.classList.remove("is-hidden");
+      dom.auth.classList.remove("is-hidden");
       document.body.classList.add("modal-open");
     }
     return { openAuth, openProfile, closeAuth, showAuthView };
@@ -873,19 +1051,19 @@
 
   // scripts/ui/management.js
   function createManagementController({
-    dom: dom2,
-    store: store2,
+    dom,
+    store,
     closeCart,
     persistStore = () => {},
   }) {
     function openManagement(role = "admin") {
       closeCart();
-      dom2.management.innerHTML = createManagementView(role, store2);
+      dom.management.innerHTML = createManagementView(role, store);
       bindManagementEvents(role);
-      dom2.home.classList.add("is-hidden");
-      dom2.detail.classList.add("is-hidden");
-      dom2.auth.classList.add("is-hidden");
-      dom2.management.classList.remove("is-hidden");
+      dom.home.classList.add("is-hidden");
+      dom.detail.classList.add("is-hidden");
+      dom.auth.classList.add("is-hidden");
+      dom.management.classList.remove("is-hidden");
       scrollTo({ top: 0, behavior: "smooth" });
     }
     function bindManagementEvents(role) {
@@ -895,7 +1073,7 @@
           "[data-admin-detail]",
           "#adminDetailModal",
           "admin",
-          (type) => createAdminDetailContent(type, store2),
+          (type) => createAdminDetailContent(type, store),
         );
       }
       if (role === "agency") {
@@ -903,37 +1081,37 @@
           "[data-agency-detail]",
           "#agencyDetailModal",
           "agency",
-          (type) => createAgencyDetailContent(type, store2),
+          (type) => createAgencyDetailContent(type, store),
         );
       }
     }
     function bindAdminSettingsForm() {
-      const form = dom2.management.querySelector("[data-admin-settings-form]");
+      const form = dom.management.querySelector("[data-admin-settings-form]");
       if (!form) return;
       form.addEventListener("submit", (event) => {
         event.preventDefault();
-        store2.settings.purchasePointRate = readPercentField(
+        store.settings.purchasePointRate = readPercentField(
           form,
           "purchasePointRate",
         );
-        store2.settings.maxPointUseRate = readPercentField(
+        store.settings.maxPointUseRate = readPercentField(
           form,
           "maxPointUseRate",
         );
-        store2.settings.personalReferrerRewardRate = readPercentField(
+        store.settings.personalReferrerRewardRate = readPercentField(
           form,
           "personalReferrerRewardRate",
         );
-        store2.settings.personalBuyerBonusRate = readPercentField(
+        store.settings.personalBuyerBonusRate = readPercentField(
           form,
           "personalBuyerBonusRate",
         );
-        store2.settings.friendSignupPoint = Math.max(
+        store.settings.friendSignupPoint = Math.max(
           0,
           Number(form.querySelector('[name="friendSignupPoint"]').value || 0),
         );
-        persistStore(store2);
-        dom2.management.innerHTML = createAdminDashboard(store2);
+        persistStore(store);
+        dom.management.innerHTML = createAdminDashboard(store);
         bindManagementEvents("admin");
       });
     }
@@ -947,9 +1125,9 @@
       scope,
       createContent,
     ) {
-      const modal = dom2.management.querySelector(modalSelector);
+      const modal = dom.management.querySelector(modalSelector);
       if (!modal) return;
-      dom2.management.querySelectorAll(cardSelector).forEach((card) => {
+      dom.management.querySelectorAll(cardSelector).forEach((card) => {
         const open = () => {
           const detailType =
             card.dataset.adminDetail || card.dataset.agencyDetail;
@@ -976,7 +1154,7 @@
             modal,
             createMemberProfileDetail(
               memberButton.dataset.memberDetail,
-              store2,
+              store,
               scope,
               modal.dataset.currentDetail || "members",
             ),
@@ -1003,19 +1181,19 @@
         const memoForm = event.target.closest("[data-member-memo-form]");
         if (!memoForm) return;
         event.preventDefault();
-        const member = store2.members.find(
+        const member = store.members.find(
           (item) => item.id === memoForm.dataset.memberMemoForm,
         );
         if (!member) return;
         member.internalMemo = memoForm.querySelector(
           '[name="internalMemo"]',
         ).value;
-        persistStore(store2);
+        persistStore(store);
         openDetailModal(
           modal,
           createMemberProfileDetail(
             member.id,
-            store2,
+            store,
             scope,
             modal.dataset.currentDetail || "members",
           ),
@@ -1029,7 +1207,7 @@
         .querySelector("[data-agency-submit]")
         .addEventListener("click", () => {
           saveAgencyFromForm(formBox);
-          persistStore(store2);
+          persistStore(store);
           reopenAdminDetail("agencies");
         });
       formBox.querySelector('[name="name"]').addEventListener("input", () => {
@@ -1052,7 +1230,7 @@
       });
       modal.querySelectorAll("[data-agency-edit]").forEach((button) => {
         button.addEventListener("click", () => {
-          const agency = store2.agencies.find(
+          const agency = store.agencies.find(
             (item) => item.id === button.dataset.agencyEdit,
           );
           if (!agency) return;
@@ -1072,7 +1250,7 @@
       modal.querySelectorAll("[data-agency-delete]").forEach((button) => {
         button.addEventListener("click", () => {
           deleteAgency(button.dataset.agencyDelete);
-          persistStore(store2);
+          persistStore(store);
           reopenAdminDetail("agencies");
         });
       });
@@ -1105,55 +1283,53 @@
       };
       if (!payload.name || !payload.code || !payload.linkSlug) return;
       if (agencyId) {
-        const agency = store2.agencies.find((item) => item.id === agencyId);
+        const agency = store.agencies.find((item) => item.id === agencyId);
         if (!agency || agency.isHeadquarters) return;
         Object.assign(agency, payload);
         return;
       }
-      store2.agencies.push({
-        id: `agency-${payload.linkSlug.replace(/[^a-z0-9-]/gi, "-").toLowerCase()}-${store2.agencies.length + 1}`,
+      store.agencies.push({
+        id: `agency-${payload.linkSlug.replace(/[^a-z0-9-]/gi, "-").toLowerCase()}-${store.agencies.length + 1}`,
         ...payload,
         isHeadquarters: false,
       });
     }
     function deleteAgency(agencyId) {
-      const agency = store2.agencies.find((item) => item.id === agencyId);
-      const headquarters = store2.agencies.find((item) => item.isHeadquarters);
+      const agency = store.agencies.find((item) => item.id === agencyId);
+      const headquarters = store.agencies.find((item) => item.isHeadquarters);
       if (!agency || agency.isHeadquarters || !headquarters) return;
-      store2.members.forEach((member) => {
+      store.members.forEach((member) => {
         if (member.agencyId === agency.id) {
           member.agencyId = headquarters.id;
         }
       });
-      store2.agencies = store2.agencies.filter((item) => item.id !== agency.id);
+      store.agencies = store.agencies.filter((item) => item.id !== agency.id);
     }
     function reopenAdminDetail(type) {
-      dom2.management.innerHTML = createAdminDashboard(store2);
+      dom.management.innerHTML = createAdminDashboard(store);
       bindManagementEvents("admin");
-      const modal = dom2.management.querySelector("#adminDetailModal");
-      openDetailModal(modal, createAdminDetailContent(type, store2));
+      const modal = dom.management.querySelector("#adminDetailModal");
+      openDetailModal(modal, createAdminDetailContent(type, store));
       bindAgencyAdminForm(modal);
     }
     return { openManagement };
   }
-  function createManagementView(role, store2) {
-    if (role === "agency") return createAgencyDashboard(store2);
-    if (role === "member") return createMemberDashboard(store2);
-    return createAdminDashboard(store2);
+  function createManagementView(role, store) {
+    if (role === "agency") return createAgencyDashboard(store);
+    if (role === "member") return createMemberDashboard(store);
+    return createAdminDashboard(store);
   }
-  function createAdminDashboard(store2) {
-    const headquarters = store2.agencies.find(
-      (agency) => agency.isHeadquarters,
-    );
-    const agencyCount = store2.agencies.length;
-    const memberCount = store2.members.length;
-    const monthlyOrders = getCurrentMonthOrders(store2);
+  function createAdminDashboard(store) {
+    const headquarters = store.agencies.find((agency) => agency.isHeadquarters);
+    const agencyCount = store.agencies.length;
+    const memberCount = store.members.length;
+    const monthlyOrders = getCurrentMonthOrders(store);
     const monthlyOrderTotal = monthlyOrders.reduce(
       (sum, order) => sum + order.paidProductAmount,
       0,
     );
-    const monthlyPointSummary = getCurrentMonthPointSummary(store2);
-    const settlementPending = store2.agencySettlementLedger.reduce(
+    const monthlyPointSummary = getCurrentMonthPointSummary(store);
+    const settlementPending = store.agencySettlementLedger.reduce(
       (sum, item) => sum + item.commissionAmount,
       0,
     );
@@ -1174,7 +1350,7 @@
         ${createMetricCard("admin", "points", "\uC774\uB2EC\uC758 \uC801\uB9BD\uAE08", `${monthlyPointSummary.earned.toLocaleString("ko-KR")}P`)}
         ${createMetricCard("admin", "settlements", "\uC815\uC0B0 \uB300\uAE30 \uC601\uC5C5\uBE44", formatMoney(settlementPending))}
       </div>
-      ${createSettingsPanel(store2)}
+      ${createSettingsPanel(store)}
       ${createDetailModal("adminDetailModal", "adminModalContent")}
     </section>
   `;
@@ -1189,8 +1365,8 @@
     </article>
   `;
   }
-  function createSettingsPanel(store2) {
-    const settings = store2.settings;
+  function createSettingsPanel(store) {
+    const settings = store.settings;
     return `
     <section class="management-panel">
       <div class="product-category">Admin settings</div>
@@ -1235,8 +1411,8 @@
     modal.hidden = true;
     document.body.classList.remove("modal-open");
   }
-  function createAdminDetailContent(type, store2) {
-    const detail = getAdminDetail(type, store2);
+  function createAdminDetailContent(type, store) {
+    const detail = getAdminDetail(type, store);
     return `
     <div class="detail-panel-head">
       <div>
@@ -1251,14 +1427,14 @@
     </div>
   `;
   }
-  function getAdminDetail(type, store2) {
+  function getAdminDetail(type, store) {
     const detailMap = {
       headquarters: {
         label: "Headquarters",
         title: "\uBCF8\uC0AC \uB300\uB9AC\uC810 \uC0C1\uC138",
         description:
           "\uB300\uB9AC\uC810 \uCF54\uB4DC \uC5C6\uC774 \uAC00\uC785\uD55C \uD68C\uC6D0\uC774 \uADC0\uC18D\uB418\uB294 \uBCF8\uC0AC \uB300\uB9AC\uC810 \uC815\uBCF4\uC785\uB2C8\uB2E4.",
-        rows: store2.agencies
+        rows: store.agencies
           .filter((agency) => agency.isHeadquarters)
           .map(createAgencyDetailRow),
       },
@@ -1268,15 +1444,15 @@
         description:
           "\uBCF8\uC0AC\uC640 \uACC4\uC57D\uB41C \uB300\uB9AC\uC810 \uCF54\uB4DC, \uC804\uC6A9 \uB9C1\uD06C, \uC601\uC5C5\uBE44\uC728, \uC0C1\uD0DC\uB97C \uB4F1\uB85D/\uBCC0\uACBD/\uC0AD\uC81C\uD569\uB2C8\uB2E4.",
         extra: createAgencyAdminForm(),
-        rows: store2.agencies.map(createAgencyManageRow),
+        rows: store.agencies.map(createAgencyManageRow),
       },
       members: {
         label: "Members",
         title: "\uD68C\uC6D0 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
         description:
           "\uD68C\uC6D0\uBCC4 \uD3EC\uC778\uD2B8, \uC8FC\uBB38 \uC218, \uB0B4\uBD80 \uB300\uB9AC\uC810 \uADC0\uC18D \uC815\uBCF4\uB97C \uAD00\uB9AC\uC790\uC6A9\uC73C\uB85C \uD655\uC778\uD569\uB2C8\uB2E4.",
-        rows: store2.members.map((member) =>
-          createMemberDetailRow(member, store2),
+        rows: store.members.map((member) =>
+          createMemberDetailRow(member, store),
         ),
       },
       orders: {
@@ -1284,15 +1460,15 @@
         title: "\uC774\uB2EC\uC758 \uC8FC\uBB38 \uC0C1\uC138",
         description:
           "\uC774\uBC88 \uB2EC \uACB0\uC81C \uC644\uB8CC \uC8FC\uBB38\uC758 \uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC744 \uB300\uB9AC\uC810\uBCC4\uB85C \uB204\uC801 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
-        rows: createMonthlyAgencySalesRows(store2),
+        rows: createMonthlyAgencySalesRows(store),
       },
       points: {
         label: "Points",
         title: "\uC774\uB2EC\uC758 \uD3EC\uC778\uD2B8 \uC0C1\uC138",
         description:
           "\uC774\uBC88 \uB2EC \uD3EC\uC778\uD2B8 \uC7A5\uBD80\uC5D0\uC11C \uC801\uB9BD \uD3EC\uC778\uD2B8\uC640 \uC0AC\uC6A9 \uD3EC\uC778\uD2B8\uB97C \uBD84\uB9AC\uD574 \uB204\uC801 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
-        extra: createMonthlyPointSummary(store2),
-        rows: getCurrentMonthPoints(store2).map(createPointDetailRow),
+        extra: createMonthlyPointSummary(store),
+        rows: getCurrentMonthPoints(store).map(createPointDetailRow),
       },
       settlements: {
         label: "Settlements",
@@ -1300,8 +1476,8 @@
           "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
         description:
           "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uB97C \uC81C\uC678\uD558\uACE0 \uB300\uB9AC\uC810 \uC601\uC5C5\uBE44 \uC9C0\uAE09 \uB300\uC0C1\uC73C\uB85C \uC7A1\uD78C \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
-        rows: store2.agencySettlementLedger.map((item) =>
-          createSettlementDetailRow(item, store2),
+        rows: store.agencySettlementLedger.map((item) =>
+          createSettlementDetailRow(item, store),
         ),
       },
     };
@@ -1317,11 +1493,9 @@
     </article>
   `;
   }
-  function createMemberDetailRow(member, store2) {
-    const agency = store2.agencies.find((item) => item.id === member.agencyId);
-    const orders = store2.orders.filter(
-      (order) => order.memberId === member.id,
-    );
+  function createMemberDetailRow(member, store) {
+    const agency = store.agencies.find((item) => item.id === member.agencyId);
+    const orders = store.orders.filter((order) => order.memberId === member.id);
     return `
     <article class="process-row">
       <div>
@@ -1336,19 +1510,17 @@
     </article>
   `;
   }
-  function createMemberProfileDetail(memberId, store2, scope, backType) {
-    const member = store2.members.find((item) => item.id === memberId);
+  function createMemberProfileDetail(memberId, store, scope, backType) {
+    const member = store.members.find((item) => item.id === memberId);
     if (!member) {
       return '<div class="admin-detail-empty">\uD68C\uC6D0 \uC815\uBCF4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
     }
-    const agency = store2.agencies.find((item) => item.id === member.agencyId);
-    const orders = store2.orders.filter(
-      (order) => order.memberId === member.id,
-    );
-    const points = store2.pointLedger.filter(
+    const agency = store.agencies.find((item) => item.id === member.agencyId);
+    const orders = store.orders.filter((order) => order.memberId === member.id);
+    const points = store.pointLedger.filter(
       (point) => point.memberId === member.id,
     );
-    const links = store2.personalReferralLinks.filter(
+    const links = store.personalReferralLinks.filter(
       (link) => link.ownerMemberId === member.id,
     );
     const isAdmin = scope === "admin";
@@ -1442,13 +1614,13 @@
   function isCurrentMonthDate(value) {
     return String(value || "").startsWith(getCurrentMonthKey());
   }
-  function getCurrentMonthOrders(store2) {
-    return store2.orders.filter(
+  function getCurrentMonthOrders(store) {
+    return store.orders.filter(
       (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
     );
   }
-  function getCurrentMonthPoints(store2) {
-    return store2.pointLedger.filter((point) => {
+  function getCurrentMonthPoints(store) {
+    return store.pointLedger.filter((point) => {
       const dateValue = point.createdAt || point.paidAt || "";
       return isCurrentMonthDate(dateValue);
     });
@@ -1456,8 +1628,8 @@
   function isPointUse(point) {
     return point.amount < 0 || String(point.type || "").includes("use");
   }
-  function getCurrentMonthPointSummary(store2) {
-    return getCurrentMonthPoints(store2).reduce(
+  function getCurrentMonthPointSummary(store) {
+    return getCurrentMonthPoints(store).reduce(
       (summary, point) => {
         if (isPointUse(point)) {
           summary.used += Math.abs(point.amount);
@@ -1469,9 +1641,9 @@
       { earned: 0, used: 0 },
     );
   }
-  function createOrderDetailRow(order, store2) {
-    const point = store2.pointLedger.find((item) => item.orderId === order.id);
-    const settlement = store2.agencySettlementLedger.find(
+  function createOrderDetailRow(order, store) {
+    const point = store.pointLedger.find((item) => item.orderId === order.id);
+    const settlement = store.agencySettlementLedger.find(
       (item) => item.orderId === order.id,
     );
     return `
@@ -1493,9 +1665,9 @@
     </article>
   `;
   }
-  function createMonthlyAgencySalesRows(store2) {
-    const monthlyOrders = getCurrentMonthOrders(store2);
-    return store2.agencies.map((agency) => {
+  function createMonthlyAgencySalesRows(store) {
+    const monthlyOrders = getCurrentMonthOrders(store);
+    return store.agencies.map((agency) => {
       const agencyOrders = monthlyOrders.filter(
         (order) => order.agencyIdAtOrder === agency.id,
       );
@@ -1515,8 +1687,8 @@
     `;
     });
   }
-  function createMonthlyPointSummary(store2) {
-    const summary = getCurrentMonthPointSummary(store2);
+  function createMonthlyPointSummary(store) {
+    const summary = getCurrentMonthPointSummary(store);
     return `
     <div class="management-grid compact monthly-point-summary">
       <article><span>\uC774\uB2EC \uC801\uB9BD\uD3EC\uC778\uD2B8</span><strong>${summary.earned.toLocaleString("ko-KR")}P</strong></article>
@@ -1525,8 +1697,8 @@
     </div>
   `;
   }
-  function createSettlementDetailRow(item, store2) {
-    const agency = store2.agencies.find(
+  function createSettlementDetailRow(item, store) {
+    const agency = store.agencies.find(
       (agencyItem) => agencyItem.id === item.agencyId,
     );
     return `
@@ -1558,19 +1730,19 @@
     </article>
   `;
   }
-  function createAgencyDashboard(store2) {
-    const agency = store2.agencies.find((item) => !item.isHeadquarters);
-    const members = store2.members.filter(
+  function createAgencyDashboard(store) {
+    const agency = store.agencies.find((item) => !item.isHeadquarters);
+    const members = store.members.filter(
       (member) => member.agencyId === agency.id,
     );
-    const sales = store2.orders
+    const sales = store.orders
       .filter(
         (order) =>
           order.agencyIdAtOrder === agency.id &&
           order.referralSourceType !== "personal_product",
       )
       .reduce((sum, order) => sum + order.paidProductAmount, 0);
-    const settlements = store2.agencySettlementLedger.filter(
+    const settlements = store.agencySettlementLedger.filter(
       (item) => item.agencyId === agency.id,
     );
     const commission = settlements.reduce(
@@ -1617,17 +1789,17 @@
     </section>
   `;
   }
-  function createAgencyDetailContent(type, store2) {
-    const agency = store2.agencies.find((item) => !item.isHeadquarters);
-    const members = store2.members.filter(
+  function createAgencyDetailContent(type, store) {
+    const agency = store.agencies.find((item) => !item.isHeadquarters);
+    const members = store.members.filter(
       (member) => member.agencyId === agency.id,
     );
-    const orders = store2.orders.filter(
+    const orders = store.orders.filter(
       (order) =>
         order.agencyIdAtOrder === agency.id &&
         order.referralSourceType !== "personal_product",
     );
-    const settlements = store2.agencySettlementLedger.filter(
+    const settlements = store.agencySettlementLedger.filter(
       (item) => item.agencyId === agency.id,
     );
     const details = {
@@ -1650,7 +1822,7 @@
         title: "\uC18C\uC18D \uACE0\uAC1D \uC0C1\uC138",
         description:
           "\uB300\uB9AC\uC810 \uB9C1\uD06C\uB85C \uAC00\uC785\uB418\uC5B4 \uBCC0\uACBD \uBD88\uAC00 \uC0C1\uD0DC\uC778 \uACE0\uAC1D \uBAA9\uB85D\uC785\uB2C8\uB2E4.",
-        rows: members.map((member) => createMemberDetailRow(member, store2)),
+        rows: members.map((member) => createMemberDetailRow(member, store)),
       },
       rate: {
         label: "Commission rate",
@@ -1670,25 +1842,21 @@
         title: "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C \uC0C1\uC138",
         description:
           "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uB97C \uC81C\uC678\uD55C \uB300\uB9AC\uC810 \uD68C\uC6D0\uC758 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC785\uB2C8\uB2E4.",
-        rows: orders.map((order) => createOrderDetailRow(order, store2)),
+        rows: orders.map((order) => createOrderDetailRow(order, store)),
       },
       commission: {
         label: "Commission",
         title: "\uC601\uC5C5\uBE44 \uC608\uC815 \uC0C1\uC138",
         description:
           "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C\uC5D0 \uB300\uB9AC\uC810 \uC601\uC5C5\uBE44\uC728\uC744 \uC801\uC6A9\uD55C \uC9C0\uAE09 \uC608\uC815 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
-        rows: settlements.map((item) =>
-          createSettlementDetailRow(item, store2),
-        ),
+        rows: settlements.map((item) => createSettlementDetailRow(item, store)),
       },
       status: {
         label: "Status",
         title: "\uC815\uC0B0 \uC0C1\uD0DC \uC0C1\uC138",
         description:
           "\uC775\uC6D4 15\uC77C \uC815\uC0B0 \uCC98\uB9AC \uC804 \uB300\uAE30 \uC0C1\uD0DC\uC758 \uC815\uC0B0 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
-        rows: settlements.map((item) =>
-          createSettlementDetailRow(item, store2),
-        ),
+        rows: settlements.map((item) => createSettlementDetailRow(item, store)),
       },
     };
     const detail = details[type] || details.sales;
@@ -1851,18 +2019,18 @@
     const finalIndex = index % 28;
     return `${initial[initialIndex]}${medial[medialIndex]}${final[finalIndex]}`;
   }
-  function createMemberDashboard(store2) {
+  function createMemberDashboard(store) {
     var _a;
     const member =
-      store2.members.find((item) => item.id === store2.currentMemberId) ||
-      store2.members[0];
-    const memberOrders = store2.orders.filter(
+      store.members.find((item) => item.id === store.currentMemberId) ||
+      store.members[0];
+    const memberOrders = store.orders.filter(
       (order) => order.memberId === member.id,
     );
-    const links = store2.personalReferralLinks.filter(
+    const links = store.personalReferralLinks.filter(
       (link) => link.ownerMemberId === member.id,
     );
-    const points = store2.pointLedger.filter(
+    const points = store.pointLedger.filter(
       (item) => item.memberId === member.id,
     );
     return `
@@ -2115,9 +2283,9 @@
   var getProduct = (id) => products.find((item) => item.id === id);
 
   // scripts/domain/order-processing.js
-  function completeBypassPayment({ cart, store: store2, payment }) {
+  function completeBypassPayment({ cart, store, payment }) {
     var _a;
-    const member = store2.members.find((item) => item.id === payment.memberId);
+    const member = store.members.find((item) => item.id === payment.memberId);
     if (!member) {
       throw new Error(
         "\uACB0\uC81C \uCC98\uB9AC \uB300\uC0C1 \uD68C\uC6D0\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
@@ -2130,13 +2298,13 @@
     const shippingAmount =
       paidProductAmount > 0 && paidProductAmount < 5e4 ? 3e3 : 0;
     const paidAmount = paidProductAmount + shippingAmount;
-    const pointRate = store2.settings.purchasePointRate;
-    const earnedPoints = Math.floor((paidProductAmount * pointRate) / 100);
-    const orderId = createId("order", store2.orders.length + 1);
+    const pointRate = store.settings.purchasePointRate;
+    const earnedPoints = calculatePurchasePoints(paidProductAmount, pointRate);
+    const orderId = createId("order", store.orders.length + 1);
     const paidAt = /* @__PURE__ */ new Date().toISOString().slice(0, 10);
     const agencyIdAtOrder =
       member.agencyId ||
-      ((_a = getHeadquartersAgency(store2)) == null ? void 0 : _a.id);
+      ((_a = getHeadquartersAgency(store)) == null ? void 0 : _a.id);
     const referralSourceType = payment.referralSourceType || "none";
     const order = {
       id: orderId,
@@ -2158,10 +2326,10 @@
         option: item.option,
       })),
     };
-    store2.orders.unshift(order);
+    store.orders.unshift(order);
     member.points += earnedPoints;
-    store2.pointLedger.unshift({
-      id: createId("point", store2.pointLedger.length + 1),
+    store.pointLedger.unshift({
+      id: createId("point", store.pointLedger.length + 1),
       memberId: member.id,
       orderId,
       type: "purchase_earn",
@@ -2175,12 +2343,12 @@
       cart,
       memberId: member.id,
       orderId,
-      store: store2,
+      store,
     });
-    store2.personalReferralLinks.unshift(...referralLinks);
-    const agencyProcessing = createAgencyProcessing({ order, store: store2 });
+    store.personalReferralLinks.unshift(...referralLinks);
+    const agencyProcessing = createAgencyProcessing({ order, store });
     if (agencyProcessing) {
-      store2.agencySettlementLedger.unshift(agencyProcessing);
+      store.agencySettlementLedger.unshift(agencyProcessing);
     }
     return {
       order,
@@ -2199,10 +2367,10 @@
     cart,
     memberId,
     orderId,
-    store: store2,
+    store,
   }) {
     const links = [];
-    const nextNumber = store2.personalReferralLinks.length + 1;
+    const nextNumber = store.personalReferralLinks.length + 1;
     const uniqueProducts = /* @__PURE__ */ new Map();
     cart.forEach((item) => {
       if (!uniqueProducts.has(item.id)) uniqueProducts.set(item.id, item);
@@ -2221,9 +2389,9 @@
     });
     return links;
   }
-  function createAgencyProcessing({ order, store: store2 }) {
+  function createAgencyProcessing({ order, store }) {
     if (order.referralSourceType === "personal_product") return null;
-    const agency = store2.agencies.find(
+    const agency = store.agencies.find(
       (item) => item.id === order.agencyIdAtOrder,
     );
     if (!agency) return null;
@@ -2233,7 +2401,7 @@
     return {
       id: createId(
         "agency-settlement",
-        store2.agencySettlementLedger.length + 1,
+        store.agencySettlementLedger.length + 1,
       ),
       agencyId: agency.id,
       orderId: order.id,
@@ -2245,8 +2413,16 @@
       createdAt: order.paidAt,
     };
   }
-  function getHeadquartersAgency(store2) {
-    return store2.agencies.find((agency) => agency.isHeadquarters);
+  function getHeadquartersAgency(store) {
+    return store.agencies.find((agency) => agency.isHeadquarters);
+  }
+  function calculatePurchasePoints(amount, rate) {
+    return Math.floor(
+      (Math.max(0, Number(amount) || 0) * getPercent(rate)) / 100,
+    );
+  }
+  function getPercent(value) {
+    return Math.min(100, Math.max(0, Number(value) || 0));
   }
   function createId(prefix, sequence) {
     return `${prefix}-${sequence.toString().padStart(3, "0")}`;
@@ -2254,10 +2430,10 @@
 
   // scripts/ui/shop.js
   function createShopController({
-    dom: dom2,
-    store: store2,
+    dom,
+    store,
     persistStore,
-    requireLogin: requireLogin2 = () => true,
+    requireLogin = () => true,
   }) {
     const state = {
       activeCategory: "all",
@@ -2274,6 +2450,11 @@
         ),
       );
     };
+    const getPurchasePointRate = () =>
+      Math.max(0, Number(store.settings.purchasePointRate || 0));
+    const getPurchasePoints = (amount) =>
+      calculatePurchasePoints(amount, getPurchasePointRate());
+    const formatPoints = (points) => `${points.toLocaleString("ko-KR")}P`;
     function getTotals() {
       const subtotal = state.cart.reduce(
         (sum, item) => sum + item.sale * item.qty,
@@ -2283,7 +2464,7 @@
       return {
         subtotal,
         shipping,
-        reward: Math.floor(subtotal * 0.03),
+        reward: getPurchasePoints(subtotal),
         total: subtotal + shipping,
         count: state.cart.reduce((sum, item) => sum + item.qty, 0),
       };
@@ -2300,11 +2481,11 @@
         category === "all"
           ? products
           : products.filter((product) => product.category === category);
-      dom2.count.textContent =
+      dom.count.textContent =
         category === "all"
           ? `All products \xB7 ${list.length} items`
           : `${category} \xB7 ${list.length} items`;
-      dom2.grid.innerHTML = list.map(createProductCard).join("");
+      dom.grid.innerHTML = list.map(createProductCard).join("");
     }
     function createProductCard(product) {
       return `
@@ -2328,7 +2509,7 @@
     function openDetail(product) {
       if (!product) return;
       const copy = categoryCopy[product.category];
-      dom2.detail.innerHTML = `
+      dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">\u2190 Back to shop</button>
       <span>Home / Shop / ${product.ko}</span>
@@ -2395,7 +2576,7 @@
       <div class="detail-price-item"><span>\uD310\uB9E4\uAC00</span><strong>${formatMoney(product.price)}</strong></div>
       <div class="detail-price-item"><span>\uD560\uC778\uD310\uB9E4\uAC00</span><strong>${formatMoney(product.sale)}</strong></div>
       <div class="detail-price-item"><span>\uBC30\uC1A1</span><strong>3,000\uC6D0 / 5\uB9CC\uC6D0 \uC774\uC0C1 \uBB34\uB8CC</strong></div>
-      <div class="detail-price-item"><span>\uC801\uB9BD</span><strong>\uAD6C\uB9E4\uAE08\uC561 3%</strong></div>
+      <div class="detail-price-item"><span>\uC801\uB9BD</span><strong>\uAD6C\uB9E4\uAE08\uC561 ${getPurchasePointRate()}%</strong></div>
     </div>
   `;
     }
@@ -2428,7 +2609,7 @@
   `;
     }
     function addToCart(product, message) {
-      if (!requireLogin2()) return false;
+      if (!requireLogin()) return false;
       const quantity = getQuantity();
       const item = state.cart.find((cartItem) => cartItem.id === product.id);
       if (item) {
@@ -2445,11 +2626,11 @@
     }
     function updateCart() {
       const totals = getTotals();
-      dom2.bag.textContent = totals.count;
-      dom2.cartList.innerHTML = state.cart.length
+      dom.bag.textContent = totals.count;
+      dom.cartList.innerHTML = state.cart.length
         ? state.cart.map(createCartItem).join("")
         : createEmptyCart();
-      dom2.cartSummary.innerHTML = createCartSummary(totals);
+      dom.cartSummary.innerHTML = createCartSummary(totals);
       document
         .querySelector("#checkoutButton")
         .addEventListener("click", () => {
@@ -2487,16 +2668,16 @@
       return `
     <div class="summary-row"><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(subtotal)}</strong></div>
     <div class="summary-row"><span>\uBC30\uC1A1\uBE44</span><strong>${shipping ? formatMoney(shipping) : "\uBB34\uB8CC"}</strong></div>
-    <div class="summary-row"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatMoney(reward)}</strong></div>
+    <div class="summary-row"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatPoints(reward)}</strong></div>
     <div class="summary-row total"><span>\uACB0\uC81C\uC608\uC815\uAE08\uC561</span><strong>${formatMoney(total)}</strong></div>
     <button class="checkout-button" id="checkoutButton">Checkout</button>
   `;
     }
     function openCheckout() {
-      if (!requireLogin2()) return;
+      if (!requireLogin()) return;
       closeCart();
       const totals = getTotals();
-      dom2.detail.innerHTML = `
+      dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">\u2190 Back to shop</button>
       <span>Home / Checkout</span>
@@ -2556,7 +2737,7 @@
         .addEventListener("click", completeCheckoutBypass);
     }
     function completeCheckoutBypass() {
-      if (!requireLogin2()) return;
+      if (!requireLogin()) return;
       if (!state.cart.length) {
         showToast(
           "\uC7A5\uBC14\uAD6C\uB2C8\uC5D0 \uC0C1\uD488\uC744 \uBA3C\uC800 \uB2F4\uC544\uC8FC\uC138\uC694.",
@@ -2565,14 +2746,14 @@
       }
       const result = completeBypassPayment({
         cart: state.cart,
-        store: store2,
+        store,
         payment: {
-          memberId: store2.currentMemberId,
+          memberId: store.currentMemberId,
           referralSourceType: "none",
         },
       });
       state.cart = [];
-      persistStore(store2);
+      persistStore(store);
       updateCart();
       openPaymentResult(result);
       showToast(
@@ -2581,7 +2762,7 @@
     }
     function openPaymentResult(result) {
       var _a, _b;
-      dom2.detail.innerHTML = `
+      dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">\u2190 Back to shop</button>
       <span>Home / Checkout / Complete</span>
@@ -2609,7 +2790,7 @@
       </div>
       <div class="payment-process">
         <div><strong>01 \uC8FC\uBB38 \uC0DD\uC131</strong><span>${result.order.id} \uC8FC\uBB38\uC744 paid \uC0C1\uD0DC\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.</span></div>
-        <div><strong>02 \uD3EC\uC778\uD2B8 \uC801\uB9BD</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store2.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
+        <div><strong>02 \uD3EC\uC778\uD2B8 \uC801\uB9BD</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
         <div><strong>03 \uB300\uB9AC\uC810 \uCC98\uB9AC</strong><span>\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C ${result.agencyProcessing ? "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC7A5\uBD80\uC5D0 \uBC18\uC601\uD588\uC2B5\uB2C8\uB2E4." : "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uC0C1\uC5D0\uC11C \uC81C\uC678\uD588\uC2B5\uB2C8\uB2E4."}</span></div>
         <div><strong>04 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC885\uB958 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
       </div>
@@ -2746,17 +2927,17 @@
     <div class="detail-price-box">
       <div class="detail-price-item"><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(subtotal)}</strong></div>
       <div class="detail-price-item"><span>\uBC30\uC1A1\uBE44</span><strong>${shipping ? formatMoney(shipping) : "\uBB34\uB8CC"}</strong></div>
-      <div class="detail-price-item"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatMoney(reward)}</strong></div>
+      <div class="detail-price-item"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatPoints(reward)}</strong></div>
       <div class="detail-price-item"><span>\uACB0\uC81C\uC608\uC815\uAE08\uC561</span><strong>${formatMoney(total)}</strong></div>
     </div>
   `;
     }
     function showHome() {
       var _a;
-      dom2.detail.classList.add("is-hidden");
-      dom2.auth.classList.add("is-hidden");
-      (_a = dom2.management) == null ? void 0 : _a.classList.add("is-hidden");
-      dom2.home.classList.remove("is-hidden");
+      dom.detail.classList.add("is-hidden");
+      dom.auth.classList.add("is-hidden");
+      (_a = dom.management) == null ? void 0 : _a.classList.add("is-hidden");
+      dom.home.classList.remove("is-hidden");
       renderProducts(state.activeCategory);
       setTimeout(
         () =>
@@ -2768,10 +2949,10 @@
     }
     function showDetailView() {
       var _a;
-      dom2.home.classList.add("is-hidden");
-      dom2.auth.classList.add("is-hidden");
-      (_a = dom2.management) == null ? void 0 : _a.classList.add("is-hidden");
-      dom2.detail.classList.remove("is-hidden");
+      dom.home.classList.add("is-hidden");
+      dom.auth.classList.add("is-hidden");
+      (_a = dom.management) == null ? void 0 : _a.classList.add("is-hidden");
+      dom.detail.classList.remove("is-hidden");
       scrollTo({ top: 0, behavior: "smooth" });
     }
     function openCart() {
@@ -2782,9 +2963,9 @@
       document.body.classList.remove("cart-open");
     }
     function showToast(message) {
-      dom2.toast.textContent = message;
-      dom2.toast.classList.add("is-open");
-      setTimeout(() => dom2.toast.classList.remove("is-open"), 2300);
+      dom.toast.textContent = message;
+      dom.toast.classList.add("is-open");
+      setTimeout(() => dom.toast.classList.remove("is-open"), 2300);
     }
     function bindShopEvents() {
       document.querySelectorAll(".category-btn").forEach((button) => {
@@ -2792,17 +2973,17 @@
           renderProducts(button.dataset.category),
         );
       });
-      dom2.grid.addEventListener("click", (event) => {
+      dom.grid.addEventListener("click", (event) => {
         const card = event.target.closest(".product-card");
         if (card) openDetail(getProduct(card.dataset.id));
       });
-      dom2.grid.addEventListener("keydown", (event) => {
+      dom.grid.addEventListener("keydown", (event) => {
         const card = event.target.closest(".product-card");
         if (!card || (event.key !== "Enter" && event.key !== " ")) return;
         event.preventDefault();
         openDetail(getProduct(card.dataset.id));
       });
-      dom2.cartList.addEventListener("click", (event) => {
+      dom.cartList.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-id]");
         if (!button) return;
         const item = state.cart.find(
@@ -2813,23 +2994,23 @@
         state.cart = state.cart.filter((cartItem) => cartItem.qty > 0);
         updateCart();
       });
-      dom2.bag.addEventListener("click", openCart);
+      dom.bag.addEventListener("click", openCart);
       document
         .querySelector("#cartOverlay")
         .addEventListener("click", closeCart);
       document.querySelector("#cartClose").addEventListener("click", closeCart);
       document.querySelector("#logoHome").addEventListener("click", () => {
-        dom2.detail.classList.add("is-hidden");
-        dom2.auth.classList.add("is-hidden");
-        dom2.home.classList.remove("is-hidden");
+        dom.detail.classList.add("is-hidden");
+        dom.auth.classList.add("is-hidden");
+        dom.home.classList.remove("is-hidden");
         renderProducts(state.activeCategory);
         scrollTo({ top: 0, behavior: "smooth" });
       });
       document.querySelectorAll("[data-home-link]").forEach((link) => {
         link.addEventListener("click", () => {
-          dom2.detail.classList.add("is-hidden");
-          dom2.auth.classList.add("is-hidden");
-          dom2.home.classList.remove("is-hidden");
+          dom.detail.classList.add("is-hidden");
+          dom.auth.classList.add("is-hidden");
+          dom.home.classList.remove("is-hidden");
           renderProducts(state.activeCategory);
         });
       });
@@ -2866,108 +3047,113 @@
   }
 
   // scripts/app.js
-  var dom = {
-    grid: document.querySelector("#productGrid"),
-    home: document.querySelector("#homeView"),
-    detail: document.querySelector("#detailView"),
-    auth: document.querySelector("#authView"),
-    management: document.querySelector("#managementView"),
-    count: document.querySelector("#categoryCount"),
-    bag: document.querySelector("#bagButton"),
-    cartList: document.querySelector("#cartList"),
-    cartSummary: document.querySelector("#cartSummary"),
-    toast: document.querySelector("#toast"),
-    loginLink: document.querySelector("#loginLink"),
-    sessionUser: document.querySelector("#sessionUser"),
-    logoutButton: document.querySelector("#logoutButton"),
-  };
-  var store = loadStore();
-  saveStore(store);
-  var shop = createShopController({
-    dom,
-    store,
-    persistStore: saveStore,
-    requireLogin,
-  });
-  var auth = createAuthController({
-    dom,
-    store,
-    persistStore: saveStore,
-    updateSessionUi,
-    showHome: shop.showHome,
-    closeCart: shop.closeCart,
-    showToast: shop.showToast,
-  });
-  var management = createManagementController({
-    dom,
-    store,
-    closeCart: shop.closeCart,
-    persistStore: saveStore,
-  });
-  shop.validateCatalog();
-  shop.bindShopEvents();
-  shop.renderProducts();
-  shop.updateCart();
-  dom.loginLink.addEventListener("click", (event) => {
-    event.preventDefault();
-    auth.openAuth("login");
-  });
-  dom.sessionUser.addEventListener("click", () => {
-    auth.openProfile();
-  });
-  dom.logoutButton.addEventListener("click", () => {
-    store.currentMemberId = "";
-    saveStore(store);
-    updateSessionUi();
-    auth.closeAuth();
-    shop.showToast("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
-  });
-  document.addEventListener("click", (event) => {
-    const agencyJoinLink = event.target.closest("[data-agency-join-link]");
-    if (agencyJoinLink) {
+  var appReady = initializeApp();
+  window.__beautyAppReady = appReady;
+  async function initializeApp() {
+    const dom = {
+      grid: document.querySelector("#productGrid"),
+      home: document.querySelector("#homeView"),
+      detail: document.querySelector("#detailView"),
+      auth: document.querySelector("#authView"),
+      management: document.querySelector("#managementView"),
+      count: document.querySelector("#categoryCount"),
+      bag: document.querySelector("#bagButton"),
+      cartList: document.querySelector("#cartList"),
+      cartSummary: document.querySelector("#cartSummary"),
+      toast: document.querySelector("#toast"),
+      loginLink: document.querySelector("#loginLink"),
+      sessionUser: document.querySelector("#sessionUser"),
+      logoutButton: document.querySelector("#logoutButton"),
+    };
+    const store = await loadStore();
+    await saveStore(store);
+    const getCurrentMember = () =>
+      store.members.find((member) => member.id === store.currentMemberId);
+    let shop;
+    let auth;
+    function updateSessionUi() {
+      const member = getCurrentMember();
+      dom.loginLink.classList.toggle("is-hidden", Boolean(member));
+      dom.sessionUser.classList.toggle("is-hidden", !member);
+      dom.logoutButton.classList.toggle("is-hidden", !member);
+      dom.sessionUser.textContent = member ? `${member.name}\uB2D8` : "";
+    }
+    function requireLogin() {
+      if (getCurrentMember()) return true;
+      shop.showToast(
+        "\uB85C\uADF8\uC778 \uD6C4 \uAD6C\uB9E4\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      );
+      auth.openAuth("login");
+      return false;
+    }
+    shop = createShopController({
+      dom,
+      store,
+      persistStore: saveStore,
+      requireLogin,
+    });
+    auth = createAuthController({
+      dom,
+      store,
+      persistStore: saveStore,
+      updateSessionUi,
+      showHome: shop.showHome,
+      closeCart: shop.closeCart,
+      showToast: shop.showToast,
+    });
+    const management = createManagementController({
+      dom,
+      store,
+      closeCart: shop.closeCart,
+      persistStore: saveStore,
+    });
+    shop.validateCatalog();
+    shop.bindShopEvents();
+    shop.renderProducts();
+    shop.updateCart();
+    dom.loginLink.addEventListener("click", (event) => {
       event.preventDefault();
-      store.pendingAgencySlug = agencyJoinLink.dataset.agencyJoinLink;
+      auth.openAuth("login");
+    });
+    dom.sessionUser.addEventListener("click", () => {
+      auth.openProfile();
+    });
+    dom.logoutButton.addEventListener("click", () => {
+      store.currentMemberId = "";
+      saveStore(store);
+      updateSessionUi();
+      auth.closeAuth();
+      shop.showToast("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
+    });
+    document.addEventListener("click", (event) => {
+      const agencyJoinLink = event.target.closest("[data-agency-join-link]");
+      if (agencyJoinLink) {
+        event.preventDefault();
+        store.pendingAgencySlug = agencyJoinLink.dataset.agencyJoinLink;
+        saveStore(store);
+        auth.openAuth("signup");
+        return;
+      }
+      const link = event.target.closest("[data-management-link]");
+      if (!link) return;
+      event.preventDefault();
+      auth.closeAuth();
+      management.openManagement(link.dataset.managementLink);
+    });
+    initializeAgencyJoinContext();
+    updateSessionUi();
+    function initializeAgencyJoinContext() {
+      var _a;
+      const params = new URLSearchParams(window.location.search);
+      const agencySlug =
+        params.get("agency") ||
+        ((_a = window.location.hash.match(/^#join\/(.+)$/)) == null
+          ? void 0
+          : _a[1]);
+      if (!agencySlug) return;
+      store.pendingAgencySlug = decodeURIComponent(agencySlug);
       saveStore(store);
       auth.openAuth("signup");
-      return;
     }
-    const link = event.target.closest("[data-management-link]");
-    if (!link) return;
-    event.preventDefault();
-    auth.closeAuth();
-    management.openManagement(link.dataset.managementLink);
-  });
-  initializeAgencyJoinContext();
-  updateSessionUi();
-  function initializeAgencyJoinContext() {
-    var _a;
-    const params = new URLSearchParams(window.location.search);
-    const agencySlug =
-      params.get("agency") ||
-      ((_a = window.location.hash.match(/^#join\/(.+)$/)) == null
-        ? void 0
-        : _a[1]);
-    if (!agencySlug) return;
-    store.pendingAgencySlug = decodeURIComponent(agencySlug);
-    saveStore(store);
-    auth.openAuth("signup");
-  }
-  function getCurrentMember() {
-    return store.members.find((member) => member.id === store.currentMemberId);
-  }
-  function updateSessionUi() {
-    const member = getCurrentMember();
-    dom.loginLink.classList.toggle("is-hidden", Boolean(member));
-    dom.sessionUser.classList.toggle("is-hidden", !member);
-    dom.logoutButton.classList.toggle("is-hidden", !member);
-    dom.sessionUser.textContent = member ? `${member.name}\uB2D8` : "";
-  }
-  function requireLogin() {
-    if (getCurrentMember()) return true;
-    shop.showToast(
-      "\uB85C\uADF8\uC778 \uD6C4 \uAD6C\uB9E4\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-    );
-    auth.openAuth("login");
-    return false;
   }
 })();

@@ -19,8 +19,9 @@ async function createDom() {
   const root = path.resolve(__dirname, "..");
   const html = fs
     .readFileSync(path.join(root, "index.html"), "utf8")
+    .replace(/<link[^>]+href="style\.css\?v=20260602-point-preview"[^>]*>/, "")
     .replace(
-      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260602-auth-rules"[\s\S]*?<\/script>/,
+      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260602-point-preview"[\s\S]*?<\/script>/,
       "",
     );
   const errors = [];
@@ -53,8 +54,77 @@ async function createDom() {
     pathToFileURL(path.join(root, "scripts", "app.js")).href +
     `?test=${Date.now()}`;
   await import(appUrl);
+  await dom.window.__beautyAppReady;
 
   return { dom, errors };
+}
+
+function createMemoryStorage() {
+  const values = new Map();
+
+  return {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+    clear: () => values.clear(),
+  };
+}
+
+function createMemoryIndexedDb() {
+  const databases = new Map();
+
+  return {
+    open(name) {
+      const request = {};
+
+      setTimeout(() => {
+        if (!databases.has(name)) {
+          databases.set(name, { stores: new Map() });
+        }
+
+        const databaseState = databases.get(name);
+        const database = {
+          objectStoreNames: {
+            contains: (storeName) => databaseState.stores.has(storeName),
+          },
+          createObjectStore: (storeName) => {
+            databaseState.stores.set(storeName, new Map());
+          },
+          transaction: (storeName) => {
+            const store = databaseState.stores.get(storeName);
+            const transaction = {
+              objectStore() {
+                return {
+                  get(key) {
+                    const getRequest = {};
+                    setTimeout(() => {
+                      getRequest.result = store.get(key);
+                      getRequest.onsuccess?.();
+                    });
+                    return getRequest;
+                  },
+                  put(value) {
+                    store.set(value.id, value);
+                  },
+                };
+              },
+            };
+
+            setTimeout(() => transaction.oncomplete?.());
+            return transaction;
+          },
+        };
+
+        request.result = database;
+        if (!database.objectStoreNames.contains("app-state")) {
+          request.onupgradeneeded?.();
+        }
+        request.onsuccess?.();
+      });
+
+      return request;
+    },
+  };
 }
 
 async function createFileDom() {
@@ -129,10 +199,13 @@ function input(element, value) {
 
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.doesNotMatch(html, /type="module"/);
-  assert.match(html, /src="scripts\/app\.bundle\.js\?v=20260602-auth-rules"/);
+  assert.match(
+    html,
+    /src="scripts\/app\.bundle\.js\?v=20260602-point-preview"/,
+  );
   assert.match(html, /id="managementView"/);
 
-  const { cloneDefaultStore } = await import(
+  const { STORE_KEY, cloneDefaultStore, loadStore, saveStore } = await import(
     pathToFileURL(path.join(root, "scripts", "data", "demo-store.js")).href +
       `?domain=${Date.now()}`
   );
@@ -172,6 +245,52 @@ function input(element, value) {
     domainResult.referralLinks.map((link) => link.productId).sort(),
     ["cosmetic-serum", "device-led"],
   );
+
+  const originalIndexedDb = global.indexedDB;
+  const originalLocalStorage = global.localStorage;
+  global.indexedDB = createMemoryIndexedDb();
+  global.localStorage = createMemoryStorage();
+
+  const persistentStore = cloneDefaultStore();
+  persistentStore.members.push({
+    id: "member-db",
+    userId: "persist01",
+    passwordHash: "abc123",
+    authProvider: "password",
+    name: "DB유지",
+    phone: "010-3333-4444",
+    email: "persist@example.com",
+    agencyId: "agency-hq",
+    points: 0,
+    status: "active",
+    joinedAt: "2026-06-02",
+    address: { postcode: "", address: "", addressDetail: "" },
+  });
+  await saveStore(persistentStore);
+  global.localStorage.clear();
+
+  const databaseBackedStore = await loadStore();
+  assert.equal(
+    databaseBackedStore.members.some((member) => member.userId === "persist01"),
+    true,
+    "store should load member data from IndexedDB after localStorage is cleared",
+  );
+  assert.match(
+    global.localStorage.getItem(STORE_KEY),
+    /persist01/,
+    "IndexedDB load should mirror the latest store into localStorage backup",
+  );
+
+  if (originalIndexedDb === undefined) {
+    delete global.indexedDB;
+  } else {
+    global.indexedDB = originalIndexedDb;
+  }
+  if (originalLocalStorage === undefined) {
+    delete global.localStorage;
+  } else {
+    global.localStorage = originalLocalStorage;
+  }
 
   const { dom, errors } = await createDom();
   const { document } = dom.window;
@@ -390,11 +509,21 @@ function input(element, value) {
   );
 
   click(dom.window, document.querySelector("#addCart"));
+  assert.match(
+    document.querySelector("#cartSummary").textContent,
+    /적립 예정\s*3,800P/,
+    "cart summary should preview purchase points using the configured rate",
+  );
   click(dom.window, document.querySelector("#bagButton"));
   click(dom.window, document.querySelector("#checkoutButton"));
   assert.ok(
     document.querySelector("#checkoutLedDetail"),
     "LED checkout detail should still render",
+  );
+  assert.match(
+    document.querySelector("#detailView").textContent,
+    /적립 예정\s*3,800P/,
+    "checkout summary should preview purchase points using the configured rate",
   );
   click(dom.window, document.querySelector("#finalPay"));
   assert.ok(

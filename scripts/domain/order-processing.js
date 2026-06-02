@@ -12,7 +12,7 @@ export function completeBypassPayment({ cart, store, payment }) {
     paidProductAmount > 0 && paidProductAmount < 50000 ? 3000 : 0;
   const paidAmount = paidProductAmount + shippingAmount;
   const pointRate = store.settings.purchasePointRate;
-  const earnedPoints = Math.floor((paidProductAmount * pointRate) / 100);
+  const earnedPoints = calculatePurchasePoints(paidProductAmount, pointRate);
   const orderId = createId("order", store.orders.length + 1);
   const paidAt = new Date().toISOString().slice(0, 10);
   const agencyIdAtOrder = member.agencyId || getHeadquartersAgency(store)?.id;
@@ -137,6 +137,16 @@ function createAgencyProcessing({ order, store }) {
 
 function getHeadquartersAgency(store) {
   return store.agencies.find((agency) => agency.isHeadquarters);
+}
+
+export function calculatePurchasePoints(amount, rate) {
+  return Math.floor(
+    (Math.max(0, Number(amount) || 0) * getPercent(rate)) / 100,
+  );
+}
+
+function getPercent(value) {
+  return Math.min(100, Math.max(0, Number(value) || 0));
 }
 
 function createId(prefix, sequence) {

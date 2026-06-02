@@ -1,1 +1,5 @@
 screenshots/
+data/*.sqlite
+data/*.sqlite-*
+server.log
+server.err.log

@@ -1,0 +1,11 @@
+{
+  "name": "beauty-ref-shop-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "build": "npx --yes esbuild scripts/app.js --bundle --format=iife --target=es2018 --outfile=scripts/app.bundle.js",
+    "test": "node tests/server-db.test.mjs"
+  }
+}

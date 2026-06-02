@@ -4,7 +4,10 @@ import {
   getProduct,
   products,
 } from "../data/catalog.js";
-import { completeBypassPayment } from "../domain/order-processing.js";
+import {
+  calculatePurchasePoints,
+  completeBypassPayment,
+} from "../domain/order-processing.js";
 import { formatMoney } from "../utils/format.js";
 
 export function createShopController({
@@ -21,6 +24,14 @@ export function createShopController({
   const getQuantity = () =>
     Math.max(1, Number(document.querySelector("#quantity")?.value || 1));
 
+  const getPurchasePointRate = () =>
+    Math.max(0, Number(store.settings.purchasePointRate || 0));
+
+  const getPurchasePoints = (amount) =>
+    calculatePurchasePoints(amount, getPurchasePointRate());
+
+  const formatPoints = (points) => `${points.toLocaleString("ko-KR")}P`;
+
   function getTotals() {
     const subtotal = state.cart.reduce(
       (sum, item) => sum + item.sale * item.qty,
@@ -31,7 +42,7 @@ export function createShopController({
     return {
       subtotal,
       shipping,
-      reward: Math.floor(subtotal * 0.03),
+      reward: getPurchasePoints(subtotal),
       total: subtotal + shipping,
       count: state.cart.reduce((sum, item) => sum + item.qty, 0),
     };
@@ -149,7 +160,7 @@ export function createShopController({
       <div class="detail-price-item"><span>판매가</span><strong>${formatMoney(product.price)}</strong></div>
       <div class="detail-price-item"><span>할인판매가</span><strong>${formatMoney(product.sale)}</strong></div>
       <div class="detail-price-item"><span>배송</span><strong>3,000원 / 5만원 이상 무료</strong></div>
-      <div class="detail-price-item"><span>적립</span><strong>구매금액 3%</strong></div>
+      <div class="detail-price-item"><span>적립</span><strong>구매금액 ${getPurchasePointRate()}%</strong></div>
     </div>
   `;
   }
@@ -245,7 +256,7 @@ export function createShopController({
     return `
     <div class="summary-row"><span>상품금액</span><strong>${formatMoney(subtotal)}</strong></div>
     <div class="summary-row"><span>배송비</span><strong>${shipping ? formatMoney(shipping) : "무료"}</strong></div>
-    <div class="summary-row"><span>적립 예정</span><strong>${formatMoney(reward)}</strong></div>
+    <div class="summary-row"><span>적립 예정</span><strong>${formatPoints(reward)}</strong></div>
     <div class="summary-row total"><span>결제예정금액</span><strong>${formatMoney(total)}</strong></div>
     <button class="checkout-button" id="checkoutButton">Checkout</button>
   `;
@@ -517,7 +528,7 @@ export function createShopController({
     <div class="detail-price-box">
       <div class="detail-price-item"><span>상품금액</span><strong>${formatMoney(subtotal)}</strong></div>
       <div class="detail-price-item"><span>배송비</span><strong>${shipping ? formatMoney(shipping) : "무료"}</strong></div>
-      <div class="detail-price-item"><span>적립 예정</span><strong>${formatMoney(reward)}</strong></div>
+      <div class="detail-price-item"><span>적립 예정</span><strong>${formatPoints(reward)}</strong></div>
       <div class="detail-price-item"><span>결제예정금액</span><strong>${formatMoney(total)}</strong></div>
     </div>
   `;
