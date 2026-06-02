@@ -88,20 +88,23 @@ function createPurchasedProductReferralLinks({
 }) {
   const links = [];
   const nextNumber = store.personalReferralLinks.length + 1;
+  const uniqueProducts = new Map();
 
   cart.forEach((item) => {
-    for (let unitIndex = 1; unitIndex <= item.qty; unitIndex += 1) {
-      const sequence = nextNumber + links.length;
-      links.push({
-        id: createId("ref", sequence),
-        ownerMemberId: memberId,
-        productId: item.id,
-        orderId,
-        unitIndex,
-        code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
-        status: "active",
-      });
-    }
+    if (!uniqueProducts.has(item.id)) uniqueProducts.set(item.id, item);
+  });
+
+  uniqueProducts.forEach((item) => {
+    const sequence = nextNumber + links.length;
+    links.push({
+      id: createId("ref", sequence),
+      ownerMemberId: memberId,
+      productId: item.id,
+      orderId,
+      unitIndex: 1,
+      code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
+      status: "active",
+    });
   });
 
   return links;

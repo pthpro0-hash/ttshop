@@ -32,8 +32,8 @@ export const defaultStore = {
   members: [
     {
       id: "member-a",
-      userId: "beauty_user",
-      passwordHash: "5a93782c",
+      userId: "beauty01",
+      passwordHash: "9a92be01",
       authProvider: "password",
       name: "홍길동",
       phone: "010-0000-0000",

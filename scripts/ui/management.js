@@ -116,6 +116,9 @@ export function createManagementController({
         return;
       }
 
+      const memoForm = event.target.closest("[data-member-memo-form]");
+      if (memoForm && event.type === "click") return;
+
       const backButton = event.target.closest("[data-member-detail-back]");
       if (backButton) {
         const detailType = backButton.dataset.memberDetailBack || "members";
@@ -130,6 +133,31 @@ export function createManagementController({
       ) {
         closeDetailModal(modal);
       }
+    });
+
+    modal.addEventListener("submit", (event) => {
+      const memoForm = event.target.closest("[data-member-memo-form]");
+      if (!memoForm) return;
+
+      event.preventDefault();
+      const member = store.members.find(
+        (item) => item.id === memoForm.dataset.memberMemoForm,
+      );
+      if (!member) return;
+
+      member.internalMemo = memoForm.querySelector(
+        '[name="internalMemo"]',
+      ).value;
+      persistStore(store);
+      openDetailModal(
+        modal,
+        createMemberProfileDetail(
+          member.id,
+          store,
+          scope,
+          modal.dataset.currentDetail || "members",
+        ),
+      );
     });
   }
 
@@ -528,6 +556,14 @@ function createMemberProfileDetail(memberId, store, scope, backType) {
         </div>
       </section>
     </div>
+    <form class="member-memo-form" data-member-memo-form="${member.id}">
+      <div class="product-category">Internal memo</div>
+      <label>
+        관리자/대리점 메모
+        <textarea class="quantity-input" name="internalMemo" rows="5" placeholder="상담 내용, 배송 요청, 고객 관리 메모를 입력하세요.">${escapeTextarea(member.internalMemo)}</textarea>
+      </label>
+      <button class="buy-button mini-button" type="submit">메모 저장</button>
+    </form>
   `;
 }
 
@@ -562,6 +598,13 @@ function formatAddress(address = {}) {
     address.addressDetail,
   ].filter(Boolean);
   return parts.length ? parts.join(" ") : "-";
+}
+
+function escapeTextarea(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function getCurrentMonthKey() {

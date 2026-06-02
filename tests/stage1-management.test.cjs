@@ -20,7 +20,7 @@ async function createDom() {
   const html = fs
     .readFileSync(path.join(root, "index.html"), "utf8")
     .replace(
-      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260602-admin-settings"[\s\S]*?<\/script>/,
+      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260602-auth-rules"[\s\S]*?<\/script>/,
       "",
     );
   const errors = [];
@@ -129,11 +129,49 @@ function input(element, value) {
 
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.doesNotMatch(html, /type="module"/);
-  assert.match(
-    html,
-    /src="scripts\/app\.bundle\.js\?v=20260602-admin-settings"/,
-  );
+  assert.match(html, /src="scripts\/app\.bundle\.js\?v=20260602-auth-rules"/);
   assert.match(html, /id="managementView"/);
+
+  const { cloneDefaultStore } = await import(
+    pathToFileURL(path.join(root, "scripts", "data", "demo-store.js")).href +
+      `?domain=${Date.now()}`
+  );
+  const { completeBypassPayment } = await import(
+    pathToFileURL(path.join(root, "scripts", "domain", "order-processing.js"))
+      .href + `?domain=${Date.now()}`
+  );
+  const domainStore = cloneDefaultStore();
+  const domainResult = completeBypassPayment({
+    store: domainStore,
+    payment: { memberId: "member-a", referralSourceType: "none" },
+    cart: [
+      {
+        id: "device-led",
+        name: "LED Skin Lifting Device",
+        ko: "LED 스킨 리프팅 디바이스",
+        sale: 76000,
+        qty: 3,
+        option: "1ea / Warm White",
+      },
+      {
+        id: "cosmetic-serum",
+        name: "Serum",
+        ko: "세럼",
+        sale: 30000,
+        qty: 2,
+        option: "1ea",
+      },
+    ],
+  });
+  assert.equal(
+    domainResult.referralLinks.length,
+    2,
+    "referral links should be generated once per distinct product",
+  );
+  assert.deepEqual(
+    domainResult.referralLinks.map((link) => link.productId).sort(),
+    ["cosmetic-serum", "device-led"],
+  );
 
   const { dom, errors } = await createDom();
   const { document } = dom.window;
@@ -198,7 +236,23 @@ function input(element, value) {
   );
   click(dom.window, document.querySelector('[data-auth-mode="signup"]'));
   const signupForm = document.querySelector('[data-auth-form="signup"]');
-  input(signupForm.querySelector('[name="userId"]'), "new_beauty_member");
+  input(signupForm.querySelector('[name="userId"]'), "bad_id");
+  input(signupForm.querySelector('[name="password"]'), "password123");
+  click(dom.window, signupForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("[data-auth-error]").textContent,
+    /영문 및 숫자/,
+    "signup should reject non-alphanumeric user ids",
+  );
+  input(signupForm.querySelector('[name="userId"]'), "newbeauty01");
+  input(signupForm.querySelector('[name="password"]'), "password");
+  click(dom.window, signupForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("[data-auth-error]").textContent,
+    /영문과 숫자/,
+    "signup should require passwords with letters and numbers",
+  );
+  input(signupForm.querySelector('[name="userId"]'), "newbeauty01");
   input(signupForm.querySelector('[name="password"]'), "password123");
   input(signupForm.querySelector('[name="name"]'), "김신규");
   input(signupForm.querySelector('[name="phone"]'), "010-1111-2222");
@@ -235,6 +289,27 @@ function input(element, value) {
     document.querySelector('[data-profile-form] [name="userId"]').readOnly,
     "profile user id should be read only",
   );
+  assert.ok(
+    document.querySelector("[data-password-form]"),
+    "profile should include password change form",
+  );
+  assert.ok(
+    document.querySelector('[data-profile-section="points"]'),
+    "profile point summary should be clickable",
+  );
+  assert.ok(
+    document.querySelector('[data-profile-section="orders"]'),
+    "profile order summary should be clickable",
+  );
+  assert.ok(
+    document.querySelector('[data-profile-section="links"]'),
+    "profile referral summary should be clickable",
+  );
+  assert.equal(
+    document.querySelector("[data-member-memo-form]"),
+    null,
+    "member profile should not expose internal memo",
+  );
   const profileForm = document.querySelector("[data-profile-form]");
   input(profileForm.querySelector('[name="name"]'), "김수정");
   input(profileForm.querySelector('[name="phone"]'), "010-9999-0000");
@@ -249,6 +324,33 @@ function input(element, value) {
     "김수정님",
     "saving profile should update the header member name",
   );
+  const passwordForm = document.querySelector("[data-password-form]");
+  input(
+    passwordForm.querySelector('[name="currentPassword"]'),
+    "wrong-password",
+  );
+  input(passwordForm.querySelector('[name="newPassword"]'), "newpass123");
+  input(passwordForm.querySelector('[name="confirmPassword"]'), "newpass123");
+  click(dom.window, passwordForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("[data-password-error]").textContent,
+    /기존 비밀번호/,
+    "password change should verify current password",
+  );
+  input(passwordForm.querySelector('[name="currentPassword"]'), "password123");
+  input(passwordForm.querySelector('[name="newPassword"]'), "newpass123");
+  input(passwordForm.querySelector('[name="confirmPassword"]'), "newpass123");
+  click(dom.window, passwordForm.querySelector('[type="submit"]'));
+  assert.equal(
+    document.querySelector("[data-password-error]").textContent,
+    "",
+    "password change should clear error after success",
+  );
+  click(dom.window, document.querySelector('[data-profile-section="links"]'));
+  assert.ok(
+    document.querySelector('[data-profile-history="links"]'),
+    "profile referral section should render",
+  );
   click(dom.window, document.querySelector("#profileClose"));
 
   click(dom.window, document.querySelector("#logoutButton"));
@@ -259,7 +361,7 @@ function input(element, value) {
   );
   click(dom.window, document.querySelector("#loginLink"));
   loginForm = document.querySelector('[data-auth-form="login"]');
-  input(loginForm.querySelector('[name="userId"]'), "new_beauty_member");
+  input(loginForm.querySelector('[name="userId"]'), "newbeauty01");
   input(loginForm.querySelector('[name="password"]'), "wrong-password");
   click(dom.window, loginForm.querySelector('[type="submit"]'));
   assert.match(
@@ -268,6 +370,13 @@ function input(element, value) {
     "login should reject the wrong password for an existing member",
   );
   input(loginForm.querySelector('[name="password"]'), "password123");
+  click(dom.window, loginForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("[data-auth-error]").textContent,
+    /아이디 또는 비밀번호/,
+    "login should reject the old password after password change",
+  );
+  input(loginForm.querySelector('[name="password"]'), "newpass123");
   click(dom.window, loginForm.querySelector('[type="submit"]'));
   assert.equal(
     document.querySelector("#authView").classList.contains("is-hidden"),
@@ -296,6 +405,15 @@ function input(element, value) {
     document.querySelector("#paymentResult").textContent,
     /적립 포인트\s*3,800P/,
     "payment result should show purchase points",
+  );
+  assert.match(
+    document.querySelector("#paymentResult").textContent,
+    /구매 상품 종류 기준/,
+    "payment result should explain product-level referral links",
+  );
+  assert.ok(
+    document.querySelector("#paymentResult [data-copy-referral]"),
+    "payment result should expose referral link copy buttons",
   );
 
   click(dom.window, document.querySelector('[data-management-link="admin"]'));
@@ -390,13 +508,24 @@ function input(element, value) {
   );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /Admin member|beauty_user|배송지|구매이력|포인트 적립\/사용 이력/,
+    /Admin member|beauty01|배송지|구매이력|포인트 적립\/사용 이력/,
     "admin member name should open member detail view",
   );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
     /내부 대리점|강남 뷰티 대리점/,
     "admin member detail should include internal agency ownership",
+  );
+  const adminMemoForm = document.querySelector("[data-member-memo-form]");
+  input(
+    adminMemoForm.querySelector('[name="internalMemo"]'),
+    "관리자 확인 메모",
+  );
+  click(dom.window, adminMemoForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /관리자 확인 메모/,
+    "admin should be able to save member memo",
   );
   click(dom.window, document.querySelector("[data-member-detail-back]"));
   assert.match(
@@ -505,13 +634,29 @@ function input(element, value) {
   );
   assert.match(
     document.querySelector("#agencyModalContent").textContent,
-    /Agency member|beauty_user|배송지|구매이력|포인트 적립\/사용 이력/,
+    /Agency member|beauty01|배송지|구매이력|포인트 적립\/사용 이력/,
     "agency member name should open member detail view",
   );
   assert.doesNotMatch(
     document.querySelector("#agencyModalContent").textContent,
     /내부 대리점/,
     "agency member detail should not expose internal ownership label",
+  );
+  const agencyMemoForm = document.querySelector("[data-member-memo-form]");
+  assert.match(
+    agencyMemoForm.querySelector('[name="internalMemo"]').value,
+    /관리자 확인 메모/,
+    "agency should see saved internal memo",
+  );
+  input(
+    agencyMemoForm.querySelector('[name="internalMemo"]'),
+    "대리점 상담 메모",
+  );
+  click(dom.window, agencyMemoForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    /대리점 상담 메모/,
+    "agency should be able to update member memo",
   );
   click(dom.window, document.querySelector("[data-member-detail-back]"));
   assert.match(

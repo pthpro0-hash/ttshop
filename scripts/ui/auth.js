@@ -97,8 +97,8 @@ export function createAuthController({
 
     return `
     <form class="auth-form" data-auth-form="signup">
-      <label>아이디<input class="quantity-input" name="userId" placeholder="beauty_user" /></label>
-      <label>비밀번호<input class="quantity-input" name="password" type="password" placeholder="8자 이상" /></label>
+      <label>아이디<input class="quantity-input" name="userId" placeholder="beauty01" /></label>
+      <label>비밀번호<input class="quantity-input" name="password" type="password" placeholder="영문+숫자 8자 이상" /></label>
       <label>이름<input class="quantity-input" name="name" placeholder="홍길동" /></label>
       <label>휴대폰<input class="quantity-input" name="phone" placeholder="010-0000-0000" /></label>
       <label>이메일<input class="quantity-input" name="email" placeholder="beauty@example.com" /></label>
@@ -252,24 +252,25 @@ export function createAuthController({
             <button class="cart-button" type="button" data-profile-close>닫기</button>
           </div>
         </form>
+        <form class="profile-form password-form" data-password-form>
+          <div class="product-category">Password</div>
+          <div class="profile-form-grid password-grid">
+            <label>기존 비밀번호<input class="quantity-input" name="currentPassword" type="password" /></label>
+            <label>새 비밀번호<input class="quantity-input" name="newPassword" type="password" placeholder="영문+숫자 8자 이상" /></label>
+            <label>새 비밀번호 확인<input class="quantity-input" name="confirmPassword" type="password" /></label>
+            <button class="buy-button" type="submit">비밀번호 변경</button>
+          </div>
+          <p class="auth-error" data-password-error aria-live="polite"></p>
+        </form>
         <div class="profile-summary-grid">
-          <article><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></article>
-          <article><span>구매이력</span><strong>${orders.length}건</strong></article>
-          <article><span>추천 링크</span><strong>${links.length}개</strong></article>
+          <button type="button" data-profile-section="points"><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></button>
+          <button type="button" data-profile-section="orders"><span>구매이력</span><strong>${orders.length}건</strong></button>
+          <button type="button" data-profile-section="links"><span>추천 링크</span><strong>${links.length}개</strong></button>
         </div>
-        <div class="profile-history-grid">
-          <section>
-            <div class="product-category">구매이력</div>
-            <div class="profile-list">
-              ${orders.map(createProfileOrderRow).join("") || '<div class="admin-detail-empty">구매이력이 없습니다.</div>'}
-            </div>
-          </section>
-          <section>
-            <div class="product-category">포인트 적립/사용 이력</div>
-            <div class="profile-list">
-              ${points.map(createProfilePointRow).join("") || '<div class="admin-detail-empty">포인트 이력이 없습니다.</div>'}
-            </div>
-          </section>
+        <div class="profile-history-stack">
+          ${createExpandableProfileSection("points", "포인트 이력", sortPointHistory(points), createProfilePointRow, "포인트 이력이 없습니다.")}
+          ${createExpandableProfileSection("orders", "구매이력", sortOrderHistory(orders), createProfileOrderRow, "구매이력이 없습니다.")}
+          ${createExpandableProfileSection("links", "추천 링크", links, createProfileLinkRow, "추천 링크가 없습니다.")}
         </div>
       </section>
     </section>
@@ -302,6 +303,55 @@ export function createAuthController({
   `;
   }
 
+  function createProfileLinkRow(link) {
+    const url = createReferralUrl(link.code);
+
+    return `
+    <article class="profile-row referral-row">
+      <div><strong>${link.code}</strong><span>${link.status}</span></div>
+      <div>
+        <span>${url}</span>
+        <button class="cart-button mini-button" type="button" data-copy-referral="${url}">링크 복사</button>
+      </div>
+    </article>
+  `;
+  }
+
+  function createExpandableProfileSection(
+    type,
+    title,
+    items,
+    createRow,
+    emptyMessage,
+  ) {
+    const visible = items.slice(0, 10);
+    const hidden = items.slice(10);
+
+    return `
+    <section class="profile-history-section ${type === "points" ? "" : "is-hidden"}" data-profile-history="${type}">
+      <div class="profile-history-head">
+        <div class="product-category">${title}</div>
+        <span>최근 ${Math.min(10, items.length)}개 / 총 ${items.length}개</span>
+      </div>
+      <div class="profile-list">
+        ${visible.map(createRow).join("") || `<div class="admin-detail-empty">${emptyMessage}</div>`}
+        ${hidden.map((item) => `<div class="profile-more-item is-hidden" data-profile-more="${type}">${createRow(item)}</div>`).join("")}
+      </div>
+      ${hidden.length ? `<button class="cart-button profile-more-button" type="button" data-profile-more-button="${type}">더보기 ${hidden.length}개</button>` : ""}
+    </section>
+  `;
+  }
+
+  function sortOrderHistory(orders) {
+    return [...orders].sort((a, b) => String(b.paidAt).localeCompare(a.paidAt));
+  }
+
+  function sortPointHistory(points) {
+    return [...points].sort((a, b) =>
+      String(b.createdAt).localeCompare(a.createdAt),
+    );
+  }
+
   function bindProfileEvents() {
     document
       .querySelector("#profileClose")
@@ -322,6 +372,42 @@ export function createAuthController({
         showToast("내정보가 저장되었습니다.");
         openProfile();
       });
+    document
+      .querySelector("[data-password-form]")
+      ?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        changePassword(event.currentTarget);
+      });
+    document.querySelectorAll("[data-profile-section]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document
+          .querySelectorAll("[data-profile-history]")
+          .forEach((section) => {
+            section.classList.toggle(
+              "is-hidden",
+              section.dataset.profileHistory !== button.dataset.profileSection,
+            );
+          });
+      });
+    });
+    document
+      .querySelectorAll("[data-profile-more-button]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          document
+            .querySelectorAll(
+              `[data-profile-more="${button.dataset.profileMoreButton}"]`,
+            )
+            .forEach((item) => item.classList.remove("is-hidden"));
+          button.remove();
+        });
+      });
+    document.querySelectorAll("[data-copy-referral]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        await copyText(button.dataset.copyReferral);
+        showToast("추천 링크가 복사되었습니다.");
+      });
+    });
   }
 
   function saveProfile(form) {
@@ -341,6 +427,41 @@ export function createAuthController({
       address: getFormValue(form, "address"),
       addressDetail: getFormValue(form, "addressDetail"),
     };
+  }
+
+  function changePassword(form) {
+    const member = getCurrentMember();
+    if (!member) return;
+
+    const currentPassword = getFormValue(form, "currentPassword");
+    const newPassword = getFormValue(form, "newPassword");
+    const confirmPassword = getFormValue(form, "confirmPassword");
+    const error = form.querySelector("[data-password-error]");
+
+    error.textContent = "";
+    if (!member.passwordHash) {
+      error.textContent = "간편 로그인 회원은 일반 비밀번호가 없습니다.";
+      return;
+    }
+    if (member.passwordHash !== hashPassword(member.userId, currentPassword)) {
+      error.textContent = "기존 비밀번호가 일치하지 않습니다.";
+      return;
+    }
+    if (!isValidPassword(newPassword)) {
+      error.textContent =
+        "새 비밀번호는 영문과 숫자를 포함해 8자 이상 입력해주세요.";
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      error.textContent = "새 비밀번호 확인이 일치하지 않습니다.";
+      return;
+    }
+
+    member.passwordHash = hashPassword(member.userId, newPassword);
+    member.authProvider = "password";
+    persistStore(store);
+    showToast("비밀번호가 변경되었습니다.");
+    form.reset();
   }
 
   function bindAuthEvents() {
@@ -387,12 +508,15 @@ export function createAuthController({
     const userId = normalizeUserId(getFormValue(form, "userId"));
     const password = getFormValue(form, "password");
 
-    if (!userId) {
-      setFormError(form, "아이디를 입력해주세요.");
+    if (!isValidUserId(userId)) {
+      setFormError(form, "아이디는 영문 및 숫자로 6자 이상 입력해주세요.");
       return false;
     }
-    if (password.length < 8) {
-      setFormError(form, "비밀번호는 8자 이상 입력해주세요.");
+    if (!isValidPassword(password)) {
+      setFormError(
+        form,
+        "비밀번호는 영문과 숫자를 포함해 8자 이상 입력해주세요.",
+      );
       return false;
     }
     if (findMemberByUserId(userId)) {
@@ -479,6 +603,14 @@ export function createAuthController({
       .toLowerCase();
   }
 
+  function isValidUserId(userId) {
+    return /^[a-z0-9]{6,}$/i.test(userId);
+  }
+
+  function isValidPassword(password) {
+    return /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password);
+  }
+
   function findMemberByUserId(userId) {
     const normalized = normalizeUserId(userId);
     return store.members.find(
@@ -498,10 +630,32 @@ export function createAuthController({
     return (hash >>> 0).toString(16).padStart(8, "0");
   }
 
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+
+  function createReferralUrl(code) {
+    return `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
+  }
+
   function migrateMemberAuthDefaults() {
     let changed = false;
     store.members.forEach((member) => {
-      if (member.userId === "beauty_user" && !member.passwordHash) {
+      if (member.userId === "beauty_user") {
+        member.userId = "beauty01";
         member.passwordHash = hashPassword(member.userId, "password123");
         member.authProvider = "password";
         changed = true;

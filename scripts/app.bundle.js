@@ -33,8 +33,8 @@
     members: [
       {
         id: "member-a",
-        userId: "beauty_user",
-        passwordHash: "5a93782c",
+        userId: "beauty01",
+        passwordHash: "9a92be01",
         authProvider: "password",
         name: "\uD64D\uAE38\uB3D9",
         phone: "010-0000-0000",
@@ -230,8 +230,8 @@
       const pendingAgency = getPendingAgency();
       return `
     <form class="auth-form" data-auth-form="signup">
-      <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" placeholder="beauty_user" /></label>
-      <label>\uBE44\uBC00\uBC88\uD638<input class="quantity-input" name="password" type="password" placeholder="8\uC790 \uC774\uC0C1" /></label>
+      <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" placeholder="beauty01" /></label>
+      <label>\uBE44\uBC00\uBC88\uD638<input class="quantity-input" name="password" type="password" placeholder="\uC601\uBB38+\uC22B\uC790 8\uC790 \uC774\uC0C1" /></label>
       <label>\uC774\uB984<input class="quantity-input" name="name" placeholder="\uD64D\uAE38\uB3D9" /></label>
       <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" placeholder="010-0000-0000" /></label>
       <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" placeholder="beauty@example.com" /></label>
@@ -380,24 +380,25 @@
             <button class="cart-button" type="button" data-profile-close>\uB2EB\uAE30</button>
           </div>
         </form>
+        <form class="profile-form password-form" data-password-form>
+          <div class="product-category">Password</div>
+          <div class="profile-form-grid password-grid">
+            <label>\uAE30\uC874 \uBE44\uBC00\uBC88\uD638<input class="quantity-input" name="currentPassword" type="password" /></label>
+            <label>\uC0C8 \uBE44\uBC00\uBC88\uD638<input class="quantity-input" name="newPassword" type="password" placeholder="\uC601\uBB38+\uC22B\uC790 8\uC790 \uC774\uC0C1" /></label>
+            <label>\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778<input class="quantity-input" name="confirmPassword" type="password" /></label>
+            <button class="buy-button" type="submit">\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD</button>
+          </div>
+          <p class="auth-error" data-password-error aria-live="polite"></p>
+        </form>
         <div class="profile-summary-grid">
-          <article><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></article>
-          <article><span>\uAD6C\uB9E4\uC774\uB825</span><strong>${orders.length}\uAC74</strong></article>
-          <article><span>\uCD94\uCC9C \uB9C1\uD06C</span><strong>${links.length}\uAC1C</strong></article>
+          <button type="button" data-profile-section="points"><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></button>
+          <button type="button" data-profile-section="orders"><span>\uAD6C\uB9E4\uC774\uB825</span><strong>${orders.length}\uAC74</strong></button>
+          <button type="button" data-profile-section="links"><span>\uCD94\uCC9C \uB9C1\uD06C</span><strong>${links.length}\uAC1C</strong></button>
         </div>
-        <div class="profile-history-grid">
-          <section>
-            <div class="product-category">\uAD6C\uB9E4\uC774\uB825</div>
-            <div class="profile-list">
-              ${orders.map(createProfileOrderRow).join("") || '<div class="admin-detail-empty">\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
-            </div>
-          </section>
-          <section>
-            <div class="product-category">\uD3EC\uC778\uD2B8 \uC801\uB9BD/\uC0AC\uC6A9 \uC774\uB825</div>
-            <div class="profile-list">
-              ${points.map(createProfilePointRow).join("") || '<div class="admin-detail-empty">\uD3EC\uC778\uD2B8 \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
-            </div>
-          </section>
+        <div class="profile-history-stack">
+          ${createExpandableProfileSection("points", "\uD3EC\uC778\uD2B8 \uC774\uB825", sortPointHistory(points), createProfilePointRow, "\uD3EC\uC778\uD2B8 \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.")}
+          ${createExpandableProfileSection("orders", "\uAD6C\uB9E4\uC774\uB825", sortOrderHistory(orders), createProfileOrderRow, "\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.")}
+          ${createExpandableProfileSection("links", "\uCD94\uCC9C \uB9C1\uD06C", links, createProfileLinkRow, "\uCD94\uCC9C \uB9C1\uD06C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.")}
         </div>
       </section>
     </section>
@@ -425,8 +426,53 @@
     </article>
   `;
     }
+    function createProfileLinkRow(link) {
+      const url = createReferralUrl(link.code);
+      return `
+    <article class="profile-row referral-row">
+      <div><strong>${link.code}</strong><span>${link.status}</span></div>
+      <div>
+        <span>${url}</span>
+        <button class="cart-button mini-button" type="button" data-copy-referral="${url}">\uB9C1\uD06C \uBCF5\uC0AC</button>
+      </div>
+    </article>
+  `;
+    }
+    function createExpandableProfileSection(
+      type,
+      title,
+      items,
+      createRow,
+      emptyMessage,
+    ) {
+      const visible = items.slice(0, 10);
+      const hidden = items.slice(10);
+      return `
+    <section class="profile-history-section ${type === "points" ? "" : "is-hidden"}" data-profile-history="${type}">
+      <div class="profile-history-head">
+        <div class="product-category">${title}</div>
+        <span>\uCD5C\uADFC ${Math.min(10, items.length)}\uAC1C / \uCD1D ${items.length}\uAC1C</span>
+      </div>
+      <div class="profile-list">
+        ${visible.map(createRow).join("") || `<div class="admin-detail-empty">${emptyMessage}</div>`}
+        ${hidden.map((item) => `<div class="profile-more-item is-hidden" data-profile-more="${type}">${createRow(item)}</div>`).join("")}
+      </div>
+      ${hidden.length ? `<button class="cart-button profile-more-button" type="button" data-profile-more-button="${type}">\uB354\uBCF4\uAE30 ${hidden.length}\uAC1C</button>` : ""}
+    </section>
+  `;
+    }
+    function sortOrderHistory(orders) {
+      return [...orders].sort((a, b) =>
+        String(b.paidAt).localeCompare(a.paidAt),
+      );
+    }
+    function sortPointHistory(points) {
+      return [...points].sort((a, b) =>
+        String(b.createdAt).localeCompare(a.createdAt),
+      );
+    }
     function bindProfileEvents() {
-      var _a, _b, _c;
+      var _a, _b, _c, _d;
       (_a = document.querySelector("#profileClose")) == null
         ? void 0
         : _a.addEventListener("click", closeAuth);
@@ -448,6 +494,45 @@
             );
             openProfile();
           });
+      (_d = document.querySelector("[data-password-form]")) == null
+        ? void 0
+        : _d.addEventListener("submit", (event) => {
+            event.preventDefault();
+            changePassword(event.currentTarget);
+          });
+      document.querySelectorAll("[data-profile-section]").forEach((button) => {
+        button.addEventListener("click", () => {
+          document
+            .querySelectorAll("[data-profile-history]")
+            .forEach((section) => {
+              section.classList.toggle(
+                "is-hidden",
+                section.dataset.profileHistory !==
+                  button.dataset.profileSection,
+              );
+            });
+        });
+      });
+      document
+        .querySelectorAll("[data-profile-more-button]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            document
+              .querySelectorAll(
+                `[data-profile-more="${button.dataset.profileMoreButton}"]`,
+              )
+              .forEach((item) => item.classList.remove("is-hidden"));
+            button.remove();
+          });
+        });
+      document.querySelectorAll("[data-copy-referral]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await copyText(button.dataset.copyReferral);
+          showToast(
+            "\uCD94\uCC9C \uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+          );
+        });
+      });
     }
     function saveProfile(form) {
       var _a;
@@ -468,6 +553,44 @@
         address: getFormValue(form, "address"),
         addressDetail: getFormValue(form, "addressDetail"),
       };
+    }
+    function changePassword(form) {
+      const member = getCurrentMember2();
+      if (!member) return;
+      const currentPassword = getFormValue(form, "currentPassword");
+      const newPassword = getFormValue(form, "newPassword");
+      const confirmPassword = getFormValue(form, "confirmPassword");
+      const error = form.querySelector("[data-password-error]");
+      error.textContent = "";
+      if (!member.passwordHash) {
+        error.textContent =
+          "\uAC04\uD3B8 \uB85C\uADF8\uC778 \uD68C\uC6D0\uC740 \uC77C\uBC18 \uBE44\uBC00\uBC88\uD638\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.";
+        return;
+      }
+      if (
+        member.passwordHash !== hashPassword(member.userId, currentPassword)
+      ) {
+        error.textContent =
+          "\uAE30\uC874 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.";
+        return;
+      }
+      if (!isValidPassword(newPassword)) {
+        error.textContent =
+          "\uC0C8 \uBE44\uBC00\uBC88\uD638\uB294 \uC601\uBB38\uACFC \uC22B\uC790\uB97C \uD3EC\uD568\uD574 8\uC790 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694.";
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        error.textContent =
+          "\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778\uC774 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.";
+        return;
+      }
+      member.passwordHash = hashPassword(member.userId, newPassword);
+      member.authProvider = "password";
+      persistStore(store2);
+      showToast(
+        "\uBE44\uBC00\uBC88\uD638\uAC00 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+      );
+      form.reset();
     }
     function bindAuthEvents() {
       var _a, _b;
@@ -527,17 +650,17 @@
       clearFormError(form);
       const userId = normalizeUserId(getFormValue(form, "userId"));
       const password = getFormValue(form, "password");
-      if (!userId) {
+      if (!isValidUserId(userId)) {
         setFormError(
           form,
-          "\uC544\uC774\uB514\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+          "\uC544\uC774\uB514\uB294 \uC601\uBB38 \uBC0F \uC22B\uC790\uB85C 6\uC790 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694.",
         );
         return false;
       }
-      if (password.length < 8) {
+      if (!isValidPassword(password)) {
         setFormError(
           form,
-          "\uBE44\uBC00\uBC88\uD638\uB294 8\uC790 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+          "\uBE44\uBC00\uBC88\uD638\uB294 \uC601\uBB38\uACFC \uC22B\uC790\uB97C \uD3EC\uD568\uD574 8\uC790 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694.",
         );
         return false;
       }
@@ -627,6 +750,12 @@
         .trim()
         .toLowerCase();
     }
+    function isValidUserId(userId) {
+      return /^[a-z0-9]{6,}$/i.test(userId);
+    }
+    function isValidPassword(password) {
+      return /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password);
+    }
     function findMemberByUserId(userId) {
       const normalized = normalizeUserId(userId);
       return store2.members.find(
@@ -642,10 +771,30 @@
       }
       return (hash >>> 0).toString(16).padStart(8, "0");
     }
+    async function copyText(text) {
+      var _a;
+      if ((_a = navigator.clipboard) == null ? void 0 : _a.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    function createReferralUrl(code) {
+      return `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
+    }
     function migrateMemberAuthDefaults() {
       let changed = false;
       store2.members.forEach((member) => {
-        if (member.userId === "beauty_user" && !member.passwordHash) {
+        if (member.userId === "beauty_user") {
+          member.userId = "beauty01";
           member.passwordHash = hashPassword(member.userId, "password123");
           member.authProvider = "password";
           changed = true;
@@ -834,6 +983,8 @@
           );
           return;
         }
+        const memoForm = event.target.closest("[data-member-memo-form]");
+        if (memoForm && event.type === "click") return;
         const backButton = event.target.closest("[data-member-detail-back]");
         if (backButton) {
           const detailType = backButton.dataset.memberDetailBack || "members";
@@ -847,6 +998,28 @@
         ) {
           closeDetailModal(modal);
         }
+      });
+      modal.addEventListener("submit", (event) => {
+        const memoForm = event.target.closest("[data-member-memo-form]");
+        if (!memoForm) return;
+        event.preventDefault();
+        const member = store2.members.find(
+          (item) => item.id === memoForm.dataset.memberMemoForm,
+        );
+        if (!member) return;
+        member.internalMemo = memoForm.querySelector(
+          '[name="internalMemo"]',
+        ).value;
+        persistStore(store2);
+        openDetailModal(
+          modal,
+          createMemberProfileDetail(
+            member.id,
+            store2,
+            scope,
+            modal.dataset.currentDetail || "members",
+          ),
+        );
       });
     }
     function bindAgencyAdminForm(modal) {
@@ -1217,6 +1390,14 @@
         </div>
       </section>
     </div>
+    <form class="member-memo-form" data-member-memo-form="${member.id}">
+      <div class="product-category">Internal memo</div>
+      <label>
+        \uAD00\uB9AC\uC790/\uB300\uB9AC\uC810 \uBA54\uBAA8
+        <textarea class="quantity-input" name="internalMemo" rows="5" placeholder="\uC0C1\uB2F4 \uB0B4\uC6A9, \uBC30\uC1A1 \uC694\uCCAD, \uACE0\uAC1D \uAD00\uB9AC \uBA54\uBAA8\uB97C \uC785\uB825\uD558\uC138\uC694.">${escapeTextarea(member.internalMemo)}</textarea>
+      </label>
+      <button class="buy-button mini-button" type="submit">\uBA54\uBAA8 \uC800\uC7A5</button>
+    </form>
   `;
   }
   function createMemberOrderRow(order) {
@@ -1248,6 +1429,12 @@
       address.addressDetail,
     ].filter(Boolean);
     return parts.length ? parts.join(" ") : "-";
+  }
+  function escapeTextarea(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
   function getCurrentMonthKey() {
     return /* @__PURE__ */ new Date().toISOString().slice(0, 7);
@@ -2016,19 +2203,21 @@
   }) {
     const links = [];
     const nextNumber = store2.personalReferralLinks.length + 1;
+    const uniqueProducts = /* @__PURE__ */ new Map();
     cart.forEach((item) => {
-      for (let unitIndex = 1; unitIndex <= item.qty; unitIndex += 1) {
-        const sequence = nextNumber + links.length;
-        links.push({
-          id: createId("ref", sequence),
-          ownerMemberId: memberId,
-          productId: item.id,
-          orderId,
-          unitIndex,
-          code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
-          status: "active",
-        });
-      }
+      if (!uniqueProducts.has(item.id)) uniqueProducts.set(item.id, item);
+    });
+    uniqueProducts.forEach((item) => {
+      const sequence = nextNumber + links.length;
+      links.push({
+        id: createId("ref", sequence),
+        ownerMemberId: memberId,
+        productId: item.id,
+        orderId,
+        unitIndex: 1,
+        code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
+        status: "active",
+      });
     });
     return links;
   }
@@ -2422,8 +2611,9 @@
         <div><strong>01 \uC8FC\uBB38 \uC0DD\uC131</strong><span>${result.order.id} \uC8FC\uBB38\uC744 paid \uC0C1\uD0DC\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.</span></div>
         <div><strong>02 \uD3EC\uC778\uD2B8 \uC801\uB9BD</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store2.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
         <div><strong>03 \uB300\uB9AC\uC810 \uCC98\uB9AC</strong><span>\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C ${result.agencyProcessing ? "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC7A5\uBD80\uC5D0 \uBC18\uC601\uD588\uC2B5\uB2C8\uB2E4." : "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uC0C1\uC5D0\uC11C \uC81C\uC678\uD588\uC2B5\uB2C8\uB2E4."}</span></div>
-        <div><strong>04 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC218\uB7C9 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
+        <div><strong>04 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC885\uB958 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
       </div>
+      ${createReferralCopyPanel(result.referralLinks)}
       <div class="buy-actions result-actions">
         <button class="buy-button" type="button" data-management-link="admin">Admin \uCC98\uB9AC \uD655\uC778</button>
         <button class="cart-button" type="button" data-management-link="agency">Agency \uC815\uC0B0 \uD655\uC778</button>
@@ -2433,6 +2623,59 @@
   `;
       showDetailView();
       document.querySelector("#backToShop").addEventListener("click", showHome);
+      bindReferralCopyButtons();
+    }
+    function createReferralCopyPanel(links) {
+      if (!links.length) return "";
+      return `
+    <section class="referral-copy-panel">
+      <div class="product-category">Personal referral links</div>
+      <div class="profile-list">
+        ${links
+          .map(
+            (link) => `
+            <article class="profile-row referral-row">
+              <div><strong>${link.code}</strong><span>${link.productId}</span></div>
+              <div>
+                <span>${createReferralUrl(link.code)}</span>
+                <button class="cart-button mini-button" type="button" data-copy-referral="${createReferralUrl(link.code)}">\uB9C1\uD06C \uBCF5\uC0AC</button>
+              </div>
+            </article>
+          `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+    }
+    function bindReferralCopyButtons() {
+      document.querySelectorAll("[data-copy-referral]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await copyText(button.dataset.copyReferral);
+          showToast(
+            "\uCD94\uCC9C \uB9C1\uD06C\uAC00 \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+          );
+        });
+      });
+    }
+    async function copyText(text) {
+      var _a;
+      if ((_a = navigator.clipboard) == null ? void 0 : _a.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    function createReferralUrl(code) {
+      return `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
     }
     function createCheckoutLedDetail() {
       const ledItem = state.cart.find((item) => item.id === "device-led");

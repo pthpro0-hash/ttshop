@@ -374,8 +374,9 @@ export function createShopController({
         <div><strong>01 주문 생성</strong><span>${result.order.id} 주문을 paid 상태로 저장했습니다.</span></div>
         <div><strong>02 포인트 적립</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}원 × ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
         <div><strong>03 대리점 처리</strong><span>개인 추천링크 구매가 아니므로 ${result.agencyProcessing ? "대리점 정산 대기 장부에 반영했습니다." : "대리점 정산 대상에서 제외했습니다."}</span></div>
-        <div><strong>04 개인 추천링크</strong><span>구매 상품 수량 기준으로 ${result.referralLinks.length}개 링크를 생성했습니다.</span></div>
+        <div><strong>04 개인 추천링크</strong><span>구매 상품 종류 기준으로 ${result.referralLinks.length}개 링크를 생성했습니다.</span></div>
       </div>
+      ${createReferralCopyPanel(result.referralLinks)}
       <div class="buy-actions result-actions">
         <button class="buy-button" type="button" data-management-link="admin">Admin 처리 확인</button>
         <button class="cart-button" type="button" data-management-link="agency">Agency 정산 확인</button>
@@ -386,6 +387,62 @@ export function createShopController({
 
     showDetailView();
     document.querySelector("#backToShop").addEventListener("click", showHome);
+    bindReferralCopyButtons();
+  }
+
+  function createReferralCopyPanel(links) {
+    if (!links.length) return "";
+
+    return `
+    <section class="referral-copy-panel">
+      <div class="product-category">Personal referral links</div>
+      <div class="profile-list">
+        ${links
+          .map(
+            (link) => `
+            <article class="profile-row referral-row">
+              <div><strong>${link.code}</strong><span>${link.productId}</span></div>
+              <div>
+                <span>${createReferralUrl(link.code)}</span>
+                <button class="cart-button mini-button" type="button" data-copy-referral="${createReferralUrl(link.code)}">링크 복사</button>
+              </div>
+            </article>
+          `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+  }
+
+  function bindReferralCopyButtons() {
+    document.querySelectorAll("[data-copy-referral]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        await copyText(button.dataset.copyReferral);
+        showToast("추천 링크가 복사되었습니다.");
+      });
+    });
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+
+  function createReferralUrl(code) {
+    return `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
   }
 
   function createCheckoutLedDetail() {
