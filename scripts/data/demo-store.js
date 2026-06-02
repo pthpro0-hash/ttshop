@@ -33,6 +33,8 @@ export const defaultStore = {
     {
       id: "member-a",
       userId: "beauty_user",
+      passwordHash: "5a93782c",
+      authProvider: "password",
       name: "홍길동",
       phone: "010-0000-0000",
       email: "beauty@example.com",

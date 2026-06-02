@@ -84,10 +84,17 @@ select {
   justify-content: flex-end;
 }
 .session-user {
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-size: 12px;
   font-weight: 900;
   color: var(--ink);
+  cursor: pointer;
   white-space: nowrap;
+}
+.session-user:hover {
+  color: var(--muted);
 }
 .session-logout {
   padding: 0;
@@ -711,9 +718,32 @@ h1 {
   line-height: 1.8;
 }
 .auth-view {
-  width: min(var(--max), calc(100% - 44px));
-  margin: 0 auto;
-  padding: 34px 0 84px;
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.42);
+}
+.auth-dialog {
+  position: relative;
+  width: min(980px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  overflow: auto;
+  background: var(--paper);
+}
+.auth-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  background: var(--paper);
+}
+.auth-dialog .auth-card {
+  min-height: auto;
+  border-color: var(--ink);
 }
 .auth-layout {
   display: grid;
@@ -823,6 +853,14 @@ h1 {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.75;
+}
+.auth-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: #c92a2a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 .social-stack {
   display: grid;
@@ -1056,6 +1094,110 @@ h1 {
   letter-spacing: 0;
   text-transform: uppercase;
 }
+.profile-dialog {
+  width: min(1080px, 100%);
+}
+.profile-card {
+  display: grid;
+  gap: 24px;
+}
+.profile-head {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 480px);
+  gap: 24px;
+  align-items: end;
+  padding-right: 46px;
+}
+.profile-head h2 {
+  margin: 8px 0 0;
+  font-size: clamp(34px, 5vw, 68px);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.profile-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.profile-form {
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: #f7f5ef;
+}
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.profile-form-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.profile-form-grid input[readonly] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.profile-wide {
+  grid-column: span 2;
+}
+.profile-actions {
+  margin-top: 18px;
+}
+.profile-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.profile-summary-grid article {
+  min-height: 104px;
+  padding: 18px;
+  border: 1px solid var(--line);
+}
+.profile-summary-grid span,
+.profile-summary-grid strong {
+  display: block;
+}
+.profile-summary-grid span {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.profile-summary-grid strong {
+  font-size: 24px;
+}
+.profile-history-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.profile-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.profile-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+}
+.profile-row strong,
+.profile-row span {
+  display: block;
+}
+.profile-row span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .auth-check {
   display: flex !important;
   align-items: center;
@@ -1174,6 +1316,27 @@ h1 {
 }
 .management-panel {
   margin-top: 28px;
+}
+.admin-settings-form {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: #f7f5ef;
+}
+.admin-settings-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.admin-settings-form .buy-button {
+  align-self: end;
+  min-height: 44px;
 }
 .admin-detail-empty {
   padding: 22px;
@@ -1322,6 +1485,66 @@ body.modal-open {
   font-size: 15px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+.member-detail-button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.member-detail-button:hover {
+  color: var(--muted);
+}
+.member-detail-back {
+  margin-bottom: 18px;
+}
+.member-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 22px;
+}
+.member-detail-grid article {
+  min-height: 98px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.member-detail-grid span,
+.member-detail-grid strong {
+  display: block;
+}
+.member-detail-grid span {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.member-detail-grid strong {
+  font-size: 16px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.member-detail-wide {
+  grid-column: span 2;
+}
+.member-detail-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 22px;
+}
+.member-history-row {
+  grid-template-columns: 1.1fr 1fr 1fr 0.8fr;
 }
 .payment-result {
   border-top: 1px solid var(--line);
@@ -1633,6 +1856,10 @@ footer {
   }
   .payment-process,
   .process-row,
+  .member-detail-grid,
+  .member-detail-columns,
+  .member-history-row,
+  .admin-settings-form,
   .agency-manage-row,
   .agency-table-row,
   .agency-admin-form {
@@ -1711,16 +1938,25 @@ footer {
     flex-direction: column;
   }
   .auth-view {
-    width: min(100% - 24px, var(--max));
+    padding: 12px;
   }
   .management-view {
     width: min(100% - 24px, var(--max));
   }
   .management-head,
   .detail-panel-head,
+  .profile-head,
   .management-grid,
+  .profile-form-grid,
+  .profile-summary-grid,
+  .profile-history-grid,
+  .profile-row,
   .payment-process,
   .process-row,
+  .member-detail-grid,
+  .member-detail-columns,
+  .member-history-row,
+  .admin-settings-form,
   .agency-manage-row,
   .agency-table-row,
   .agency-admin-form {
@@ -1728,6 +1964,12 @@ footer {
   }
   .agency-table-row div {
     white-space: normal;
+  }
+  .profile-wide {
+    grid-column: span 1;
+  }
+  .member-detail-wide {
+    grid-column: span 1;
   }
   .auth-brand,
   .auth-card {

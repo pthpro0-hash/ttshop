@@ -34,6 +34,8 @@
       {
         id: "member-a",
         userId: "beauty_user",
+        passwordHash: "5a93782c",
+        authProvider: "password",
         name: "\uD64D\uAE38\uB3D9",
         phone: "010-0000-0000",
         email: "beauty@example.com",
@@ -139,6 +141,9 @@
       : _a.setItem(STORE_KEY, JSON.stringify(store2));
   }
 
+  // scripts/utils/format.js
+  var formatMoney = (value) => `${Number(value).toLocaleString("ko-KR")}\uC6D0`;
+
   // scripts/ui/auth.js
   function createAuthController({
     dom: dom2,
@@ -149,11 +154,28 @@
     closeCart,
     showToast,
   }) {
+    migrateMemberAuthDefaults();
     function openAuth(mode = "login") {
       closeCart();
       dom2.auth.innerHTML = createAuthView(mode);
       showAuthView();
       bindAuthEvents();
+    }
+    function closeAuth() {
+      dom2.auth.classList.add("is-hidden");
+      dom2.auth.innerHTML = "";
+      document.body.classList.remove("modal-open");
+    }
+    function openProfile() {
+      const member = getCurrentMember2();
+      if (!member) {
+        openAuth("login");
+        return;
+      }
+      closeCart();
+      dom2.auth.innerHTML = createProfileView(member);
+      showAuthView();
+      bindProfileEvents();
     }
     function createAuthView(mode) {
       const modeLabel = {
@@ -162,23 +184,8 @@
         complete: "Welcome",
       };
       return `
-    <section class="auth-layout">
-      <aside class="auth-brand">
-        <button class="back-button" id="authBack">\u2190 Back to shop</button>
-        <div>
-          <div class="eyebrow">Beauty membership</div>
-          <h1 class="auth-title">Join<br />The<br />Routine.</h1>
-          <p class="auth-copy">
-            \uCCAB \uAD6C\uB9E4 \uCFE0\uD3F0, \uAD00\uC2EC \uCE74\uD14C\uACE0\uB9AC \uCD94\uCC9C, \uBC30\uC1A1\uC9C0 \uC800\uC7A5\uC744 \uC704\uD55C \uC1FC\uD551\uBAB0 \uD68C\uC6D0 \uD654\uBA74\uC785\uB2C8\uB2E4.
-            \uAC04\uD3B8 \uAC00\uC785\uC740 \uC678\uBD80 \uC5F0\uB3D9 \uC5C6\uC774 \uB370\uBAA8 \uD654\uBA74 \uC774\uB3D9\uB9CC \uC81C\uACF5\uD569\uB2C8\uB2E4.
-          </p>
-        </div>
-        <div class="auth-benefits">
-          <span>Welcome coupon</span>
-          <span>Beauty picks</span>
-          <span>Saved address</span>
-        </div>
-      </aside>
+    <section class="auth-dialog" role="dialog" aria-modal="true" aria-label="${modeLabel[mode]}">
+      <button class="cart-close auth-close" id="authClose" type="button" aria-label="\uD68C\uC6D0 \uD31D\uC5C5 \uB2EB\uAE30">\xD7</button>
       <section class="auth-card">
         <div class="auth-tabs" aria-label="\uD68C\uC6D0 \uBA54\uB274">
           ${createAuthTab("login", "\uB85C\uADF8\uC778", mode)}
@@ -232,6 +239,7 @@
       ${createAddressFields()}
       <label class="auth-check"><input type="checkbox" checked /> \uBDF0\uD2F0 \uD61C\uD0DD \uBC0F \uCCAB \uAD6C\uB9E4 \uCFE0\uD3F0 \uC548\uB0B4 \uBC1B\uAE30</label>
       <button class="buy-button auth-submit" type="submit">\uC77C\uBC18\uD68C\uC6D0\uAC00\uC785 \uC644\uB8CC</button>
+      <p class="auth-error" data-auth-error aria-live="polite"></p>
       <p class="auth-note">\uB300\uB9AC\uC810\uCF54\uB4DC\uAC00 \uC5C6\uAC70\uB098 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC73C\uBA74 \uBCF8\uC0AC \uB300\uB9AC\uC810 \uACE0\uAC1D\uC73C\uB85C \uB4F1\uB85D\uB429\uB2C8\uB2E4.</p>
     </form>
   `;
@@ -273,7 +281,8 @@
         </div>
         <button class="buy-button" type="button" data-auth-mode="signup">\uD68C\uC6D0\uAC00\uC785</button>
       </div>
-      <p class="auth-note">\uC544\uC774\uB514\uAC00 \uAE30\uC874 \uD68C\uC6D0\uACFC \uC77C\uCE58\uD558\uBA74 \uD574\uB2F9 \uD68C\uC6D0\uC73C\uB85C \uB85C\uADF8\uC778\uB429\uB2C8\uB2E4.</p>
+      <p class="auth-error" data-auth-error aria-live="polite"></p>
+      <p class="auth-note">\uD68C\uC6D0\uAC00\uC785\uD55C \uC544\uC774\uB514\uC640 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD574\uC57C \uB85C\uADF8\uC778\uB429\uB2C8\uB2E4.</p>
     </form>
   `;
     }
@@ -318,9 +327,156 @@
     </div>
   `;
     }
-    function bindAuthEvents() {
+    function createProfileView(member) {
+      var _a, _b, _c;
+      const orders = store2.orders.filter(
+        (order) => order.memberId === member.id,
+      );
+      const points = store2.pointLedger.filter(
+        (point) => point.memberId === member.id,
+      );
+      const links = store2.personalReferralLinks.filter(
+        (link) => link.ownerMemberId === member.id,
+      );
+      return `
+    <section class="auth-dialog profile-dialog" role="dialog" aria-modal="true" aria-label="\uB0B4\uC815\uBCF4">
+      <button class="cart-close auth-close" id="profileClose" type="button" aria-label="\uB0B4\uC815\uBCF4 \uB2EB\uAE30">\xD7</button>
+      <section class="auth-card profile-card">
+        <div class="profile-head">
+          <div>
+            <div class="product-category">Member / My information</div>
+            <h2>\uB0B4\uC815\uBCF4</h2>
+          </div>
+          <p>\uC544\uC774\uB514\uB294 \uBCC0\uACBD\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uBC30\uC1A1\uC9C0, \uC5F0\uB77D\uCC98, \uC218\uC2E0 \uC124\uC815\uC740 \uC1FC\uD551\uBAB0 \uC8FC\uBB38 \uAE30\uC900 \uC815\uBCF4\uB85C \uC800\uC7A5\uB429\uB2C8\uB2E4.</p>
+        </div>
+        <form class="profile-form" data-profile-form>
+          <div class="profile-form-grid">
+            <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" value="${escapeAttribute(member.userId || member.id)}" readonly /></label>
+            <label>\uC774\uB984<input class="quantity-input" name="name" value="${escapeAttribute(member.name)}" /></label>
+            <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" value="${escapeAttribute(member.phone)}" /></label>
+            <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" value="${escapeAttribute(member.email)}" /></label>
+            <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="postcode" value="${escapeAttribute((_a = member.address) == null ? void 0 : _a.postcode)}" /></label>
+            <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" value="${escapeAttribute((_b = member.address) == null ? void 0 : _b.address)}" /></label>
+            <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" value="${escapeAttribute((_c = member.address) == null ? void 0 : _c.addressDetail)}" /></label>
+            <label>\uAE30\uBCF8 \uACB0\uC81C\uC218\uB2E8
+              <select class="option-select" name="paymentMethod">
+                ${createOption("\uC2E0\uC6A9\uCE74\uB4DC", member.paymentMethod)}
+                ${createOption("\uCE74\uCE74\uC624\uD398\uC774", member.paymentMethod)}
+                ${createOption("\uB124\uC774\uBC84\uD398\uC774", member.paymentMethod)}
+                ${createOption("\uBB34\uD1B5\uC7A5\uC785\uAE08", member.paymentMethod)}
+              </select>
+            </label>
+            <label>\uAD00\uC2EC \uCE74\uD14C\uACE0\uB9AC
+              <select class="option-select" name="favoriteCategory">
+                ${createOption("\uBBF8\uC6A9\uAE30\uAD6C", member.favoriteCategory)}
+                ${createOption("\uBBF8\uC6A9\uC7AC\uB8CC", member.favoriteCategory)}
+                ${createOption("\uD654\uC7A5\uD488", member.favoriteCategory)}
+              </select>
+            </label>
+            <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> \uC1FC\uD551 \uD61C\uD0DD \uBC0F \uBC30\uC1A1 \uC54C\uB9BC \uC218\uC2E0</label>
+          </div>
+          <div class="buy-actions profile-actions">
+            <button class="buy-button" type="submit">\uB0B4\uC815\uBCF4 \uC800\uC7A5</button>
+            <button class="cart-button" type="button" data-profile-close>\uB2EB\uAE30</button>
+          </div>
+        </form>
+        <div class="profile-summary-grid">
+          <article><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></article>
+          <article><span>\uAD6C\uB9E4\uC774\uB825</span><strong>${orders.length}\uAC74</strong></article>
+          <article><span>\uCD94\uCC9C \uB9C1\uD06C</span><strong>${links.length}\uAC1C</strong></article>
+        </div>
+        <div class="profile-history-grid">
+          <section>
+            <div class="product-category">\uAD6C\uB9E4\uC774\uB825</div>
+            <div class="profile-list">
+              ${orders.map(createProfileOrderRow).join("") || '<div class="admin-detail-empty">\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+            </div>
+          </section>
+          <section>
+            <div class="product-category">\uD3EC\uC778\uD2B8 \uC801\uB9BD/\uC0AC\uC6A9 \uC774\uB825</div>
+            <div class="profile-list">
+              ${points.map(createProfilePointRow).join("") || '<div class="admin-detail-empty">\uD3EC\uC778\uD2B8 \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+            </div>
+          </section>
+        </div>
+      </section>
+    </section>
+  `;
+    }
+    function createOption(value, selectedValue) {
+      return `<option value="${value}" ${value === selectedValue ? "selected" : ""}>${value}</option>`;
+    }
+    function createProfileOrderRow(order) {
       var _a;
-      document.querySelector("#authBack").addEventListener("click", showHome);
+      const firstItem = (_a = order.items) == null ? void 0 : _a[0];
+      return `
+    <article class="profile-row">
+      <div><strong>${order.id}</strong><span>${order.paidAt} \xB7 ${order.status}</span></div>
+      <div><span>${(firstItem == null ? void 0 : firstItem.productKo) || "\uC0C1\uD488"}</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+    </article>
+  `;
+    }
+    function createProfilePointRow(point) {
+      const typeLabel = point.amount >= 0 ? "\uC801\uB9BD" : "\uC0AC\uC6A9";
+      return `
+    <article class="profile-row">
+      <div><strong>${typeLabel} ${Math.abs(point.amount).toLocaleString("ko-KR")}P</strong><span>${point.note}</span></div>
+      <div><span>\uAE30\uC900 \uAE08\uC561</span><strong>${formatMoney(point.baseAmount)}</strong></div>
+    </article>
+  `;
+    }
+    function bindProfileEvents() {
+      var _a, _b, _c;
+      (_a = document.querySelector("#profileClose")) == null
+        ? void 0
+        : _a.addEventListener("click", closeAuth);
+      dom2.auth.addEventListener("click", (event) => {
+        if (event.target === dom2.auth) closeAuth();
+      });
+      (_b = document.querySelector("[data-profile-close]")) == null
+        ? void 0
+        : _b.addEventListener("click", closeAuth);
+      (_c = document.querySelector("[data-profile-form]")) == null
+        ? void 0
+        : _c.addEventListener("submit", (event) => {
+            event.preventDefault();
+            saveProfile(event.currentTarget);
+            persistStore(store2);
+            updateSessionUi2();
+            showToast(
+              "\uB0B4\uC815\uBCF4\uAC00 \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+            );
+            openProfile();
+          });
+    }
+    function saveProfile(form) {
+      var _a;
+      const member = getCurrentMember2();
+      if (!member) return;
+      member.name = getFormValue(form, "name") || member.name;
+      member.phone = getFormValue(form, "phone");
+      member.email = getFormValue(form, "email");
+      member.paymentMethod = getFormValue(form, "paymentMethod");
+      member.favoriteCategory = getFormValue(form, "favoriteCategory");
+      member.marketingOptIn = Boolean(
+        (_a = form.querySelector('[name="marketingOptIn"]')) == null
+          ? void 0
+          : _a.checked,
+      );
+      member.address = {
+        postcode: getFormValue(form, "postcode"),
+        address: getFormValue(form, "address"),
+        addressDetail: getFormValue(form, "addressDetail"),
+      };
+    }
+    function bindAuthEvents() {
+      var _a, _b;
+      (_a = document.querySelector("#authClose")) == null
+        ? void 0
+        : _a.addEventListener("click", closeAuth);
+      dom2.auth.addEventListener("click", (event) => {
+        if (event.target === dom2.auth) closeAuth();
+      });
       document.querySelectorAll("[data-auth-mode]").forEach((button) => {
         button.addEventListener("click", () =>
           openAuth(button.dataset.authMode),
@@ -332,29 +488,33 @@
           showToast(
             `${button.dataset.authComplete} \uD654\uBA74 \uC774\uB3D9\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
           );
-          openAuth("complete");
+          closeAuth();
         });
       });
       document.querySelectorAll("[data-auth-form]").forEach((form) => {
         form.addEventListener("submit", (event) => {
           event.preventDefault();
+          let isValid = false;
           if (form.dataset.authForm === "signup") {
-            registerMember(form);
-            showToast(
-              "\uD68C\uC6D0\uAC00\uC785\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-            );
+            isValid = registerMember(form);
+            if (isValid)
+              showToast(
+                "\uD68C\uC6D0\uAC00\uC785\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+              );
           } else {
-            loginMember(form);
-            showToast(
-              "\uB85C\uADF8\uC778\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-            );
+            isValid = loginMember(form);
+            if (isValid)
+              showToast(
+                "\uB85C\uADF8\uC778\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+              );
           }
-          openAuth("complete");
+          if (!isValid) return;
+          closeAuth();
         });
       });
-      (_a = document.querySelector("#authGoShop")) == null
+      (_b = document.querySelector("#authGoShop")) == null
         ? void 0
-        : _a.addEventListener("click", showHome);
+        : _b.addEventListener("click", closeAuth);
       document.querySelectorAll(".address-search").forEach((button) => {
         button.addEventListener("click", () =>
           showToast(
@@ -364,16 +524,40 @@
       });
     }
     function registerMember(form) {
+      clearFormError(form);
+      const userId = normalizeUserId(getFormValue(form, "userId"));
+      const password = getFormValue(form, "password");
+      if (!userId) {
+        setFormError(
+          form,
+          "\uC544\uC774\uB514\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+        );
+        return false;
+      }
+      if (password.length < 8) {
+        setFormError(
+          form,
+          "\uBE44\uBC00\uBC88\uD638\uB294 8\uC790 \uC774\uC0C1 \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+        );
+        return false;
+      }
+      if (findMemberByUserId(userId)) {
+        setFormError(
+          form,
+          "\uC774\uBBF8 \uAC00\uC785\uB41C \uC544\uC774\uB514\uC785\uB2C8\uB2E4. \uB2E4\uB978 \uC544\uC774\uB514\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+        );
+        return false;
+      }
       const agency =
         findAgencyByCode(getFormValue(form, "agencyCode")) ||
         getPendingAgency() ||
         getHeadquartersAgency2();
       const memberId = `member-${Date.now()}`;
-      const userId =
-        getFormValue(form, "userId") || `user_${store2.members.length + 1}`;
       store2.members.push({
         id: memberId,
         userId,
+        passwordHash: hashPassword(userId, password),
+        authProvider: "password",
         name:
           getFormValue(form, "name") || userId || "\uC2E0\uADDC\uD68C\uC6D0",
         phone: getFormValue(form, "phone"),
@@ -392,16 +576,36 @@
       store2.pendingAgencySlug = "";
       persistStore(store2);
       updateSessionUi2();
+      return true;
     }
     function loginMember(form) {
-      const userId = getFormValue(form, "userId");
-      const member =
-        store2.members.find((item) => item.userId === userId) ||
-        store2.members.find((item) => item.id === store2.currentMemberId) ||
-        store2.members[0];
+      clearFormError(form);
+      const userId = normalizeUserId(getFormValue(form, "userId"));
+      const password = getFormValue(form, "password");
+      const member = findMemberByUserId(userId);
+      if (!userId || !password) {
+        setFormError(
+          form,
+          "\uC544\uC774\uB514\uC640 \uBE44\uBC00\uBC88\uD638\uB97C \uBAA8\uB450 \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+        );
+        return false;
+      }
+      if (
+        !member ||
+        member.status !== "active" ||
+        !member.passwordHash ||
+        member.passwordHash !== hashPassword(userId, password)
+      ) {
+        setFormError(
+          form,
+          "\uC544\uC774\uB514 \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.",
+        );
+        return false;
+      }
       store2.currentMemberId = member.id;
       persistStore(store2);
       updateSessionUi2();
+      return true;
     }
     function getFormValue(form, name) {
       var _a;
@@ -410,6 +614,55 @@
           ? void 0
           : _a.value) || "",
       ).trim();
+    }
+    function setFormError(form, message) {
+      const error = form.querySelector("[data-auth-error]");
+      if (error) error.textContent = message;
+    }
+    function clearFormError(form) {
+      setFormError(form, "");
+    }
+    function normalizeUserId(userId) {
+      return String(userId || "")
+        .trim()
+        .toLowerCase();
+    }
+    function findMemberByUserId(userId) {
+      const normalized = normalizeUserId(userId);
+      return store2.members.find(
+        (member) => normalizeUserId(member.userId) === normalized,
+      );
+    }
+    function hashPassword(userId, password) {
+      const source = `${normalizeUserId(userId)}:${password}:beauty-ref-demo-v1`;
+      let hash = 2166136261;
+      for (let index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(16).padStart(8, "0");
+    }
+    function migrateMemberAuthDefaults() {
+      let changed = false;
+      store2.members.forEach((member) => {
+        if (member.userId === "beauty_user" && !member.passwordHash) {
+          member.passwordHash = hashPassword(member.userId, "password123");
+          member.authProvider = "password";
+          changed = true;
+        }
+        if (!member.authProvider) {
+          member.authProvider = member.passwordHash ? "password" : "social";
+          changed = true;
+        }
+      });
+      if (changed) persistStore(store2);
+    }
+    function escapeAttribute(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
     }
     function ensureQuickMember(label) {
       const existing = getCurrentMember2();
@@ -425,6 +678,7 @@
         agencyId: agency.id,
         points: 0,
         status: "active",
+        authProvider: "social",
         joinedAt: /* @__PURE__ */ new Date().toISOString().slice(0, 10),
         address: {},
       });
@@ -462,18 +716,11 @@
       return store2.agencies.find((agency) => agency.isHeadquarters);
     }
     function showAuthView() {
-      var _a;
-      dom2.home.classList.add("is-hidden");
-      dom2.detail.classList.add("is-hidden");
-      (_a = dom2.management) == null ? void 0 : _a.classList.add("is-hidden");
       dom2.auth.classList.remove("is-hidden");
-      scrollTo({ top: 0, behavior: "smooth" });
+      document.body.classList.add("modal-open");
     }
-    return { openAuth, showAuthView };
+    return { openAuth, openProfile, closeAuth, showAuthView };
   }
-
-  // scripts/utils/format.js
-  var formatMoney = (value) => `${Number(value).toLocaleString("ko-KR")}\uC6D0`;
 
   // scripts/ui/management.js
   function createManagementController({
@@ -494,23 +741,70 @@
     }
     function bindManagementEvents(role) {
       if (role === "admin") {
-        bindMetricModal("[data-admin-detail]", "#adminDetailModal", (type) =>
-          createAdminDetailContent(type, store2),
+        bindAdminSettingsForm();
+        bindMetricModal(
+          "[data-admin-detail]",
+          "#adminDetailModal",
+          "admin",
+          (type) => createAdminDetailContent(type, store2),
         );
       }
       if (role === "agency") {
-        bindMetricModal("[data-agency-detail]", "#agencyDetailModal", (type) =>
-          createAgencyDetailContent(type, store2),
+        bindMetricModal(
+          "[data-agency-detail]",
+          "#agencyDetailModal",
+          "agency",
+          (type) => createAgencyDetailContent(type, store2),
         );
       }
     }
-    function bindMetricModal(cardSelector, modalSelector, createContent) {
+    function bindAdminSettingsForm() {
+      const form = dom2.management.querySelector("[data-admin-settings-form]");
+      if (!form) return;
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        store2.settings.purchasePointRate = readPercentField(
+          form,
+          "purchasePointRate",
+        );
+        store2.settings.maxPointUseRate = readPercentField(
+          form,
+          "maxPointUseRate",
+        );
+        store2.settings.personalReferrerRewardRate = readPercentField(
+          form,
+          "personalReferrerRewardRate",
+        );
+        store2.settings.personalBuyerBonusRate = readPercentField(
+          form,
+          "personalBuyerBonusRate",
+        );
+        store2.settings.friendSignupPoint = Math.max(
+          0,
+          Number(form.querySelector('[name="friendSignupPoint"]').value || 0),
+        );
+        persistStore(store2);
+        dom2.management.innerHTML = createAdminDashboard(store2);
+        bindManagementEvents("admin");
+      });
+    }
+    function readPercentField(form, name) {
+      const value = Number(form.querySelector(`[name="${name}"]`).value || 0);
+      return Math.min(100, Math.max(0, value));
+    }
+    function bindMetricModal(
+      cardSelector,
+      modalSelector,
+      scope,
+      createContent,
+    ) {
       const modal = dom2.management.querySelector(modalSelector);
       if (!modal) return;
       dom2.management.querySelectorAll(cardSelector).forEach((card) => {
         const open = () => {
           const detailType =
             card.dataset.adminDetail || card.dataset.agencyDetail;
+          modal.dataset.currentDetail = detailType;
           openDetailModal(modal, createContent(detailType));
           if (
             modalSelector === "#adminDetailModal" &&
@@ -527,6 +821,26 @@
         });
       });
       modal.addEventListener("click", (event) => {
+        const memberButton = event.target.closest("[data-member-detail]");
+        if (memberButton) {
+          openDetailModal(
+            modal,
+            createMemberProfileDetail(
+              memberButton.dataset.memberDetail,
+              store2,
+              scope,
+              modal.dataset.currentDetail || "members",
+            ),
+          );
+          return;
+        }
+        const backButton = event.target.closest("[data-member-detail-back]");
+        if (backButton) {
+          const detailType = backButton.dataset.memberDetailBack || "members";
+          modal.dataset.currentDetail = detailType;
+          openDetailModal(modal, createContent(detailType));
+          return;
+        }
         if (
           event.target.matches("[data-modal-close]") ||
           event.target === modal
@@ -660,8 +974,12 @@
     );
     const agencyCount = store2.agencies.length;
     const memberCount = store2.members.length;
-    const latestOrder = store2.orders[0];
-    const latestPoint = store2.pointLedger[0];
+    const monthlyOrders = getCurrentMonthOrders(store2);
+    const monthlyOrderTotal = monthlyOrders.reduce(
+      (sum, order) => sum + order.paidProductAmount,
+      0,
+    );
+    const monthlyPointSummary = getCurrentMonthPointSummary(store2);
     const settlementPending = store2.agencySettlementLedger.reduce(
       (sum, item) => sum + item.commissionAmount,
       0,
@@ -679,8 +997,8 @@
         ${createMetricCard("admin", "headquarters", "\uBCF8\uC0AC \uB300\uB9AC\uC810", headquarters.name)}
         ${createMetricCard("admin", "agencies", "\uB300\uB9AC\uC810 \uC218", `${agencyCount}`)}
         ${createMetricCard("admin", "members", "\uD68C\uC6D0 \uC218", `${memberCount}`)}
-        ${createMetricCard("admin", "orders", "\uCD5C\uADFC \uC8FC\uBB38", latestOrder.id)}
-        ${createMetricCard("admin", "points", "\uCD5C\uADFC \uC801\uB9BD", `${latestPoint.amount.toLocaleString("ko-KR")}P`)}
+        ${createMetricCard("admin", "orders", "\uC774\uB2EC\uC758 \uC8FC\uBB38", formatMoney(monthlyOrderTotal))}
+        ${createMetricCard("admin", "points", "\uC774\uB2EC\uC758 \uC801\uB9BD\uAE08", `${monthlyPointSummary.earned.toLocaleString("ko-KR")}P`)}
         ${createMetricCard("admin", "settlements", "\uC815\uC0B0 \uB300\uAE30 \uC601\uC5C5\uBE44", formatMoney(settlementPending))}
       </div>
       ${createSettingsPanel(store2)}
@@ -703,12 +1021,14 @@
     return `
     <section class="management-panel">
       <div class="product-category">Admin settings</div>
-      <div class="management-grid compact">
-        <article><span>\uAD6C\uB9E4 \uC801\uB9BD\uB960</span><strong>${settings.purchasePointRate}%</strong></article>
-        <article><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9 \uD55C\uB3C4</span><strong>${settings.maxPointUseRate}%</strong></article>
-        <article><span>\uAC1C\uC778 \uCD94\uCC9C\uC790 \uC9C0\uAE09\uB960</span><strong>${settings.personalReferrerRewardRate}%</strong></article>
-        <article><span>\uAD6C\uB9E4\uC790 \uCD94\uAC00 \uC9C0\uAE09\uB960</span><strong>${settings.personalBuyerBonusRate}%</strong></article>
-      </div>
+      <form class="admin-settings-form" data-admin-settings-form>
+        <label>\uAD6C\uB9E4 \uC801\uB9BD\uB960<input class="quantity-input" name="purchasePointRate" type="number" min="0" max="100" value="${settings.purchasePointRate}" /></label>
+        <label>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9 \uD55C\uB3C4<input class="quantity-input" name="maxPointUseRate" type="number" min="0" max="100" value="${settings.maxPointUseRate}" /></label>
+        <label>\uCE5C\uAD6C\uAC00\uC785 \uD3EC\uC778\uD2B8<input class="quantity-input" name="friendSignupPoint" type="number" min="0" step="100" value="${settings.friendSignupPoint}" /></label>
+        <label>\uAC1C\uC778 \uCD94\uCC9C\uC790 \uC9C0\uAE09\uB960<input class="quantity-input" name="personalReferrerRewardRate" type="number" min="0" max="100" value="${settings.personalReferrerRewardRate}" /></label>
+        <label>\uAD6C\uB9E4\uC790 \uCD94\uAC00 \uC9C0\uAE09\uB960<input class="quantity-input" name="personalBuyerBonusRate" type="number" min="0" max="100" value="${settings.personalBuyerBonusRate}" /></label>
+        <button class="buy-button" type="submit">\uC124\uC815 \uC800\uC7A5</button>
+      </form>
     </section>
   `;
   }
@@ -788,18 +1108,18 @@
       },
       orders: {
         label: "Orders",
-        title: "\uC8FC\uBB38 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        title: "\uC774\uB2EC\uC758 \uC8FC\uBB38 \uC0C1\uC138",
         description:
-          "\uACB0\uC81C \uC6B0\uD68C \uCC98\uB9AC\uB85C \uC0DD\uC131\uB41C \uC8FC\uBB38\uACFC \uC0C1\uD488 \uC2E4\uACB0\uC81C\uAE08\uC561, \uC801\uB9BD/\uC815\uC0B0 \uC5F0\uACB0 \uC0C1\uD0DC\uC785\uB2C8\uB2E4.",
-        rows: store2.orders.map((order) => createOrderDetailRow(order, store2)),
+          "\uC774\uBC88 \uB2EC \uACB0\uC81C \uC644\uB8CC \uC8FC\uBB38\uC758 \uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC744 \uB300\uB9AC\uC810\uBCC4\uB85C \uB204\uC801 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+        rows: createMonthlyAgencySalesRows(store2),
       },
       points: {
         label: "Points",
-        title:
-          "\uD3EC\uC778\uD2B8 \uC801\uB9BD \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        title: "\uC774\uB2EC\uC758 \uD3EC\uC778\uD2B8 \uC0C1\uC138",
         description:
-          "\uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900\uC73C\uB85C \uC0DD\uC131\uB41C \uD3EC\uC778\uD2B8 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
-        rows: store2.pointLedger.map(createPointDetailRow),
+          "\uC774\uBC88 \uB2EC \uD3EC\uC778\uD2B8 \uC7A5\uBD80\uC5D0\uC11C \uC801\uB9BD \uD3EC\uC778\uD2B8\uC640 \uC0AC\uC6A9 \uD3EC\uC778\uD2B8\uB97C \uBD84\uB9AC\uD574 \uB204\uC801 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+        extra: createMonthlyPointSummary(store2),
+        rows: getCurrentMonthPoints(store2).map(createPointDetailRow),
       },
       settlements: {
         label: "Settlements",
@@ -831,12 +1151,136 @@
     );
     return `
     <article class="process-row">
-      <div><strong>${member.name}</strong><span>${member.phone}</span></div>
+      <div>
+        <button class="member-detail-button" type="button" data-member-detail="${member.id}">
+          ${member.name}
+        </button>
+        <span>${member.phone || "\uC5F0\uB77D\uCC98 \uC5C6\uC74C"}</span>
+      </div>
       <div><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></div>
       <div><span>\uC8FC\uBB38 \uC218</span><strong>${orders.length}\uAC74</strong></div>
       <div><span>\uB0B4\uBD80 \uB300\uB9AC\uC810</span><strong>${(agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC"}</strong></div>
     </article>
   `;
+  }
+  function createMemberProfileDetail(memberId, store2, scope, backType) {
+    const member = store2.members.find((item) => item.id === memberId);
+    if (!member) {
+      return '<div class="admin-detail-empty">\uD68C\uC6D0 \uC815\uBCF4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+    }
+    const agency = store2.agencies.find((item) => item.id === member.agencyId);
+    const orders = store2.orders.filter(
+      (order) => order.memberId === member.id,
+    );
+    const points = store2.pointLedger.filter(
+      (point) => point.memberId === member.id,
+    );
+    const links = store2.personalReferralLinks.filter(
+      (link) => link.ownerMemberId === member.id,
+    );
+    const isAdmin = scope === "admin";
+    return `
+    <div class="detail-panel-head">
+      <div>
+        <button class="back-button member-detail-back" type="button" data-member-detail-back="${backType}">\u2190 \uD68C\uC6D0 \uB9AC\uC2A4\uD2B8</button>
+        <div class="product-category">${isAdmin ? "Admin" : "Agency"} member / ${member.userId || member.id}</div>
+        <h2 id="adminModalTitle">${member.name}</h2>
+      </div>
+      <p>
+        \uD68C\uC6D0 \uAE30\uBCF8 \uC815\uBCF4, \uBC30\uC1A1\uC9C0, \uAD6C\uB9E4\uC774\uB825, \uD3EC\uC778\uD2B8 \uC774\uB825\uC744 \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD569\uB2C8\uB2E4.
+        ${isAdmin ? "\uAD00\uB9AC\uC790 \uD654\uBA74\uC5D0\uC11C\uB294 \uB0B4\uBD80 \uB300\uB9AC\uC810 \uADC0\uC18D \uC815\uBCF4\uB3C4 \uD568\uAED8 \uD45C\uC2DC\uB429\uB2C8\uB2E4." : "\uB300\uB9AC\uC810 \uD654\uBA74\uC5D0\uC11C\uB294 \uC18C\uC18D \uACE0\uAC1D\uC758 \uC8FC\uBB38/\uD3EC\uC778\uD2B8 \uC911\uC2EC\uC73C\uB85C \uD45C\uC2DC\uB429\uB2C8\uB2E4."}
+      </p>
+    </div>
+    <div class="member-detail-grid">
+      <article><span>\uC544\uC774\uB514</span><strong>${member.userId || "-"}</strong></article>
+      <article><span>\uC0C1\uD0DC</span><strong>${member.status}</strong></article>
+      <article><span>\uAC00\uC785\uC77C</span><strong>${member.joinedAt || "-"}</strong></article>
+      <article><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>\uD734\uB300\uD3F0</span><strong>${member.phone || "-"}</strong></article>
+      <article><span>\uC774\uBA54\uC77C</span><strong>${member.email || "-"}</strong></article>
+      <article><span>\uC8FC\uBB38 \uC218</span><strong>${orders.length}\uAC74</strong></article>
+      <article><span>\uCD94\uCC9C \uB9C1\uD06C</span><strong>${links.length}\uAC1C</strong></article>
+      ${isAdmin ? `<article><span>\uB0B4\uBD80 \uB300\uB9AC\uC810</span><strong>${(agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC"}</strong></article>` : ""}
+      <article class="member-detail-wide"><span>\uBC30\uC1A1\uC9C0</span><strong>${formatAddress(member.address)}</strong></article>
+    </div>
+    <div class="member-detail-columns">
+      <section>
+        <div class="product-category">\uAD6C\uB9E4\uC774\uB825</div>
+        <div class="process-list">
+          ${orders.map(createMemberOrderRow).join("") || '<div class="admin-detail-empty">\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+        </div>
+      </section>
+      <section>
+        <div class="product-category">\uD3EC\uC778\uD2B8 \uC801\uB9BD/\uC0AC\uC6A9 \uC774\uB825</div>
+        <div class="process-list">
+          ${points.map(createMemberPointRow).join("") || '<div class="admin-detail-empty">\uD3EC\uC778\uD2B8 \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+        </div>
+      </section>
+    </div>
+  `;
+  }
+  function createMemberOrderRow(order) {
+    var _a;
+    const firstItem = (_a = order.items) == null ? void 0 : _a[0];
+    return `
+    <article class="process-row member-history-row">
+      <div><strong>${order.id}</strong><span>${order.paidAt} \xB7 ${order.status}</span></div>
+      <div><span>\uB300\uD45C \uC0C1\uD488</span><strong>${(firstItem == null ? void 0 : firstItem.productKo) || "\uC0C1\uD488"}</strong></div>
+      <div><span>\uC0C1\uD488 \uC2E4\uACB0\uC81C</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+      <div><span>\uBC30\uC1A1\uBE44</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "\uBB34\uB8CC"}</strong></div>
+    </article>
+  `;
+  }
+  function createMemberPointRow(point) {
+    return `
+    <article class="process-row member-history-row">
+      <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
+      <div><span>\uAD6C\uBD84</span><strong>${point.type}</strong></div>
+      <div><span>\uAE30\uC900 \uAE08\uC561</span><strong>${formatMoney(point.baseAmount)}</strong></div>
+      <div><span>\uD3EC\uC778\uD2B8</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+    </article>
+  `;
+  }
+  function formatAddress(address = {}) {
+    const parts = [
+      address.postcode,
+      address.address,
+      address.addressDetail,
+    ].filter(Boolean);
+    return parts.length ? parts.join(" ") : "-";
+  }
+  function getCurrentMonthKey() {
+    return /* @__PURE__ */ new Date().toISOString().slice(0, 7);
+  }
+  function isCurrentMonthDate(value) {
+    return String(value || "").startsWith(getCurrentMonthKey());
+  }
+  function getCurrentMonthOrders(store2) {
+    return store2.orders.filter(
+      (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
+    );
+  }
+  function getCurrentMonthPoints(store2) {
+    return store2.pointLedger.filter((point) => {
+      const dateValue = point.createdAt || point.paidAt || "";
+      return isCurrentMonthDate(dateValue);
+    });
+  }
+  function isPointUse(point) {
+    return point.amount < 0 || String(point.type || "").includes("use");
+  }
+  function getCurrentMonthPointSummary(store2) {
+    return getCurrentMonthPoints(store2).reduce(
+      (summary, point) => {
+        if (isPointUse(point)) {
+          summary.used += Math.abs(point.amount);
+        } else {
+          summary.earned += Math.max(0, point.amount);
+        }
+        return summary;
+      },
+      { earned: 0, used: 0 },
+    );
   }
   function createOrderDetailRow(order, store2) {
     const point = store2.pointLedger.find((item) => item.orderId === order.id);
@@ -858,8 +1302,40 @@
       <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
       <div><span>\uAE30\uC900 \uAE08\uC561</span><strong>${formatMoney(point.baseAmount)}</strong></div>
       <div><span>\uC801\uB9BD\uB960</span><strong>${point.rate}%</strong></div>
-      <div><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+      <div><span>\uD3EC\uC778\uD2B8</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
     </article>
+  `;
+  }
+  function createMonthlyAgencySalesRows(store2) {
+    const monthlyOrders = getCurrentMonthOrders(store2);
+    return store2.agencies.map((agency) => {
+      const agencyOrders = monthlyOrders.filter(
+        (order) => order.agencyIdAtOrder === agency.id,
+      );
+      const amount = agencyOrders.reduce(
+        (sum, order) => sum + order.paidProductAmount,
+        0,
+      );
+      const commissionRate = agency.commissionRate || 0;
+      const commission = Math.floor(amount * (commissionRate / 100));
+      return `
+      <article class="process-row">
+        <div><strong>${agency.name}</strong><span>${agency.code} \xB7 ${agency.status}</span></div>
+        <div><span>\uC774\uB2EC \uC8FC\uBB38</span><strong>${agencyOrders.length}\uAC74</strong></div>
+        <div><span>\uB204\uC801 \uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(amount)}</strong></div>
+        <div><span>\uC608\uC0C1 \uC601\uC5C5\uBE44</span><strong>${formatMoney(commission)}</strong></div>
+      </article>
+    `;
+    });
+  }
+  function createMonthlyPointSummary(store2) {
+    const summary = getCurrentMonthPointSummary(store2);
+    return `
+    <div class="management-grid compact monthly-point-summary">
+      <article><span>\uC774\uB2EC \uC801\uB9BD\uD3EC\uC778\uD2B8</span><strong>${summary.earned.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>\uC774\uB2EC \uC0AC\uC6A9\uD3EC\uC778\uD2B8</span><strong>${summary.used.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>\uC21C\uC99D\uAC10</span><strong>${(summary.earned - summary.used).toLocaleString("ko-KR")}P</strong></article>
+    </div>
   `;
   }
   function createSettlementDetailRow(item, store2) {
@@ -2193,10 +2669,14 @@
     event.preventDefault();
     auth.openAuth("login");
   });
+  dom.sessionUser.addEventListener("click", () => {
+    auth.openProfile();
+  });
   dom.logoutButton.addEventListener("click", () => {
     store.currentMemberId = "";
     saveStore(store);
     updateSessionUi();
+    auth.closeAuth();
     shop.showToast("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
   });
   document.addEventListener("click", (event) => {
@@ -2211,6 +2691,7 @@
     const link = event.target.closest("[data-management-link]");
     if (!link) return;
     event.preventDefault();
+    auth.closeAuth();
     management.openManagement(link.dataset.managementLink);
   });
   initializeAgencyJoinContext();

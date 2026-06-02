@@ -53,10 +53,14 @@ dom.loginLink.addEventListener("click", (event) => {
   event.preventDefault();
   auth.openAuth("login");
 });
+dom.sessionUser.addEventListener("click", () => {
+  auth.openProfile();
+});
 dom.logoutButton.addEventListener("click", () => {
   store.currentMemberId = "";
   saveStore(store);
   updateSessionUi();
+  auth.closeAuth();
   shop.showToast("로그아웃되었습니다.");
 });
 
@@ -74,6 +78,7 @@ document.addEventListener("click", (event) => {
   if (!link) return;
 
   event.preventDefault();
+  auth.closeAuth();
   management.openManagement(link.dataset.managementLink);
 });
 

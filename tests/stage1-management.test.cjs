@@ -20,7 +20,7 @@ async function createDom() {
   const html = fs
     .readFileSync(path.join(root, "index.html"), "utf8")
     .replace(
-      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260601-session-auth"[\s\S]*?<\/script>/,
+      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260602-admin-settings"[\s\S]*?<\/script>/,
       "",
     );
   const errors = [];
@@ -129,7 +129,10 @@ function input(element, value) {
 
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.doesNotMatch(html, /type="module"/);
-  assert.match(html, /src="scripts\/app\.bundle\.js\?v=20260601-session-auth"/);
+  assert.match(
+    html,
+    /src="scripts\/app\.bundle\.js\?v=20260602-admin-settings"/,
+  );
   assert.match(html, /id="managementView"/);
 
   const { dom, errors } = await createDom();
@@ -171,13 +174,27 @@ function input(element, value) {
     false,
     "logged-out purchase attempt should open login view",
   );
-  click(dom.window, document.querySelector("#authBack"));
+  click(dom.window, document.querySelector("#authClose"));
 
   click(dom.window, document.querySelector("#loginLink"));
   assert.equal(
     document.querySelectorAll("#authView [data-management-link]").length,
     3,
     "management links should be inside the auth view",
+  );
+  let loginForm = document.querySelector('[data-auth-form="login"]');
+  input(loginForm.querySelector('[name="userId"]'), "unknown_user");
+  input(loginForm.querySelector('[name="password"]'), "whatever");
+  click(dom.window, loginForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("[data-auth-error]").textContent,
+    /아이디 또는 비밀번호/,
+    "login should reject unknown credentials",
+  );
+  assert.equal(
+    document.querySelector("#authView").classList.contains("is-hidden"),
+    false,
+    "auth modal should stay open after failed login",
   );
   click(dom.window, document.querySelector('[data-auth-mode="signup"]'));
   const signupForm = document.querySelector('[data-auth-form="signup"]');
@@ -188,10 +205,10 @@ function input(element, value) {
   input(signupForm.querySelector('[name="email"]'), "new@example.com");
   input(signupForm.querySelector('[name="agencyCode"]'), "GNBEAUTY");
   click(dom.window, signupForm.querySelector('[type="submit"]'));
-  assert.match(
-    document.querySelector("#authView").textContent,
-    /김신규님은 강남 뷰티 대리점 고객/,
-    "signup should create and login a member under the agency code",
+  assert.equal(
+    document.querySelector("#authView").classList.contains("is-hidden"),
+    true,
+    "auth modal should close after signup",
   );
   assert.equal(
     document.querySelector("#sessionUser").textContent,
@@ -208,36 +225,61 @@ function input(element, value) {
     false,
     "logout should be visible after login",
   );
+  click(dom.window, document.querySelector("#sessionUser"));
+  assert.match(
+    document.querySelector("#authView").textContent,
+    /내정보|구매이력|포인트 적립\/사용 이력/,
+    "member name should open my information modal",
+  );
+  assert.ok(
+    document.querySelector('[data-profile-form] [name="userId"]').readOnly,
+    "profile user id should be read only",
+  );
+  const profileForm = document.querySelector("[data-profile-form]");
+  input(profileForm.querySelector('[name="name"]'), "김수정");
+  input(profileForm.querySelector('[name="phone"]'), "010-9999-0000");
+  input(profileForm.querySelector('[name="postcode"]'), "04524");
+  input(
+    profileForm.querySelector('[name="address"]'),
+    "서울시 중구 세종대로 110",
+  );
+  click(dom.window, profileForm.querySelector('[type="submit"]'));
+  assert.equal(
+    document.querySelector("#sessionUser").textContent,
+    "김수정님",
+    "saving profile should update the header member name",
+  );
+  click(dom.window, document.querySelector("#profileClose"));
+
+  click(dom.window, document.querySelector("#logoutButton"));
+  assert.equal(
+    document.querySelector("#loginLink").classList.contains("is-hidden"),
+    false,
+    "logout should return to logged-out header state",
+  );
   click(dom.window, document.querySelector("#loginLink"));
-
-  for (const [selector, expected] of [
-    ['#authView [data-management-link="admin"]', "Admin Control"],
-    ['#authView [data-management-link="agency"]', "Agency Desk"],
-    ['#authView [data-management-link="member"]', "My Beauty"],
-  ]) {
-    click(dom.window, document.querySelector(selector));
-    assert.match(
-      document.querySelector("#managementView").textContent,
-      new RegExp(expected),
-    );
-  }
-
-  click(dom.window, document.querySelector("#loginLink"));
-  click(
-    dom.window,
-    document.querySelector('#authView [data-management-link="member"]'),
+  loginForm = document.querySelector('[data-auth-form="login"]');
+  input(loginForm.querySelector('[name="userId"]'), "new_beauty_member");
+  input(loginForm.querySelector('[name="password"]'), "wrong-password");
+  click(dom.window, loginForm.querySelector('[type="submit"]'));
+  assert.match(
+    document.querySelector("[data-auth-error]").textContent,
+    /아이디 또는 비밀번호/,
+    "login should reject the wrong password for an existing member",
   );
-  const memberText = document.querySelector("#managementView").textContent;
-  assert.doesNotMatch(
-    memberText,
-    /GNBEAUTY|강남 뷰티 대리점/,
-    "member page must not expose agency ownership",
+  input(loginForm.querySelector('[name="password"]'), "password123");
+  click(dom.window, loginForm.querySelector('[type="submit"]'));
+  assert.equal(
+    document.querySelector("#authView").classList.contains("is-hidden"),
+    true,
+    "auth modal should close after valid credential login",
+  );
+  assert.equal(
+    document.querySelector("#sessionUser").textContent,
+    "김수정님",
+    "valid login should restore the saved member profile",
   );
 
-  click(
-    dom.window,
-    document.querySelector(".product-card[data-id='device-led']"),
-  );
   click(dom.window, document.querySelector("#addCart"));
   click(dom.window, document.querySelector("#bagButton"));
   click(dom.window, document.querySelector("#checkoutButton"));
@@ -262,6 +304,28 @@ function input(element, value) {
     /상세 리스트 보기/,
     "admin dashboard cards should not show detail helper text",
   );
+  assert.match(
+    document.querySelector("#managementView").textContent,
+    /이달의 주문|76,000원|이달의 적립금|3,800P/,
+    "admin dashboard should show monthly order and point totals",
+  );
+  const settingsForm = document.querySelector("[data-admin-settings-form]");
+  input(settingsForm.querySelector('[name="purchasePointRate"]'), "7");
+  input(settingsForm.querySelector('[name="maxPointUseRate"]'), "45");
+  click(dom.window, settingsForm.querySelector('[type="submit"]'));
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).settings
+      .purchasePointRate,
+    7,
+    "admin settings form should persist purchase point rate",
+  );
+  assert.equal(
+    document.querySelector(
+      '[data-admin-settings-form] [name="purchasePointRate"]',
+    ).value,
+    "7",
+    "admin settings form should rerender with the saved value",
+  );
   assert.equal(
     document.querySelector("#adminDetailModal").classList.contains("is-open"),
     false,
@@ -285,8 +349,18 @@ function input(element, value) {
   );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /상품 실결제|포인트 적립|대리점 영업비/,
-    "admin should show order processing ledger",
+    /이달의 주문 상세|강남 뷰티 대리점|누적 상품금액|76,000원/,
+    "admin should show monthly agency sales totals",
+  );
+  click(
+    dom.window,
+    document.querySelector("#adminDetailModal [data-modal-close]"),
+  );
+  click(dom.window, document.querySelector('[data-admin-detail="points"]'));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /이달의 포인트 상세|이달 적립포인트|3,800P|이달 사용포인트|0P/,
+    "admin should show monthly earned and used point totals",
   );
   click(
     dom.window,
@@ -307,6 +381,28 @@ function input(element, value) {
     document.querySelector("#adminModalContent").textContent,
     /회원 상세 리스트|홍길동|내부 대리점/,
     "admin member card should show member detail list",
+  );
+  click(
+    dom.window,
+    document.querySelector(
+      '#adminModalContent [data-member-detail="member-a"]',
+    ),
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /Admin member|beauty_user|배송지|구매이력|포인트 적립\/사용 이력/,
+    "admin member name should open member detail view",
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /내부 대리점|강남 뷰티 대리점/,
+    "admin member detail should include internal agency ownership",
+  );
+  click(dom.window, document.querySelector("[data-member-detail-back]"));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /회원 상세 리스트|홍길동/,
+    "member detail back should return to admin member list",
   );
   click(
     dom.window,
@@ -400,6 +496,28 @@ function input(element, value) {
     document.querySelector("#agencyModalContent").textContent,
     /소속 고객 상세|홍길동/,
     "agency member card should show customer detail modal",
+  );
+  click(
+    dom.window,
+    document.querySelector(
+      '#agencyModalContent [data-member-detail="member-a"]',
+    ),
+  );
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    /Agency member|beauty_user|배송지|구매이력|포인트 적립\/사용 이력/,
+    "agency member name should open member detail view",
+  );
+  assert.doesNotMatch(
+    document.querySelector("#agencyModalContent").textContent,
+    /내부 대리점/,
+    "agency member detail should not expose internal ownership label",
+  );
+  click(dom.window, document.querySelector("[data-member-detail-back]"));
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    /소속 고객 상세|홍길동/,
+    "member detail back should return to agency customer list",
   );
   click(
     dom.window,

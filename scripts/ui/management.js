@@ -19,19 +19,63 @@ export function createManagementController({
 
   function bindManagementEvents(role) {
     if (role === "admin") {
-      bindMetricModal("[data-admin-detail]", "#adminDetailModal", (type) =>
-        createAdminDetailContent(type, store),
+      bindAdminSettingsForm();
+      bindMetricModal(
+        "[data-admin-detail]",
+        "#adminDetailModal",
+        "admin",
+        (type) => createAdminDetailContent(type, store),
       );
     }
 
     if (role === "agency") {
-      bindMetricModal("[data-agency-detail]", "#agencyDetailModal", (type) =>
-        createAgencyDetailContent(type, store),
+      bindMetricModal(
+        "[data-agency-detail]",
+        "#agencyDetailModal",
+        "agency",
+        (type) => createAgencyDetailContent(type, store),
       );
     }
   }
 
-  function bindMetricModal(cardSelector, modalSelector, createContent) {
+  function bindAdminSettingsForm() {
+    const form = dom.management.querySelector("[data-admin-settings-form]");
+    if (!form) return;
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      store.settings.purchasePointRate = readPercentField(
+        form,
+        "purchasePointRate",
+      );
+      store.settings.maxPointUseRate = readPercentField(
+        form,
+        "maxPointUseRate",
+      );
+      store.settings.personalReferrerRewardRate = readPercentField(
+        form,
+        "personalReferrerRewardRate",
+      );
+      store.settings.personalBuyerBonusRate = readPercentField(
+        form,
+        "personalBuyerBonusRate",
+      );
+      store.settings.friendSignupPoint = Math.max(
+        0,
+        Number(form.querySelector('[name="friendSignupPoint"]').value || 0),
+      );
+      persistStore(store);
+      dom.management.innerHTML = createAdminDashboard(store);
+      bindManagementEvents("admin");
+    });
+  }
+
+  function readPercentField(form, name) {
+    const value = Number(form.querySelector(`[name="${name}"]`).value || 0);
+    return Math.min(100, Math.max(0, value));
+  }
+
+  function bindMetricModal(cardSelector, modalSelector, scope, createContent) {
     const modal = dom.management.querySelector(modalSelector);
     if (!modal) return;
 
@@ -39,6 +83,7 @@ export function createManagementController({
       const open = () => {
         const detailType =
           card.dataset.adminDetail || card.dataset.agencyDetail;
+        modal.dataset.currentDetail = detailType;
         openDetailModal(modal, createContent(detailType));
         if (
           modalSelector === "#adminDetailModal" &&
@@ -57,6 +102,28 @@ export function createManagementController({
     });
 
     modal.addEventListener("click", (event) => {
+      const memberButton = event.target.closest("[data-member-detail]");
+      if (memberButton) {
+        openDetailModal(
+          modal,
+          createMemberProfileDetail(
+            memberButton.dataset.memberDetail,
+            store,
+            scope,
+            modal.dataset.currentDetail || "members",
+          ),
+        );
+        return;
+      }
+
+      const backButton = event.target.closest("[data-member-detail-back]");
+      if (backButton) {
+        const detailType = backButton.dataset.memberDetailBack || "members";
+        modal.dataset.currentDetail = detailType;
+        openDetailModal(modal, createContent(detailType));
+        return;
+      }
+
       if (
         event.target.matches("[data-modal-close]") ||
         event.target === modal
@@ -206,8 +273,12 @@ function createAdminDashboard(store) {
   const headquarters = store.agencies.find((agency) => agency.isHeadquarters);
   const agencyCount = store.agencies.length;
   const memberCount = store.members.length;
-  const latestOrder = store.orders[0];
-  const latestPoint = store.pointLedger[0];
+  const monthlyOrders = getCurrentMonthOrders(store);
+  const monthlyOrderTotal = monthlyOrders.reduce(
+    (sum, order) => sum + order.paidProductAmount,
+    0,
+  );
+  const monthlyPointSummary = getCurrentMonthPointSummary(store);
   const settlementPending = store.agencySettlementLedger.reduce(
     (sum, item) => sum + item.commissionAmount,
     0,
@@ -226,8 +297,8 @@ function createAdminDashboard(store) {
         ${createMetricCard("admin", "headquarters", "본사 대리점", headquarters.name)}
         ${createMetricCard("admin", "agencies", "대리점 수", `${agencyCount}`)}
         ${createMetricCard("admin", "members", "회원 수", `${memberCount}`)}
-        ${createMetricCard("admin", "orders", "최근 주문", latestOrder.id)}
-        ${createMetricCard("admin", "points", "최근 적립", `${latestPoint.amount.toLocaleString("ko-KR")}P`)}
+        ${createMetricCard("admin", "orders", "이달의 주문", formatMoney(monthlyOrderTotal))}
+        ${createMetricCard("admin", "points", "이달의 적립금", `${monthlyPointSummary.earned.toLocaleString("ko-KR")}P`)}
         ${createMetricCard("admin", "settlements", "정산 대기 영업비", formatMoney(settlementPending))}
       </div>
       ${createSettingsPanel(store)}
@@ -254,12 +325,14 @@ function createSettingsPanel(store) {
   return `
     <section class="management-panel">
       <div class="product-category">Admin settings</div>
-      <div class="management-grid compact">
-        <article><span>구매 적립률</span><strong>${settings.purchasePointRate}%</strong></article>
-        <article><span>포인트 사용 한도</span><strong>${settings.maxPointUseRate}%</strong></article>
-        <article><span>개인 추천자 지급률</span><strong>${settings.personalReferrerRewardRate}%</strong></article>
-        <article><span>구매자 추가 지급률</span><strong>${settings.personalBuyerBonusRate}%</strong></article>
-      </div>
+      <form class="admin-settings-form" data-admin-settings-form>
+        <label>구매 적립률<input class="quantity-input" name="purchasePointRate" type="number" min="0" max="100" value="${settings.purchasePointRate}" /></label>
+        <label>포인트 사용 한도<input class="quantity-input" name="maxPointUseRate" type="number" min="0" max="100" value="${settings.maxPointUseRate}" /></label>
+        <label>친구가입 포인트<input class="quantity-input" name="friendSignupPoint" type="number" min="0" step="100" value="${settings.friendSignupPoint}" /></label>
+        <label>개인 추천자 지급률<input class="quantity-input" name="personalReferrerRewardRate" type="number" min="0" max="100" value="${settings.personalReferrerRewardRate}" /></label>
+        <label>구매자 추가 지급률<input class="quantity-input" name="personalBuyerBonusRate" type="number" min="0" max="100" value="${settings.personalBuyerBonusRate}" /></label>
+        <button class="buy-button" type="submit">설정 저장</button>
+      </form>
     </section>
   `;
 }
@@ -344,17 +417,18 @@ function getAdminDetail(type, store) {
     },
     orders: {
       label: "Orders",
-      title: "주문 상세 리스트",
+      title: "이달의 주문 상세",
       description:
-        "결제 우회 처리로 생성된 주문과 상품 실결제금액, 적립/정산 연결 상태입니다.",
-      rows: store.orders.map((order) => createOrderDetailRow(order, store)),
+        "이번 달 결제 완료 주문의 배송비 제외 실결제 상품금액을 대리점별로 누적 표시합니다.",
+      rows: createMonthlyAgencySalesRows(store),
     },
     points: {
       label: "Points",
-      title: "포인트 적립 상세 리스트",
+      title: "이달의 포인트 상세",
       description:
-        "배송비 제외 실결제 상품금액 기준으로 생성된 포인트 장부입니다.",
-      rows: store.pointLedger.map(createPointDetailRow),
+        "이번 달 포인트 장부에서 적립 포인트와 사용 포인트를 분리해 누적 표시합니다.",
+      extra: createMonthlyPointSummary(store),
+      rows: getCurrentMonthPoints(store).map(createPointDetailRow),
     },
     settlements: {
       label: "Settlements",
@@ -387,12 +461,146 @@ function createMemberDetailRow(member, store) {
 
   return `
     <article class="process-row">
-      <div><strong>${member.name}</strong><span>${member.phone}</span></div>
+      <div>
+        <button class="member-detail-button" type="button" data-member-detail="${member.id}">
+          ${member.name}
+        </button>
+        <span>${member.phone || "연락처 없음"}</span>
+      </div>
       <div><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></div>
       <div><span>주문 수</span><strong>${orders.length}건</strong></div>
       <div><span>내부 대리점</span><strong>${agency?.name || "본사"}</strong></div>
     </article>
   `;
+}
+
+function createMemberProfileDetail(memberId, store, scope, backType) {
+  const member = store.members.find((item) => item.id === memberId);
+  if (!member) {
+    return '<div class="admin-detail-empty">회원 정보를 찾을 수 없습니다.</div>';
+  }
+
+  const agency = store.agencies.find((item) => item.id === member.agencyId);
+  const orders = store.orders.filter((order) => order.memberId === member.id);
+  const points = store.pointLedger.filter(
+    (point) => point.memberId === member.id,
+  );
+  const links = store.personalReferralLinks.filter(
+    (link) => link.ownerMemberId === member.id,
+  );
+  const isAdmin = scope === "admin";
+
+  return `
+    <div class="detail-panel-head">
+      <div>
+        <button class="back-button member-detail-back" type="button" data-member-detail-back="${backType}">← 회원 리스트</button>
+        <div class="product-category">${isAdmin ? "Admin" : "Agency"} member / ${member.userId || member.id}</div>
+        <h2 id="adminModalTitle">${member.name}</h2>
+      </div>
+      <p>
+        회원 기본 정보, 배송지, 구매이력, 포인트 이력을 한 화면에서 확인합니다.
+        ${isAdmin ? "관리자 화면에서는 내부 대리점 귀속 정보도 함께 표시됩니다." : "대리점 화면에서는 소속 고객의 주문/포인트 중심으로 표시됩니다."}
+      </p>
+    </div>
+    <div class="member-detail-grid">
+      <article><span>아이디</span><strong>${member.userId || "-"}</strong></article>
+      <article><span>상태</span><strong>${member.status}</strong></article>
+      <article><span>가입일</span><strong>${member.joinedAt || "-"}</strong></article>
+      <article><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>휴대폰</span><strong>${member.phone || "-"}</strong></article>
+      <article><span>이메일</span><strong>${member.email || "-"}</strong></article>
+      <article><span>주문 수</span><strong>${orders.length}건</strong></article>
+      <article><span>추천 링크</span><strong>${links.length}개</strong></article>
+      ${isAdmin ? `<article><span>내부 대리점</span><strong>${agency?.name || "본사"}</strong></article>` : ""}
+      <article class="member-detail-wide"><span>배송지</span><strong>${formatAddress(member.address)}</strong></article>
+    </div>
+    <div class="member-detail-columns">
+      <section>
+        <div class="product-category">구매이력</div>
+        <div class="process-list">
+          ${orders.map(createMemberOrderRow).join("") || '<div class="admin-detail-empty">구매이력이 없습니다.</div>'}
+        </div>
+      </section>
+      <section>
+        <div class="product-category">포인트 적립/사용 이력</div>
+        <div class="process-list">
+          ${points.map(createMemberPointRow).join("") || '<div class="admin-detail-empty">포인트 이력이 없습니다.</div>'}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function createMemberOrderRow(order) {
+  const firstItem = order.items?.[0];
+
+  return `
+    <article class="process-row member-history-row">
+      <div><strong>${order.id}</strong><span>${order.paidAt} · ${order.status}</span></div>
+      <div><span>대표 상품</span><strong>${firstItem?.productKo || "상품"}</strong></div>
+      <div><span>상품 실결제</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+      <div><span>배송비</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "무료"}</strong></div>
+    </article>
+  `;
+}
+
+function createMemberPointRow(point) {
+  return `
+    <article class="process-row member-history-row">
+      <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
+      <div><span>구분</span><strong>${point.type}</strong></div>
+      <div><span>기준 금액</span><strong>${formatMoney(point.baseAmount)}</strong></div>
+      <div><span>포인트</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+    </article>
+  `;
+}
+
+function formatAddress(address = {}) {
+  const parts = [
+    address.postcode,
+    address.address,
+    address.addressDetail,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" ") : "-";
+}
+
+function getCurrentMonthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function isCurrentMonthDate(value) {
+  return String(value || "").startsWith(getCurrentMonthKey());
+}
+
+function getCurrentMonthOrders(store) {
+  return store.orders.filter(
+    (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
+  );
+}
+
+function getCurrentMonthPoints(store) {
+  return store.pointLedger.filter((point) => {
+    const dateValue = point.createdAt || point.paidAt || "";
+    return isCurrentMonthDate(dateValue);
+  });
+}
+
+function isPointUse(point) {
+  return point.amount < 0 || String(point.type || "").includes("use");
+}
+
+function getCurrentMonthPointSummary(store) {
+  return getCurrentMonthPoints(store).reduce(
+    (summary, point) => {
+      if (isPointUse(point)) {
+        summary.used += Math.abs(point.amount);
+      } else {
+        summary.earned += Math.max(0, point.amount);
+      }
+      return summary;
+    },
+    { earned: 0, used: 0 },
+  );
 }
 
 function createOrderDetailRow(order, store) {
@@ -417,8 +625,45 @@ function createPointDetailRow(point) {
       <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
       <div><span>기준 금액</span><strong>${formatMoney(point.baseAmount)}</strong></div>
       <div><span>적립률</span><strong>${point.rate}%</strong></div>
-      <div><span>적립 포인트</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+      <div><span>포인트</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
     </article>
+  `;
+}
+
+function createMonthlyAgencySalesRows(store) {
+  const monthlyOrders = getCurrentMonthOrders(store);
+
+  return store.agencies.map((agency) => {
+    const agencyOrders = monthlyOrders.filter(
+      (order) => order.agencyIdAtOrder === agency.id,
+    );
+    const amount = agencyOrders.reduce(
+      (sum, order) => sum + order.paidProductAmount,
+      0,
+    );
+    const commissionRate = agency.commissionRate || 0;
+    const commission = Math.floor(amount * (commissionRate / 100));
+
+    return `
+      <article class="process-row">
+        <div><strong>${agency.name}</strong><span>${agency.code} · ${agency.status}</span></div>
+        <div><span>이달 주문</span><strong>${agencyOrders.length}건</strong></div>
+        <div><span>누적 상품금액</span><strong>${formatMoney(amount)}</strong></div>
+        <div><span>예상 영업비</span><strong>${formatMoney(commission)}</strong></div>
+      </article>
+    `;
+  });
+}
+
+function createMonthlyPointSummary(store) {
+  const summary = getCurrentMonthPointSummary(store);
+
+  return `
+    <div class="management-grid compact monthly-point-summary">
+      <article><span>이달 적립포인트</span><strong>${summary.earned.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>이달 사용포인트</span><strong>${summary.used.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>순증감</span><strong>${(summary.earned - summary.used).toLocaleString("ko-KR")}P</strong></article>
+    </div>
   `;
 }
 

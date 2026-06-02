@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BEAUTY REF. Shop</title>
-    <link rel="stylesheet" href="style.css?v=20260601-session-auth" />
+    <link rel="stylesheet" href="style.css?v=20260602-admin-settings" />
   </head>
   <body>
     <header class="site-header">
@@ -20,7 +20,12 @@
           <a href="#review">Review</a>
           <a href="#shop" data-home-link>Search</a>
           <a href="#login" id="loginLink">Login</a>
-          <span class="session-user is-hidden" id="sessionUser"></span>
+          <button
+            class="session-user is-hidden"
+            id="sessionUser"
+            type="button"
+            aria-label="내정보 보기"
+          ></button>
           <button
             class="session-logout is-hidden"
             id="logoutButton"
@@ -172,6 +177,6 @@
     </footer>
 
     <div class="toast" id="toast">장바구니에 상품이 담겼습니다.</div>
-    <script src="scripts/app.bundle.js?v=20260601-session-auth"></script>
+    <script src="scripts/app.bundle.js?v=20260602-admin-settings"></script>
   </body>
 </html>
