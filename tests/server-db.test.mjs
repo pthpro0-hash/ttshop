@@ -32,6 +32,10 @@ try {
   const store = cloneDefaultStore();
   store.products[0].sale = 74000;
   store.products[0].stock = 12;
+  store.products[0].detailImages = [
+    "https://example.com/device-led-detail-1.jpg",
+    "https://example.com/device-led-detail-2.jpg",
+  ];
   store.products[0].variants[0].stock = 12;
   store.members.push({
     id: "member-db-test",
@@ -86,6 +90,15 @@ try {
       .stock,
     12,
     "product option stock should survive SQLite reload",
+  );
+  assert.deepEqual(
+    reloaded.products.find((product) => product.id === "device-led")
+      .detailImages,
+    [
+      "https://example.com/device-led-detail-1.jpg",
+      "https://example.com/device-led-detail-2.jpg",
+    ],
+    "product detail images should survive SQLite reload",
   );
   assert.equal(
     reloaded.products.find((product) => product.id === "cos-sun").stock,

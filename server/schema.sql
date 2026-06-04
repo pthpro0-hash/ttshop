@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS products (
   point_rate_override REAL,
   option_text TEXT,
   image TEXT,
+  detail_images TEXT,
   short TEXT,
   desc TEXT,
   search_keywords TEXT,

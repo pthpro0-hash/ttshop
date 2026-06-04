@@ -15,12 +15,23 @@ export function openShopDatabase(dbPath = defaultDbPath) {
   const database = new DatabaseSync(dbPath);
   database.exec("PRAGMA foreign_keys = ON");
   database.exec(readFileSync(schemaPath, "utf8"));
+  migrateDatabase(database);
 
   if (!hasSeedData(database)) {
     writeStore(database, cloneDefaultStore());
   }
 
   return database;
+}
+
+function migrateDatabase(database) {
+  ensureColumn(database, "products", "detail_images", "TEXT");
+}
+
+function ensureColumn(database, table, column, definition) {
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all();
+  if (columns.some((item) => item.name === column)) return;
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 export function readStore(database) {
@@ -209,8 +220,8 @@ function insertProduct(database, product) {
         (id, sku, name, ko, category, type, badge, price, sale, supply_price,
          cost, tax_type, status, display_status, stock, safety_stock,
          shipping_type, shipping_fee, point_rate_override, option_text, image,
-         short, desc, search_keywords, manufacturer, supplier, origin, brand, barcode)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         detail_images, short, desc, search_keywords, manufacturer, supplier, origin, brand, barcode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -238,6 +249,7 @@ function insertProduct(database, product) {
         : Number(product.pointRateOverride),
       product.option || "",
       product.image || "",
+      JSON.stringify(normalizeDetailImages(product.detailImages)),
       product.short || "",
       product.desc || "",
       product.searchKeywords || "",
@@ -452,6 +464,7 @@ function mapProduct(row) {
       row.point_rate_override === null ? "" : row.point_rate_override,
     option: row.option_text,
     image: row.image,
+    detailImages: parseDetailImages(row.detail_images, row.image),
     short: row.short,
     desc: row.desc,
     searchKeywords: row.search_keywords,
@@ -462,6 +475,28 @@ function mapProduct(row) {
     barcode: row.barcode,
     variants: [],
   };
+}
+
+function normalizeDetailImages(images) {
+  return (Array.isArray(images) ? images : [])
+    .map((image) => String(image || "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function parseDetailImages(value, fallbackImage = "") {
+  if (!value) return fallbackImage ? [fallbackImage] : [];
+  try {
+    const images = normalizeDetailImages(JSON.parse(value));
+    return images.length ? images : fallbackImage ? [fallbackImage] : [];
+  } catch {
+    const images = String(value || "")
+      .split(/\n+/)
+      .map((image) => image.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    return images.length ? images : fallbackImage ? [fallbackImage] : [];
+  }
 }
 
 function mapProductVariant(row) {

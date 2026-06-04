@@ -320,6 +320,15 @@ function input(element, value) {
     dom.window,
     document.querySelector(".product-card[data-id='device-led']"),
   );
+  assert.ok(
+    document.querySelector(".product-detail-image-stack"),
+    "product detail page should render detail images below customer review",
+  );
+  assert.equal(
+    document.querySelector(".review-strip").nextElementSibling?.className,
+    "product-detail-image-stack",
+    "product detail images should be placed immediately after customer review",
+  );
   click(dom.window, document.querySelector("#addCart"));
   assert.equal(
     document.querySelector("#bagButton").textContent,
@@ -522,6 +531,11 @@ function input(element, value) {
   );
   assert.match(
     document.querySelector("#detailView").textContent,
+    /상세 안내|결제 전 상품별 상세 이미지/,
+    "checkout page should render product detail guide content",
+  );
+  assert.match(
+    document.querySelector("#detailView").textContent,
     /적립 예정\s*3,800P/,
     "checkout summary should preview purchase points using the configured rate",
   );
@@ -681,6 +695,16 @@ function input(element, value) {
     "product management should include local image registration control",
   );
   assert.equal(
+    document.querySelectorAll("[data-product-detail-image-input]").length,
+    5,
+    "product management should expose five detail image slots",
+  );
+  assert.equal(
+    document.querySelectorAll("[data-product-detail-image-file]").length,
+    5,
+    "product management should expose five local detail image controls",
+  );
+  assert.equal(
     document.querySelectorAll("[data-product-category-filter]").length,
     4,
     "product management should expose all/category filters",
@@ -713,10 +737,57 @@ function input(element, value) {
     /^https:\/\/images\.unsplash\.com\//,
     "sample image button should populate the image field",
   );
+  let productForm = document.querySelector("[data-product-form]");
+  click(dom.window, productForm.querySelector("[data-product-reset]"));
+  input(productForm.querySelector('[name="name"]'), "New Cosmetic Mist");
+  click(dom.window, productForm.querySelector("[data-product-submit]"));
+  assert.match(
+    document.querySelector("[data-product-form-message]").textContent,
+    /필수/,
+    "product form should show a visible validation message for missing required fields",
+  );
+  input(productForm.querySelector('[name="name"]'), "New Cosmetic Mist");
+  input(productForm.querySelector('[name="ko"]'), "신규 코스메틱 미스트");
+  input(productForm.querySelector('[name="category"]'), "화장품");
+  input(productForm.querySelector('[name="type"]'), "Mist");
+  input(productForm.querySelector('[name="badge"]'), "New");
+  input(productForm.querySelector('[name="price"]'), "21000");
+  input(productForm.querySelector('[name="sale"]'), "17000");
+  input(productForm.querySelector('[name="stock"]'), "44");
+  input(productForm.querySelector('[name="short"]'), "테스트 신규 화장품");
+  input(
+    productForm.querySelector('[name="desc"]'),
+    "관리자가 등록한 신규 화장품입니다.",
+  );
+  input(productForm.querySelector('[name="option"]'), "100ml");
+  click(dom.window, productForm.querySelector("[data-product-submit]"));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /신규 코스메틱 미스트|화장품/,
+    "admin should show newly registered cosmetic products",
+  );
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.some(
+      (product) =>
+        product.ko === "신규 코스메틱 미스트" &&
+        product.category === "화장품" &&
+        product.displayStatus === "displayed",
+    ),
+    true,
+    "new cosmetic product should persist in the store",
+  );
   click(dom.window, document.querySelector('[data-product-edit="cos-sun"]'));
-  const productForm = document.querySelector("[data-product-form]");
+  productForm = document.querySelector("[data-product-form]");
   input(productForm.querySelector('[name="sale"]'), "24000");
   input(productForm.querySelector('[name="stock"]'), "33");
+  input(
+    productForm.querySelector('[name="detailImage1"]'),
+    "https://example.com/cos-sun-detail-1.jpg",
+  );
+  input(
+    productForm.querySelector('[name="detailImage2"]'),
+    "https://example.com/cos-sun-detail-2.jpg",
+  );
   input(
     productForm.querySelector('[name="variants"]'),
     "50ml / SPF50+ PA++++ | COS-SUN-STD | 33 | 0 | selling",
@@ -733,6 +804,16 @@ function input(element, value) {
     ).sale,
     24000,
     "product management should persist product sale price",
+  );
+  assert.deepEqual(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.find(
+      (product) => product.id === "cos-sun",
+    ).detailImages,
+    [
+      "https://example.com/cos-sun-detail-1.jpg",
+      "https://example.com/cos-sun-detail-2.jpg",
+    ],
+    "product management should persist product detail images",
   );
   click(
     dom.window,

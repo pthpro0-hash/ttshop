@@ -246,7 +246,7 @@ export function createManagementController({
     formBox
       .querySelector("[data-product-submit]")
       .addEventListener("click", () => {
-        saveProductFromForm(formBox);
+        if (!saveProductFromForm(formBox)) return;
         persistStore(store);
         reopenAdminDetail("products");
       });
@@ -325,7 +325,32 @@ export function createManagementController({
         });
         reader.readAsDataURL(file);
       });
+    formBox
+      .querySelectorAll("[data-product-detail-image-file]")
+      .forEach((input) => {
+        input.addEventListener("change", (event) => {
+          const file = event.target.files?.[0];
+          const index = Number(input.dataset.productDetailImageFile);
+          if (!file || !index) return;
+
+          const reader = new FileReader();
+          reader.addEventListener("load", () => {
+            getProductField(formBox, `detailImage${index}`).value =
+              reader.result;
+            updateProductDetailImagePreviews(formBox);
+          });
+          reader.readAsDataURL(file);
+        });
+      });
+    formBox
+      .querySelectorAll("[data-product-detail-image-input]")
+      .forEach((input) => {
+        input.addEventListener("input", () =>
+          updateProductDetailImagePreviews(formBox),
+        );
+      });
     updateProductImagePreview(formBox);
+    updateProductDetailImagePreviews(formBox);
   }
 
   function getProductField(formBox, name) {
@@ -336,20 +361,28 @@ export function createManagementController({
     const productId = getProductField(formBox, "productId").value;
     const payload = readProductForm(formBox);
     if (!payload.name || !payload.ko || !payload.category || !payload.sale) {
-      return;
+      setProductFormMessage(
+        formBox,
+        "상품명 영문, 상품명 한글, 카테고리, 할인판매가는 필수입니다.",
+      );
+      return false;
     }
 
     if (productId) {
       const product = store.products.find((item) => item.id === productId);
-      if (!product) return;
+      if (!product) {
+        setProductFormMessage(formBox, "수정할 상품을 찾을 수 없습니다.");
+        return false;
+      }
       Object.assign(product, payload);
-      return;
+      return true;
     }
 
     store.products.push({
       id: createProductId(payload),
       ...payload,
     });
+    return true;
   }
 
   function readProductForm(formBox) {
@@ -382,6 +415,7 @@ export function createManagementController({
       pointRateOverride: getProductField(formBox, "pointRateOverride").value,
       option,
       image: getProductField(formBox, "image").value.trim(),
+      detailImages: readProductDetailImages(formBox),
       short: getProductField(formBox, "short").value.trim(),
       desc: getProductField(formBox, "desc").value.trim(),
       searchKeywords: getProductField(formBox, "searchKeywords").value.trim(),
@@ -434,9 +468,12 @@ export function createManagementController({
     fields.forEach((field) => {
       getProductField(formBox, field).value = product[field] ?? "";
     });
+    fillProductDetailImages(formBox, product.detailImages);
     getProductField(formBox, "variants").value = formatVariantRows(product);
     updateProductImagePreview(formBox);
+    updateProductDetailImagePreviews(formBox);
     formBox.querySelector("[data-product-submit]").textContent = "상품 수정";
+    setProductFormMessage(formBox, "");
   }
 
   function resetProductForm(formBox) {
@@ -451,7 +488,15 @@ export function createManagementController({
     getProductField(formBox, "shippingFee").value = "3000";
     getProductField(formBox, "safetyStock").value = "5";
     updateProductImagePreview(formBox);
+    updateProductDetailImagePreviews(formBox);
     formBox.querySelector("[data-product-submit]").textContent = "상품 등록";
+    setProductFormMessage(formBox, "");
+  }
+
+  function setProductFormMessage(formBox, message) {
+    const messageBox = formBox.querySelector("[data-product-form-message]");
+    if (!messageBox) return;
+    messageBox.textContent = message;
   }
 
   function updateProductImagePreview(formBox) {
@@ -460,6 +505,34 @@ export function createManagementController({
     preview.innerHTML = image
       ? `<img src="${escapeAttribute(image)}" alt="상품 이미지 미리보기" />`
       : "<span>이미지 없음</span>";
+  }
+
+  function readProductDetailImages(formBox) {
+    return Array.from({ length: 5 }, (_, index) =>
+      getProductField(formBox, `detailImage${index + 1}`).value.trim(),
+    ).filter(Boolean);
+  }
+
+  function fillProductDetailImages(formBox, images = []) {
+    Array.from({ length: 5 }, (_, index) => {
+      getProductField(formBox, `detailImage${index + 1}`).value =
+        images[index] || "";
+    });
+  }
+
+  function updateProductDetailImagePreviews(formBox) {
+    formBox
+      .querySelectorAll("[data-product-detail-image-preview]")
+      .forEach((preview) => {
+        const index = Number(preview.dataset.productDetailImagePreview);
+        const image = getProductField(
+          formBox,
+          `detailImage${index}`,
+        ).value.trim();
+        preview.innerHTML = image
+          ? `<img src="${escapeAttribute(image)}" alt="상세 이미지 ${index} 미리보기" />`
+          : `<span>${index}</span>`;
+      });
   }
 
   function readNumberField(formBox, name) {
@@ -1364,7 +1437,7 @@ function createProductAdminForm() {
       <section class="product-form-group">
         <div class="product-form-group-head">
           <strong>이미지 등록</strong>
-          <span>URL 또는 로컬 이미지 파일로 대표 이미지를 등록</span>
+          <span>대표 이미지와 결제 상세 안내 이미지를 등록</span>
         </div>
         <div class="product-image-editor">
           <div class="product-image-preview" data-product-image-preview><span>이미지 없음</span></div>
@@ -1373,6 +1446,26 @@ function createProductAdminForm() {
             <label>로컬 이미지 선택<input class="quantity-input" type="file" accept="image/*" data-product-image-file /></label>
             <button class="cart-button mini-button" type="button" data-product-image-sample>샘플 이미지 적용</button>
           </div>
+        </div>
+        <div class="product-detail-image-manager">
+          <div class="product-form-group-head compact">
+            <strong>상세 안내 이미지</strong>
+            <span>결제 페이지 하단에 노출되는 이미지, 최대 5개</span>
+          </div>
+          ${Array.from(
+            { length: 5 },
+            (_, index) => `
+            <article class="product-detail-image-row">
+              <div class="product-detail-image-preview" data-product-detail-image-preview="${index + 1}"><span>${index + 1}</span></div>
+              <label>상세 이미지 ${index + 1} URL
+                <input class="quantity-input" name="detailImage${index + 1}" placeholder="https://..." data-product-detail-image-input="${index + 1}" />
+              </label>
+              <label>파일 선택
+                <input class="quantity-input" type="file" accept="image/*" data-product-detail-image-file="${index + 1}" />
+              </label>
+            </article>
+          `,
+          ).join("")}
         </div>
       </section>
       <section class="product-form-group">
@@ -1448,6 +1541,7 @@ function createProductAdminForm() {
         <button class="buy-button" type="button" data-product-submit>상품 등록</button>
         <button class="cart-button" type="button" data-product-reset>입력 초기화</button>
       </div>
+      <p class="product-form-message" data-product-form-message aria-live="polite"></p>
     </div>
   `;
 }

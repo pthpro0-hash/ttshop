@@ -226,6 +226,7 @@
     },
     products: products.map((product, index) => ({
       ...product,
+      detailImages: normalizeDetailImages(product),
       sku: product.id.toUpperCase().replace(/[^A-Z0-9]/g, "-"),
       status: "selling",
       displayStatus: "displayed",
@@ -358,6 +359,12 @@
       },
     ],
   };
+  function normalizeDetailImages(product) {
+    if (Array.isArray(product.detailImages) && product.detailImages.length) {
+      return product.detailImages.slice(0, 5);
+    }
+    return [product.image].filter(Boolean);
+  }
   function cloneDefaultStore() {
     return JSON.parse(JSON.stringify(defaultStore));
   }
@@ -373,14 +380,20 @@
     const serverStore = await loadStoreFromServer();
     if (serverStore) {
       const localStore = await getBestLocalStore();
-      const shouldMigrate = shouldMigrateLocalStoreToServer(
+      const mergedProductStore = mergeLocalProductsIntoServer(
         serverStore,
+        localStore,
+      );
+      const shouldMigrate = shouldMigrateLocalStoreToServer(
+        mergedProductStore,
         localStore,
       );
       const snapshot = shouldMigrate
         ? normalizeStore(localStore)
-        : normalizeStore(serverStore);
-      if (shouldMigrate) await saveStoreToServer(snapshot);
+        : normalizeStore(mergedProductStore);
+      if (shouldMigrate || mergedProductStore !== serverStore) {
+        await saveStoreToServer(snapshot);
+      }
       (_a = getStorage()) == null
         ? void 0
         : _a.setItem(STORE_KEY, JSON.stringify(snapshot));
@@ -430,6 +443,28 @@
     if (!localStore) return false;
     return getStoreWeight(localStore) > getStoreWeight(serverStore);
   }
+  function mergeLocalProductsIntoServer(serverStore, localStore) {
+    var _a;
+    if (
+      !((_a = localStore == null ? void 0 : localStore.products) == null
+        ? void 0
+        : _a.length)
+    )
+      return serverStore;
+    const serverSnapshot = normalizeStore(serverStore);
+    const localSnapshot = normalizeStore(localStore);
+    const serverProductIds = new Set(
+      serverSnapshot.products.map((product) => product.id),
+    );
+    const missingProducts = localSnapshot.products.filter(
+      (product) => !serverProductIds.has(product.id),
+    );
+    if (!missingProducts.length) return serverStore;
+    return {
+      ...serverSnapshot,
+      products: [...serverSnapshot.products, ...missingProducts],
+    };
+  }
   function getStoreWeight(store) {
     if (!store) return 0;
     const snapshot = normalizeStore(store);
@@ -439,6 +474,7 @@
       snapshot.pointLedger.length * 5 +
       snapshot.agencySettlementLedger.length * 4 +
       snapshot.personalReferralLinks.length * 3 +
+      snapshot.products.length * 2 +
       snapshot.agencies.length +
       (snapshot.currentMemberId ? 2 : 0) +
       (snapshot.pendingAgencySlug ? 1 : 0)
@@ -1521,7 +1557,7 @@
       formBox
         .querySelector("[data-product-submit]")
         .addEventListener("click", () => {
-          saveProductFromForm(formBox);
+          if (!saveProductFromForm(formBox)) return;
           persistStore(store);
           reopenAdminDetail("products");
         });
@@ -1594,7 +1630,32 @@
           });
           reader.readAsDataURL(file);
         });
+      formBox
+        .querySelectorAll("[data-product-detail-image-file]")
+        .forEach((input) => {
+          input.addEventListener("change", (event) => {
+            var _a;
+            const file = (_a = event.target.files) == null ? void 0 : _a[0];
+            const index = Number(input.dataset.productDetailImageFile);
+            if (!file || !index) return;
+            const reader = new FileReader();
+            reader.addEventListener("load", () => {
+              getProductField(formBox, `detailImage${index}`).value =
+                reader.result;
+              updateProductDetailImagePreviews(formBox);
+            });
+            reader.readAsDataURL(file);
+          });
+        });
+      formBox
+        .querySelectorAll("[data-product-detail-image-input]")
+        .forEach((input) => {
+          input.addEventListener("input", () =>
+            updateProductDetailImagePreviews(formBox),
+          );
+        });
       updateProductImagePreview(formBox);
+      updateProductDetailImagePreviews(formBox);
     }
     function getProductField(formBox, name) {
       return formBox.querySelector(`[name="${name}"]`);
@@ -1603,18 +1664,29 @@
       const productId = getProductField(formBox, "productId").value;
       const payload = readProductForm(formBox);
       if (!payload.name || !payload.ko || !payload.category || !payload.sale) {
-        return;
+        setProductFormMessage(
+          formBox,
+          "\uC0C1\uD488\uBA85 \uC601\uBB38, \uC0C1\uD488\uBA85 \uD55C\uAE00, \uCE74\uD14C\uACE0\uB9AC, \uD560\uC778\uD310\uB9E4\uAC00\uB294 \uD544\uC218\uC785\uB2C8\uB2E4.",
+        );
+        return false;
       }
       if (productId) {
         const product = store.products.find((item) => item.id === productId);
-        if (!product) return;
+        if (!product) {
+          setProductFormMessage(
+            formBox,
+            "\uC218\uC815\uD560 \uC0C1\uD488\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+          );
+          return false;
+        }
         Object.assign(product, payload);
-        return;
+        return true;
       }
       store.products.push({
         id: createProductId(payload),
         ...payload,
       });
+      return true;
     }
     function readProductForm(formBox) {
       const price = readNumberField(formBox, "price");
@@ -1645,6 +1717,7 @@
         pointRateOverride: getProductField(formBox, "pointRateOverride").value,
         option,
         image: getProductField(formBox, "image").value.trim(),
+        detailImages: readProductDetailImages(formBox),
         short: getProductField(formBox, "short").value.trim(),
         desc: getProductField(formBox, "desc").value.trim(),
         searchKeywords: getProductField(formBox, "searchKeywords").value.trim(),
@@ -1698,10 +1771,13 @@
         getProductField(formBox, field).value =
           (_a = product[field]) != null ? _a : "";
       });
+      fillProductDetailImages(formBox, product.detailImages);
       getProductField(formBox, "variants").value = formatVariantRows(product);
       updateProductImagePreview(formBox);
+      updateProductDetailImagePreviews(formBox);
       formBox.querySelector("[data-product-submit]").textContent =
         "\uC0C1\uD488 \uC218\uC815";
+      setProductFormMessage(formBox, "");
     }
     function resetProductForm(formBox) {
       formBox.querySelectorAll("input, textarea").forEach((input) => {
@@ -1715,8 +1791,15 @@
       getProductField(formBox, "shippingFee").value = "3000";
       getProductField(formBox, "safetyStock").value = "5";
       updateProductImagePreview(formBox);
+      updateProductDetailImagePreviews(formBox);
       formBox.querySelector("[data-product-submit]").textContent =
         "\uC0C1\uD488 \uB4F1\uB85D";
+      setProductFormMessage(formBox, "");
+    }
+    function setProductFormMessage(formBox, message) {
+      const messageBox = formBox.querySelector("[data-product-form-message]");
+      if (!messageBox) return;
+      messageBox.textContent = message;
     }
     function updateProductImagePreview(formBox) {
       const preview = formBox.querySelector("[data-product-image-preview]");
@@ -1724,6 +1807,31 @@
       preview.innerHTML = image
         ? `<img src="${escapeAttribute(image)}" alt="\uC0C1\uD488 \uC774\uBBF8\uC9C0 \uBBF8\uB9AC\uBCF4\uAE30" />`
         : "<span>\uC774\uBBF8\uC9C0 \uC5C6\uC74C</span>";
+    }
+    function readProductDetailImages(formBox) {
+      return Array.from({ length: 5 }, (_, index) =>
+        getProductField(formBox, `detailImage${index + 1}`).value.trim(),
+      ).filter(Boolean);
+    }
+    function fillProductDetailImages(formBox, images = []) {
+      Array.from({ length: 5 }, (_, index) => {
+        getProductField(formBox, `detailImage${index + 1}`).value =
+          images[index] || "";
+      });
+    }
+    function updateProductDetailImagePreviews(formBox) {
+      formBox
+        .querySelectorAll("[data-product-detail-image-preview]")
+        .forEach((preview) => {
+          const index = Number(preview.dataset.productDetailImagePreview);
+          const image = getProductField(
+            formBox,
+            `detailImage${index}`,
+          ).value.trim();
+          preview.innerHTML = image
+            ? `<img src="${escapeAttribute(image)}" alt="\uC0C1\uC138 \uC774\uBBF8\uC9C0 ${index} \uBBF8\uB9AC\uBCF4\uAE30" />`
+            : `<span>${index}</span>`;
+        });
     }
     function readNumberField(formBox, name) {
       return Math.max(0, Number(getProductField(formBox, name).value || 0));
@@ -2564,7 +2672,7 @@
       <section class="product-form-group">
         <div class="product-form-group-head">
           <strong>\uC774\uBBF8\uC9C0 \uB4F1\uB85D</strong>
-          <span>URL \uB610\uB294 \uB85C\uCEEC \uC774\uBBF8\uC9C0 \uD30C\uC77C\uB85C \uB300\uD45C \uC774\uBBF8\uC9C0\uB97C \uB4F1\uB85D</span>
+          <span>\uB300\uD45C \uC774\uBBF8\uC9C0\uC640 \uACB0\uC81C \uC0C1\uC138 \uC548\uB0B4 \uC774\uBBF8\uC9C0\uB97C \uB4F1\uB85D</span>
         </div>
         <div class="product-image-editor">
           <div class="product-image-preview" data-product-image-preview><span>\uC774\uBBF8\uC9C0 \uC5C6\uC74C</span></div>
@@ -2573,6 +2681,26 @@
             <label>\uB85C\uCEEC \uC774\uBBF8\uC9C0 \uC120\uD0DD<input class="quantity-input" type="file" accept="image/*" data-product-image-file /></label>
             <button class="cart-button mini-button" type="button" data-product-image-sample>\uC0D8\uD50C \uC774\uBBF8\uC9C0 \uC801\uC6A9</button>
           </div>
+        </div>
+        <div class="product-detail-image-manager">
+          <div class="product-form-group-head compact">
+            <strong>\uC0C1\uC138 \uC548\uB0B4 \uC774\uBBF8\uC9C0</strong>
+            <span>\uACB0\uC81C \uD398\uC774\uC9C0 \uD558\uB2E8\uC5D0 \uB178\uCD9C\uB418\uB294 \uC774\uBBF8\uC9C0, \uCD5C\uB300 5\uAC1C</span>
+          </div>
+          ${Array.from(
+            { length: 5 },
+            (_, index) => `
+            <article class="product-detail-image-row">
+              <div class="product-detail-image-preview" data-product-detail-image-preview="${index + 1}"><span>${index + 1}</span></div>
+              <label>\uC0C1\uC138 \uC774\uBBF8\uC9C0 ${index + 1} URL
+                <input class="quantity-input" name="detailImage${index + 1}" placeholder="https://..." data-product-detail-image-input="${index + 1}" />
+              </label>
+              <label>\uD30C\uC77C \uC120\uD0DD
+                <input class="quantity-input" type="file" accept="image/*" data-product-detail-image-file="${index + 1}" />
+              </label>
+            </article>
+          `,
+          ).join("")}
         </div>
       </section>
       <section class="product-form-group">
@@ -2648,6 +2776,7 @@
         <button class="buy-button" type="button" data-product-submit>\uC0C1\uD488 \uB4F1\uB85D</button>
         <button class="cart-button" type="button" data-product-reset>\uC785\uB825 \uCD08\uAE30\uD654</button>
       </div>
+      <p class="product-form-message" data-product-form-message aria-live="polite"></p>
     </div>
   `;
   }
@@ -3144,7 +3273,7 @@
         </p>
       </aside>
     </section>
-    ${createDetailContent(copy)}
+    ${createDetailContent(copy, product)}
   `;
       showDetailView();
       document.querySelector("#backToShop").addEventListener("click", showHome);
@@ -3172,7 +3301,7 @@
     </div>
   `;
     }
-    function createDetailContent(copy) {
+    function createDetailContent(copy, product) {
       return `
     <section class="detail-content">
       <div class="content-block">
@@ -3197,6 +3326,24 @@
         \u201C${copy.review}\u201D<br />
         \uBBF8\uB2C8\uBA40\uD55C \uC0C1\uC138 \uAD6C\uC870 \uC548\uC5D0\uC11C \uC81C\uD488 \uD6A8\uB2A5, \uC0AC\uC6A9\uBC95, \uB9AC\uBDF0, \uAD6C\uB9E4 \uBC84\uD2BC\uC744 \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uAC8C \uAD6C\uC131\uD588\uC2B5\uB2C8\uB2E4.
       </div>
+    </section>
+    ${createProductDetailImageStack(product)}
+  `;
+    }
+    function createProductDetailImageStack(product) {
+      const detailImages = getProductDetailImages(product);
+      if (!detailImages.length) return "";
+      return `
+    <section class="product-detail-image-stack" aria-label="${product.ko} \uC0C1\uC138 \uC774\uBBF8\uC9C0">
+      ${detailImages
+        .map(
+          (image, index) => `
+          <figure>
+            <img src="${image}" alt="${product.ko} \uC0C1\uC138 \uC774\uBBF8\uC9C0 ${index + 1}" />
+          </figure>
+        `,
+        )
+        .join("")}
     </section>
   `;
     }
@@ -3329,7 +3476,7 @@
         ${createCheckoutTotals(totals)}
       </aside>
     </section>
-    ${createCheckoutLedDetail()}
+    ${createCheckoutProductDetails()}
   `;
       showDetailView();
       document.querySelector("#backToShop").addEventListener("click", showHome);
@@ -3462,54 +3609,90 @@
     function createReferralUrl(code) {
       return `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
     }
-    function createCheckoutLedDetail() {
-      const ledItem = state.cart.find((item) => item.id === "device-led");
-      if (!ledItem) return "";
-      const product = getProduct("device-led");
-      if (!product) return "";
+    function createCheckoutProductDetails() {
+      const uniqueItems = state.cart.filter(
+        (item, index, items) =>
+          items.findIndex((candidate) => candidate.id === item.id) === index,
+      );
+      if (!uniqueItems.length) return "";
       return `
-    <section class="checkout-product-detail" id="checkoutLedDetail">
-      <div class="checkout-detail-media">
-        <img src="${product.image}" alt="${product.ko} \uC0C1\uC138 \uC774\uBBF8\uC9C0" />
-        <div class="visual-caption">
-          <span>Only for checkout</span>
-          <span>${product.badge}</span>
+    <section class="checkout-detail-section">
+      <div class="management-head compact">
+        <div>
+          <div class="product-category">Product detail guide</div>
+          <h2>\uC0C1\uC138 \uC548\uB0B4</h2>
         </div>
+        <p>\uACB0\uC81C \uC804 \uC0C1\uD488\uBCC4 \uC0C1\uC138 \uC774\uBBF8\uC9C0, \uC635\uC158, \uC0AC\uC6A9 \uC548\uB0B4\uB97C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>
+      </div>
+      ${uniqueItems.map(createCheckoutProductDetail).join("")}
+    </section>
+  `;
+    }
+    function createCheckoutProductDetail(item) {
+      const product = getProduct(item.id) || item;
+      const detailImages = getProductDetailImages(product);
+      const sectionId =
+        product.id === "device-led" ? ' id="checkoutLedDetail"' : "";
+      return `
+    <article class="checkout-product-detail"${sectionId}>
+      <div class="checkout-detail-media-grid">
+        ${detailImages
+          .map(
+            (image, index) => `
+            <figure class="${index === 0 ? "is-main" : ""}">
+              <img src="${image}" alt="${product.ko} \uC0C1\uC138 \uC774\uBBF8\uC9C0 ${index + 1}" />
+            </figure>
+          `,
+          )
+          .join("")}
       </div>
       <div class="checkout-detail-copy">
         <div class="product-category">${product.category} / ${product.type}</div>
-        <h2>LED Skin<br />Lifting Device</h2>
+        <h2>${product.name}</h2>
         <p>
-          \uACB0\uC81C \uC804 \uD55C \uBC88 \uB354 \uD655\uC778\uD560 \uC218 \uC788\uB3C4\uB85D LED \uC2A4\uD0A8 \uB9AC\uD504\uD305 \uB514\uBC14\uC774\uC2A4 \uC804\uC6A9 \uC0C1\uC138 \uC815\uBCF4\uB97C
-          \uACB0\uC81C \uD654\uBA74 \uD558\uB2E8\uC5D0 \uBC30\uCE58\uD588\uC2B5\uB2C8\uB2E4. \uD648\uCF00\uC5B4 \uB8E8\uD2F4, \uC0AC\uC6A9 \uD3B8\uC758\uC131, \uBC30\uC1A1 \uC815\uBCF4\uB97C
-          \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.
+          ${product.desc || product.short || "\uC0C1\uD488 \uC0C1\uC138 \uC548\uB0B4\uB97C \uD655\uC778\uD558\uACE0 \uAD6C\uB9E4\uB97C \uC9C4\uD589\uD558\uC138\uC694."}
         </p>
         <div class="checkout-detail-grid">
           <div>
             <strong>\uAD6C\uB9E4 \uC218\uB7C9</strong>
-            <span>${ledItem.qty}\uAC1C</span>
+            <span>${item.qty}\uAC1C</span>
           </div>
           <div>
             <strong>\uC0C1\uD488 \uAE08\uC561</strong>
-            <span>${formatMoney(product.sale * ledItem.qty)}</span>
+            <span>${formatMoney(product.sale * item.qty)}</span>
           </div>
           <div>
             <strong>\uC635\uC158</strong>
             <span>${product.option}</span>
           </div>
           <div>
-            <strong>\uCD94\uCC9C \uB8E8\uD2F4</strong>
-            <span>\uC138\uC548 \uD6C4 5\uBD84 \uD0C4\uB825 \uD648\uCF00\uC5B4</span>
+            <strong>\uBC30\uC1A1</strong>
+            <span>${product.shippingFee ? `${formatMoney(product.shippingFee)} / 5\uB9CC\uC6D0 \uC774\uC0C1 \uBB34\uB8CC` : "\uBB34\uB8CC \uBC30\uC1A1"}</span>
           </div>
         </div>
         <div class="checkout-care-list">
-          <div><strong>01</strong> \uD53C\uBD80 \uD0C4\uB825 \uCF00\uC5B4\uC640 \uB370\uC77C\uB9AC \uD648\uCF00\uC5B4 \uB8E8\uD2F4\uC5D0 \uC801\uD569\uD569\uB2C8\uB2E4.</div>
-          <div><strong>02</strong> \uC190\uC5D0 \uC7A1\uD788\uB294 \uC2AC\uB9BC\uD55C \uD615\uD0DC\uB85C \uBCF4\uAD00\uACFC \uC0AC\uC6A9\uC774 \uAC04\uD3B8\uD569\uB2C8\uB2E4.</div>
-          <div><strong>03</strong> \uC0AC\uC6A9 \uD6C4\uC5D0\uB294 \uB9C8\uB978 \uCC9C\uC73C\uB85C \uB2E6\uC544 \uAC74\uC870\uD55C \uACF3\uC5D0 \uBCF4\uAD00\uD558\uC138\uC694.</div>
+          ${createCheckoutGuideItems(product).join("")}
         </div>
       </div>
-    </section>
+    </article>
   `;
+    }
+    function getProductDetailImages(product) {
+      const images = Array.isArray(product.detailImages)
+        ? product.detailImages.filter(Boolean)
+        : [];
+      return (images.length ? images : [product.image])
+        .filter(Boolean)
+        .slice(0, 5);
+    }
+    function createCheckoutGuideItems(product) {
+      const copy =
+        categoryCopy[product.category] || categoryCopy["\uD654\uC7A5\uD488"];
+      return [
+        `<div><strong>01</strong> ${copy.usage}</div>`,
+        `<div><strong>02</strong> ${copy.material}</div>`,
+        `<div><strong>03</strong> ${product.short || copy.benefits[0]}</div>`,
+      ];
     }
     function createCheckoutItem(item) {
       return `

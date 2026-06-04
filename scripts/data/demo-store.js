@@ -17,6 +17,7 @@ export const defaultStore = {
   },
   products: catalogProducts.map((product, index) => ({
     ...product,
+    detailImages: normalizeDetailImages(product),
     sku: product.id.toUpperCase().replace(/[^A-Z0-9]/g, "-"),
     status: "selling",
     displayStatus: "displayed",
@@ -148,6 +149,14 @@ export const defaultStore = {
   ],
 };
 
+function normalizeDetailImages(product) {
+  if (Array.isArray(product.detailImages) && product.detailImages.length) {
+    return product.detailImages.slice(0, 5);
+  }
+
+  return [product.image].filter(Boolean);
+}
+
 export function cloneDefaultStore() {
   return JSON.parse(JSON.stringify(defaultStore));
 }
@@ -164,15 +173,21 @@ export async function loadStore() {
   const serverStore = await loadStoreFromServer();
   if (serverStore) {
     const localStore = await getBestLocalStore();
-    const shouldMigrate = shouldMigrateLocalStoreToServer(
+    const mergedProductStore = mergeLocalProductsIntoServer(
       serverStore,
+      localStore,
+    );
+    const shouldMigrate = shouldMigrateLocalStoreToServer(
+      mergedProductStore,
       localStore,
     );
     const snapshot = shouldMigrate
       ? normalizeStore(localStore)
-      : normalizeStore(serverStore);
+      : normalizeStore(mergedProductStore);
 
-    if (shouldMigrate) await saveStoreToServer(snapshot);
+    if (shouldMigrate || mergedProductStore !== serverStore) {
+      await saveStoreToServer(snapshot);
+    }
     getStorage()?.setItem(STORE_KEY, JSON.stringify(snapshot));
     await saveStoreToDatabase(snapshot);
     return snapshot;
@@ -227,6 +242,26 @@ function shouldMigrateLocalStoreToServer(serverStore, localStore) {
   return getStoreWeight(localStore) > getStoreWeight(serverStore);
 }
 
+function mergeLocalProductsIntoServer(serverStore, localStore) {
+  if (!localStore?.products?.length) return serverStore;
+
+  const serverSnapshot = normalizeStore(serverStore);
+  const localSnapshot = normalizeStore(localStore);
+  const serverProductIds = new Set(
+    serverSnapshot.products.map((product) => product.id),
+  );
+  const missingProducts = localSnapshot.products.filter(
+    (product) => !serverProductIds.has(product.id),
+  );
+
+  if (!missingProducts.length) return serverStore;
+
+  return {
+    ...serverSnapshot,
+    products: [...serverSnapshot.products, ...missingProducts],
+  };
+}
+
 function getStoreWeight(store) {
   if (!store) return 0;
   const snapshot = normalizeStore(store);
@@ -237,6 +272,7 @@ function getStoreWeight(store) {
     snapshot.pointLedger.length * 5 +
     snapshot.agencySettlementLedger.length * 4 +
     snapshot.personalReferralLinks.length * 3 +
+    snapshot.products.length * 2 +
     snapshot.agencies.length +
     (snapshot.currentMemberId ? 2 : 0) +
     (snapshot.pendingAgencySlug ? 1 : 0)

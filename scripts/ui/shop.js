@@ -143,7 +143,7 @@ export function createShopController({
         </p>
       </aside>
     </section>
-    ${createDetailContent(copy)}
+    ${createDetailContent(copy, product)}
   `;
 
     showDetailView();
@@ -171,7 +171,7 @@ export function createShopController({
   `;
   }
 
-  function createDetailContent(copy) {
+  function createDetailContent(copy, product) {
     return `
     <section class="detail-content">
       <div class="content-block">
@@ -196,6 +196,26 @@ export function createShopController({
         “${copy.review}”<br />
         미니멀한 상세 구조 안에서 제품 효능, 사용법, 리뷰, 구매 버튼을 한 화면에서 확인할 수 있게 구성했습니다.
       </div>
+    </section>
+    ${createProductDetailImageStack(product)}
+  `;
+  }
+
+  function createProductDetailImageStack(product) {
+    const detailImages = getProductDetailImages(product);
+    if (!detailImages.length) return "";
+
+    return `
+    <section class="product-detail-image-stack" aria-label="${product.ko} 상세 이미지">
+      ${detailImages
+        .map(
+          (image, index) => `
+          <figure>
+            <img src="${image}" alt="${product.ko} 상세 이미지 ${index + 1}" />
+          </figure>
+        `,
+        )
+        .join("")}
     </section>
   `;
   }
@@ -332,7 +352,7 @@ export function createShopController({
         ${createCheckoutTotals(totals)}
       </aside>
     </section>
-    ${createCheckoutLedDetail()}
+    ${createCheckoutProductDetails()}
   `;
 
     showDetailView();
@@ -472,55 +492,94 @@ export function createShopController({
     return `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
   }
 
-  function createCheckoutLedDetail() {
-    const ledItem = state.cart.find((item) => item.id === "device-led");
-    if (!ledItem) return "";
+  function createCheckoutProductDetails() {
+    const uniqueItems = state.cart.filter(
+      (item, index, items) =>
+        items.findIndex((candidate) => candidate.id === item.id) === index,
+    );
+    if (!uniqueItems.length) return "";
 
-    const product = getProduct("device-led");
-    if (!product) return "";
     return `
-    <section class="checkout-product-detail" id="checkoutLedDetail">
-      <div class="checkout-detail-media">
-        <img src="${product.image}" alt="${product.ko} 상세 이미지" />
-        <div class="visual-caption">
-          <span>Only for checkout</span>
-          <span>${product.badge}</span>
+    <section class="checkout-detail-section">
+      <div class="management-head compact">
+        <div>
+          <div class="product-category">Product detail guide</div>
+          <h2>상세 안내</h2>
         </div>
+        <p>결제 전 상품별 상세 이미지, 옵션, 사용 안내를 확인할 수 있습니다.</p>
+      </div>
+      ${uniqueItems.map(createCheckoutProductDetail).join("")}
+    </section>
+  `;
+  }
+
+  function createCheckoutProductDetail(item) {
+    const product = getProduct(item.id) || item;
+    const detailImages = getProductDetailImages(product);
+    const sectionId =
+      product.id === "device-led" ? ' id="checkoutLedDetail"' : "";
+
+    return `
+    <article class="checkout-product-detail"${sectionId}>
+      <div class="checkout-detail-media-grid">
+        ${detailImages
+          .map(
+            (image, index) => `
+            <figure class="${index === 0 ? "is-main" : ""}">
+              <img src="${image}" alt="${product.ko} 상세 이미지 ${index + 1}" />
+            </figure>
+          `,
+          )
+          .join("")}
       </div>
       <div class="checkout-detail-copy">
         <div class="product-category">${product.category} / ${product.type}</div>
-        <h2>LED Skin<br />Lifting Device</h2>
+        <h2>${product.name}</h2>
         <p>
-          결제 전 한 번 더 확인할 수 있도록 LED 스킨 리프팅 디바이스 전용 상세 정보를
-          결제 화면 하단에 배치했습니다. 홈케어 루틴, 사용 편의성, 배송 정보를
-          한 화면에서 확인할 수 있습니다.
+          ${product.desc || product.short || "상품 상세 안내를 확인하고 구매를 진행하세요."}
         </p>
         <div class="checkout-detail-grid">
           <div>
             <strong>구매 수량</strong>
-            <span>${ledItem.qty}개</span>
+            <span>${item.qty}개</span>
           </div>
           <div>
             <strong>상품 금액</strong>
-            <span>${formatMoney(product.sale * ledItem.qty)}</span>
+            <span>${formatMoney(product.sale * item.qty)}</span>
           </div>
           <div>
             <strong>옵션</strong>
             <span>${product.option}</span>
           </div>
           <div>
-            <strong>추천 루틴</strong>
-            <span>세안 후 5분 탄력 홈케어</span>
+            <strong>배송</strong>
+            <span>${product.shippingFee ? `${formatMoney(product.shippingFee)} / 5만원 이상 무료` : "무료 배송"}</span>
           </div>
         </div>
         <div class="checkout-care-list">
-          <div><strong>01</strong> 피부 탄력 케어와 데일리 홈케어 루틴에 적합합니다.</div>
-          <div><strong>02</strong> 손에 잡히는 슬림한 형태로 보관과 사용이 간편합니다.</div>
-          <div><strong>03</strong> 사용 후에는 마른 천으로 닦아 건조한 곳에 보관하세요.</div>
+          ${createCheckoutGuideItems(product).join("")}
         </div>
       </div>
-    </section>
+    </article>
   `;
+  }
+
+  function getProductDetailImages(product) {
+    const images = Array.isArray(product.detailImages)
+      ? product.detailImages.filter(Boolean)
+      : [];
+    return (images.length ? images : [product.image])
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+
+  function createCheckoutGuideItems(product) {
+    const copy = categoryCopy[product.category] || categoryCopy["화장품"];
+    return [
+      `<div><strong>01</strong> ${copy.usage}</div>`,
+      `<div><strong>02</strong> ${copy.material}</div>`,
+      `<div><strong>03</strong> ${product.short || copy.benefits[0]}</div>`,
+    ];
   }
 
   function createCheckoutItem(item) {
