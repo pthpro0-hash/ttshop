@@ -1670,6 +1670,13 @@
         );
         return false;
       }
+      if (payload.status === "selling" && payload.stock <= 0) {
+        setProductFormMessage(
+          formBox,
+          "\uD310\uB9E4\uC911 \uC0C1\uD488\uC740 \uC7AC\uACE0\uB97C 1\uAC1C \uC774\uC0C1 \uC785\uB825\uD574\uC57C \uAD6C\uB9E4 \uAC00\uB2A5\uD569\uB2C8\uB2E4.",
+        );
+        return false;
+      }
       if (productId) {
         const product = store.products.find((item) => item.id === productId);
         if (!product) {
@@ -3259,7 +3266,7 @@
             </div>
             <div>
               <label class="option-label" for="stockStatus">Stock</label>
-              <input class="quantity-input" id="stockStatus" value="Available" readonly />
+              <input class="quantity-input" id="stockStatus" value="${createStockLabel(product)}" readonly />
             </div>
           </div>
         </div>
@@ -3352,7 +3359,9 @@
       const quantity = getQuantity();
       if (product.status !== "selling" || Number(product.stock || 0) <= 0) {
         showToast(
-          "\uD604\uC7AC \uAD6C\uB9E4\uD560 \uC218 \uC5C6\uB294 \uC0C1\uD488\uC785\uB2C8\uB2E4.",
+          product.status !== "selling"
+            ? "\uD604\uC7AC \uD310\uB9E4\uC911\uC778 \uC0C1\uD488\uC774 \uC544\uB2D9\uB2C8\uB2E4."
+            : "\uC7AC\uACE0\uAC00 \uC5C6\uC5B4 \uAD6C\uB9E4\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
         );
         return false;
       }
@@ -3374,6 +3383,11 @@
           `${product.ko} ${quantity}\uAC1C\uAC00 \uC7A5\uBC14\uAD6C\uB2C8\uC5D0 \uB2F4\uACBC\uC2B5\uB2C8\uB2E4.`,
       );
       return true;
+    }
+    function createStockLabel(product) {
+      if (product.status !== "selling") return "Not selling";
+      const stock = Number(product.stock || 0);
+      return stock > 0 ? `${stock.toLocaleString("ko-KR")}\uAC1C` : "Sold out";
     }
     function updateCart() {
       const totals = getTotals();

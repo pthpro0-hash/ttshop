@@ -129,7 +129,7 @@ export function createShopController({
             </div>
             <div>
               <label class="option-label" for="stockStatus">Stock</label>
-              <input class="quantity-input" id="stockStatus" value="Available" readonly />
+              <input class="quantity-input" id="stockStatus" value="${createStockLabel(product)}" readonly />
             </div>
           </div>
         </div>
@@ -225,7 +225,11 @@ export function createShopController({
 
     const quantity = getQuantity();
     if (product.status !== "selling" || Number(product.stock || 0) <= 0) {
-      showToast("현재 구매할 수 없는 상품입니다.");
+      showToast(
+        product.status !== "selling"
+          ? "현재 판매중인 상품이 아닙니다."
+          : "재고가 없어 구매할 수 없습니다.",
+      );
       return false;
     }
     if (quantity > Number(product.stock || 0)) {
@@ -247,6 +251,12 @@ export function createShopController({
       message || `${product.ko} ${quantity}개가 장바구니에 담겼습니다.`,
     );
     return true;
+  }
+
+  function createStockLabel(product) {
+    if (product.status !== "selling") return "Not selling";
+    const stock = Number(product.stock || 0);
+    return stock > 0 ? `${stock.toLocaleString("ko-KR")}개` : "Sold out";
   }
 
   function updateCart() {

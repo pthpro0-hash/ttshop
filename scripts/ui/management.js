@@ -367,6 +367,13 @@ export function createManagementController({
       );
       return false;
     }
+    if (payload.status === "selling" && payload.stock <= 0) {
+      setProductFormMessage(
+        formBox,
+        "판매중 상품은 재고를 1개 이상 입력해야 구매 가능합니다.",
+      );
+      return false;
+    }
 
     if (productId) {
       const product = store.products.find((item) => item.id === productId);

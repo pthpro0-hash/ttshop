@@ -753,13 +753,20 @@ function input(element, value) {
   input(productForm.querySelector('[name="badge"]'), "New");
   input(productForm.querySelector('[name="price"]'), "21000");
   input(productForm.querySelector('[name="sale"]'), "17000");
-  input(productForm.querySelector('[name="stock"]'), "44");
+  input(productForm.querySelector('[name="stock"]'), "0");
   input(productForm.querySelector('[name="short"]'), "테스트 신규 화장품");
   input(
     productForm.querySelector('[name="desc"]'),
     "관리자가 등록한 신규 화장품입니다.",
   );
   input(productForm.querySelector('[name="option"]'), "100ml");
+  click(dom.window, productForm.querySelector("[data-product-submit]"));
+  assert.match(
+    document.querySelector("[data-product-form-message]").textContent,
+    /재고를 1개 이상/,
+    "selling product registration should require positive stock",
+  );
+  input(productForm.querySelector('[name="stock"]'), "44");
   click(dom.window, productForm.querySelector("[data-product-submit]"));
   assert.match(
     document.querySelector("#adminModalContent").textContent,
