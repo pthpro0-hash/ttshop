@@ -1534,18 +1534,40 @@
           fillProductForm(formBox, product);
         });
       });
-      modal.querySelectorAll("[data-product-delete]").forEach((button) => {
+      modal.querySelectorAll("[data-product-visibility]").forEach((button) => {
         button.addEventListener("click", () => {
           const product = store.products.find(
-            (item) => item.id === button.dataset.productDelete,
+            (item) => item.id === button.dataset.productVisibility,
           );
           if (!product) return;
-          product.status = "deleted";
-          product.displayStatus = "hidden";
+          product.displayStatus =
+            product.displayStatus === "hidden" ? "displayed" : "hidden";
+          if (product.status === "deleted") product.status = "stopped";
           persistStore(store);
           reopenAdminDetail("products");
         });
       });
+      modal
+        .querySelectorAll("[data-product-category-filter]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            const category = button.dataset.productCategoryFilter;
+            modal
+              .querySelectorAll("[data-product-category-filter]")
+              .forEach((item) => {
+                item.classList.toggle("is-active", item === button);
+              });
+            modal
+              .querySelectorAll("[data-product-category-card]")
+              .forEach((card) => {
+                card.classList.toggle(
+                  "is-filtered-out",
+                  category !== "all" &&
+                    card.dataset.productCategoryCard !== category,
+                );
+              });
+          });
+        });
       formBox
         .querySelector("[data-product-reset]")
         .addEventListener("click", () => resetProductForm(formBox));
@@ -2439,6 +2461,13 @@
     const products2 = (store.products || []).filter(
       (product) => product.status !== "deleted",
     );
+    const categoryCounts = getProductCategoryCounts(products2);
+    const displayedCount = products2.filter(
+      (product) => product.displayStatus === "displayed",
+    ).length;
+    const hiddenCount = products2.filter(
+      (product) => product.displayStatus === "hidden",
+    ).length;
     const activeCount = products2.filter(
       (product) =>
         product.status === "selling" && product.displayStatus === "displayed",
@@ -2453,11 +2482,21 @@
         <div class="product-list-summary">
           <article><span>\uC804\uCCB4 \uC0C1\uD488</span><strong>${products2.length}</strong></article>
           <article><span>\uD310\uB9E4\uC911</span><strong>${activeCount}</strong></article>
+          <article><span>\uB178\uCD9C \uC0C1\uD488</span><strong>${displayedCount}</strong></article>
+          <article><span>\uC228\uAE40 \uC0C1\uD488</span><strong>${hiddenCount}</strong></article>
           <article><span>\uC7AC\uACE0\uC8FC\uC758</span><strong>${lowStockCount}</strong></article>
         </div>
         <div class="product-list-tools">
-          <strong>\uC0C1\uD488 \uBAA9\uB85D</strong>
-          <span>\uC0C1\uD488\uBA85\uC744 \uC120\uD0DD\uD558\uBA74 \uC624\uB978\uCABD \uD3B8\uC9D1 \uD328\uB110\uC5D0 \uBD88\uB7EC\uC635\uB2C8\uB2E4.</span>
+          <div>
+            <strong>\uC0C1\uD488 \uBAA9\uB85D</strong>
+            <span>\uC0C1\uD488\uBA85\uC744 \uC120\uD0DD\uD558\uBA74 \uC624\uB978\uCABD \uD3B8\uC9D1 \uD328\uB110\uC5D0 \uBD88\uB7EC\uC635\uB2C8\uB2E4.</span>
+          </div>
+        </div>
+        <div class="product-category-filters" aria-label="\uC0C1\uD488 \uCE74\uD14C\uACE0\uB9AC \uD544\uD130">
+          ${createProductCategoryFilter("all", "\uC804\uCCB4", products2.length, true)}
+          ${createProductCategoryFilter("\uBBF8\uC6A9\uAE30\uAD6C", "\uBBF8\uC6A9\uAE30\uAD6C", categoryCounts["\uBBF8\uC6A9\uAE30\uAD6C"] || 0)}
+          ${createProductCategoryFilter("\uBBF8\uC6A9\uC7AC\uB8CC", "\uBBF8\uC6A9\uC7AC\uB8CC", categoryCounts["\uBBF8\uC6A9\uC7AC\uB8CC"] || 0)}
+          ${createProductCategoryFilter("\uD654\uC7A5\uD488", "\uD654\uC7A5\uD488", categoryCounts["\uD654\uC7A5\uD488"] || 0)}
         </div>
         <div class="product-card-list">
           ${products2.map(createProductManageRow).join("")}
@@ -2474,6 +2513,25 @@
         ${createProductAdminForm()}
       </section>
     </section>
+  `;
+  }
+  function getProductCategoryCounts(products2) {
+    return products2.reduce((counts, product) => {
+      counts[product.category] = (counts[product.category] || 0) + 1;
+      return counts;
+    }, {});
+  }
+  function createProductCategoryFilter(
+    category,
+    label,
+    count,
+    isActive = false,
+  ) {
+    return `
+    <button class="product-category-filter ${isActive ? "is-active" : ""}" type="button" data-product-category-filter="${category}">
+      <span>${label}</span>
+      <strong>${count}</strong>
+    </button>
   `;
   }
   function createProductAdminForm() {
@@ -2602,8 +2660,10 @@
     const image = product.image
       ? `<img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.ko)}" />`
       : `<span>${product.category}</span>`;
+    const isHidden = product.displayStatus === "hidden";
+    const visibilityLabel = isHidden ? "\uB178\uCD9C" : "\uC228\uAE40";
     return `
-    <article class="product-list-card">
+    <article class="product-list-card ${isHidden ? "is-hidden-product" : ""}" data-product-category-card="${product.category}">
       <div class="product-list-thumb">${image}</div>
       <div class="product-list-main">
         <div class="product-list-title">
@@ -2623,7 +2683,7 @@
       </div>
       <div class="product-list-actions">
         <button class="cart-button mini-button" type="button" data-product-edit="${product.id}">\uD3B8\uC9D1</button>
-        <button class="cart-button mini-button" type="button" data-product-delete="${product.id}">\uC228\uAE40</button>
+        <button class="cart-button mini-button" type="button" data-product-visibility="${product.id}">${visibilityLabel}</button>
       </div>
     </article>
   `;

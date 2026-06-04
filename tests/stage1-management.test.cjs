@@ -680,6 +680,33 @@ function input(element, value) {
     document.querySelector("[data-product-image-file]"),
     "product management should include local image registration control",
   );
+  assert.equal(
+    document.querySelectorAll("[data-product-category-filter]").length,
+    4,
+    "product management should expose all/category filters",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-product-category-filter="화장품"]'),
+  );
+  assert.equal(
+    document
+      .querySelector('[data-product-category-card="미용기구"]')
+      .classList.contains("is-filtered-out"),
+    true,
+    "category filter should hide products from other categories",
+  );
+  assert.equal(
+    document
+      .querySelector('[data-product-category-card="화장품"]')
+      .classList.contains("is-filtered-out"),
+    false,
+    "category filter should keep matching category products visible",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-product-category-filter="all"]'),
+  );
   click(dom.window, document.querySelector("[data-product-image-sample]"));
   assert.match(
     document.querySelector('[data-product-form] [name="image"]').value,
@@ -706,6 +733,31 @@ function input(element, value) {
     ).sale,
     24000,
     "product management should persist product sale price",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-product-visibility="cos-sun"]'),
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /숨김 상품\s*1|데일리 톤업 선스크린|hidden \/ selling|노출/,
+    "admin should keep hidden products manageable in the product list",
+  );
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.find(
+      (product) => product.id === "cos-sun",
+    ).displayStatus,
+    "hidden",
+    "product visibility toggle should persist hidden status",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-product-visibility="cos-sun"]'),
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /숨김 상품\s*0|displayed \/ selling|숨김/,
+    "admin should restore hidden products to displayed status",
   );
   click(
     dom.window,

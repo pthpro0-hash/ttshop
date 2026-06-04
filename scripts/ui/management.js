@@ -262,19 +262,42 @@ export function createManagementController({
       });
     });
 
-    modal.querySelectorAll("[data-product-delete]").forEach((button) => {
+    modal.querySelectorAll("[data-product-visibility]").forEach((button) => {
       button.addEventListener("click", () => {
         const product = store.products.find(
-          (item) => item.id === button.dataset.productDelete,
+          (item) => item.id === button.dataset.productVisibility,
         );
         if (!product) return;
 
-        product.status = "deleted";
-        product.displayStatus = "hidden";
+        product.displayStatus =
+          product.displayStatus === "hidden" ? "displayed" : "hidden";
+        if (product.status === "deleted") product.status = "stopped";
         persistStore(store);
         reopenAdminDetail("products");
       });
     });
+
+    modal
+      .querySelectorAll("[data-product-category-filter]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const category = button.dataset.productCategoryFilter;
+          modal
+            .querySelectorAll("[data-product-category-filter]")
+            .forEach((item) => {
+              item.classList.toggle("is-active", item === button);
+            });
+          modal
+            .querySelectorAll("[data-product-category-card]")
+            .forEach((card) => {
+              card.classList.toggle(
+                "is-filtered-out",
+                category !== "all" &&
+                  card.dataset.productCategoryCard !== category,
+              );
+            });
+        });
+      });
 
     formBox
       .querySelector("[data-product-reset]")
@@ -1240,6 +1263,13 @@ function createProductManagementWorkspace(store) {
   const products = (store.products || []).filter(
     (product) => product.status !== "deleted",
   );
+  const categoryCounts = getProductCategoryCounts(products);
+  const displayedCount = products.filter(
+    (product) => product.displayStatus === "displayed",
+  ).length;
+  const hiddenCount = products.filter(
+    (product) => product.displayStatus === "hidden",
+  ).length;
   const activeCount = products.filter(
     (product) =>
       product.status === "selling" && product.displayStatus === "displayed",
@@ -1254,11 +1284,21 @@ function createProductManagementWorkspace(store) {
         <div class="product-list-summary">
           <article><span>전체 상품</span><strong>${products.length}</strong></article>
           <article><span>판매중</span><strong>${activeCount}</strong></article>
+          <article><span>노출 상품</span><strong>${displayedCount}</strong></article>
+          <article><span>숨김 상품</span><strong>${hiddenCount}</strong></article>
           <article><span>재고주의</span><strong>${lowStockCount}</strong></article>
         </div>
         <div class="product-list-tools">
-          <strong>상품 목록</strong>
-          <span>상품명을 선택하면 오른쪽 편집 패널에 불러옵니다.</span>
+          <div>
+            <strong>상품 목록</strong>
+            <span>상품명을 선택하면 오른쪽 편집 패널에 불러옵니다.</span>
+          </div>
+        </div>
+        <div class="product-category-filters" aria-label="상품 카테고리 필터">
+          ${createProductCategoryFilter("all", "전체", products.length, true)}
+          ${createProductCategoryFilter("미용기구", "미용기구", categoryCounts["미용기구"] || 0)}
+          ${createProductCategoryFilter("미용재료", "미용재료", categoryCounts["미용재료"] || 0)}
+          ${createProductCategoryFilter("화장품", "화장품", categoryCounts["화장품"] || 0)}
         </div>
         <div class="product-card-list">
           ${products.map(createProductManageRow).join("")}
@@ -1275,6 +1315,22 @@ function createProductManagementWorkspace(store) {
         ${createProductAdminForm()}
       </section>
     </section>
+  `;
+}
+
+function getProductCategoryCounts(products) {
+  return products.reduce((counts, product) => {
+    counts[product.category] = (counts[product.category] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function createProductCategoryFilter(category, label, count, isActive = false) {
+  return `
+    <button class="product-category-filter ${isActive ? "is-active" : ""}" type="button" data-product-category-filter="${category}">
+      <span>${label}</span>
+      <strong>${count}</strong>
+    </button>
   `;
 }
 
@@ -1405,9 +1461,11 @@ function createProductManageRow(product) {
   const image = product.image
     ? `<img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.ko)}" />`
     : `<span>${product.category}</span>`;
+  const isHidden = product.displayStatus === "hidden";
+  const visibilityLabel = isHidden ? "노출" : "숨김";
 
   return `
-    <article class="product-list-card">
+    <article class="product-list-card ${isHidden ? "is-hidden-product" : ""}" data-product-category-card="${product.category}">
       <div class="product-list-thumb">${image}</div>
       <div class="product-list-main">
         <div class="product-list-title">
@@ -1427,7 +1485,7 @@ function createProductManageRow(product) {
       </div>
       <div class="product-list-actions">
         <button class="cart-button mini-button" type="button" data-product-edit="${product.id}">편집</button>
-        <button class="cart-button mini-button" type="button" data-product-delete="${product.id}">숨김</button>
+        <button class="cart-button mini-button" type="button" data-product-visibility="${product.id}">${visibilityLabel}</button>
       </div>
     </article>
   `;
