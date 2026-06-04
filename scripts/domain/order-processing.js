@@ -40,6 +40,7 @@ export function completeBypassPayment({ cart, store, payment }) {
   };
 
   store.orders.unshift(order);
+  decrementProductStock(store, cart);
   member.points += earnedPoints;
   store.pointLedger.unshift({
     id: createId("point", store.pointLedger.length + 1),
@@ -78,6 +79,26 @@ export function completeBypassPayment({ cart, store, payment }) {
       paidAmount,
     },
   };
+}
+
+function decrementProductStock(store, cart) {
+  cart.forEach((item) => {
+    const product = (store.products || []).find(
+      (productItem) => productItem.id === item.id,
+    );
+    if (!product) return;
+
+    product.stock = Math.max(0, Number(product.stock || 0) - item.qty);
+    const variant =
+      (product.variants || []).find(
+        (variantItem) => variantItem.optionName === item.option,
+      ) || product.variants?.[0];
+
+    if (variant) {
+      variant.stock = Math.max(0, Number(variant.stock || 0) - item.qty);
+    }
+    if (product.stock <= 0) product.status = "soldout";
+  });
 }
 
 function createPurchasedProductReferralLinks({

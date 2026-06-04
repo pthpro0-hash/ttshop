@@ -91,6 +91,12 @@ export function createManagementController({
         ) {
           bindAgencyAdminForm(modal);
         }
+        if (
+          modalSelector === "#adminDetailModal" &&
+          detailType === "products"
+        ) {
+          bindProductAdminForm(modal);
+        }
       };
 
       card.addEventListener("click", open);
@@ -233,6 +239,280 @@ export function createManagementController({
       });
   }
 
+  function bindProductAdminForm(modal) {
+    const formBox = modal.querySelector("[data-product-form]");
+    if (!formBox) return;
+
+    formBox
+      .querySelector("[data-product-submit]")
+      .addEventListener("click", () => {
+        saveProductFromForm(formBox);
+        persistStore(store);
+        reopenAdminDetail("products");
+      });
+
+    modal.querySelectorAll("[data-product-edit]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const product = store.products.find(
+          (item) => item.id === button.dataset.productEdit,
+        );
+        if (!product) return;
+
+        fillProductForm(formBox, product);
+      });
+    });
+
+    modal.querySelectorAll("[data-product-delete]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const product = store.products.find(
+          (item) => item.id === button.dataset.productDelete,
+        );
+        if (!product) return;
+
+        product.status = "deleted";
+        product.displayStatus = "hidden";
+        persistStore(store);
+        reopenAdminDetail("products");
+      });
+    });
+
+    formBox
+      .querySelector("[data-product-reset]")
+      .addEventListener("click", () => resetProductForm(formBox));
+    getProductField(formBox, "image").addEventListener("input", () =>
+      updateProductImagePreview(formBox),
+    );
+    formBox
+      .querySelector("[data-product-image-sample]")
+      .addEventListener("click", () => {
+        getProductField(formBox, "image").value =
+          "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1200&q=80";
+        updateProductImagePreview(formBox);
+      });
+    formBox
+      .querySelector("[data-product-image-file]")
+      .addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          getProductField(formBox, "image").value = reader.result;
+          updateProductImagePreview(formBox);
+        });
+        reader.readAsDataURL(file);
+      });
+    updateProductImagePreview(formBox);
+  }
+
+  function getProductField(formBox, name) {
+    return formBox.querySelector(`[name="${name}"]`);
+  }
+
+  function saveProductFromForm(formBox) {
+    const productId = getProductField(formBox, "productId").value;
+    const payload = readProductForm(formBox);
+    if (!payload.name || !payload.ko || !payload.category || !payload.sale) {
+      return;
+    }
+
+    if (productId) {
+      const product = store.products.find((item) => item.id === productId);
+      if (!product) return;
+      Object.assign(product, payload);
+      return;
+    }
+
+    store.products.push({
+      id: createProductId(payload),
+      ...payload,
+    });
+  }
+
+  function readProductForm(formBox) {
+    const price = readNumberField(formBox, "price");
+    const sale = readNumberField(formBox, "sale");
+    const stock = readNumberField(formBox, "stock");
+    const option = getProductField(formBox, "option").value.trim();
+    const sku =
+      getProductField(formBox, "sku").value.trim() ||
+      createProductSku(getProductField(formBox, "name").value);
+
+    return {
+      sku,
+      name: getProductField(formBox, "name").value.trim(),
+      ko: getProductField(formBox, "ko").value.trim(),
+      category: getProductField(formBox, "category").value,
+      type: getProductField(formBox, "type").value.trim(),
+      badge: getProductField(formBox, "badge").value.trim(),
+      price,
+      sale,
+      supplyPrice: readNumberField(formBox, "supplyPrice"),
+      cost: readNumberField(formBox, "cost"),
+      taxType: getProductField(formBox, "taxType").value,
+      status: getProductField(formBox, "status").value,
+      displayStatus: getProductField(formBox, "displayStatus").value,
+      stock,
+      safetyStock: readNumberField(formBox, "safetyStock"),
+      shippingType: getProductField(formBox, "shippingType").value,
+      shippingFee: readNumberField(formBox, "shippingFee"),
+      pointRateOverride: getProductField(formBox, "pointRateOverride").value,
+      option,
+      image: getProductField(formBox, "image").value.trim(),
+      short: getProductField(formBox, "short").value.trim(),
+      desc: getProductField(formBox, "desc").value.trim(),
+      searchKeywords: getProductField(formBox, "searchKeywords").value.trim(),
+      manufacturer: getProductField(formBox, "manufacturer").value.trim(),
+      supplier: getProductField(formBox, "supplier").value.trim(),
+      origin: getProductField(formBox, "origin").value.trim(),
+      brand: getProductField(formBox, "brand").value.trim(),
+      barcode: getProductField(formBox, "barcode").value.trim(),
+      variants: parseVariantRows(
+        getProductField(formBox, "variants").value,
+        sku,
+        option,
+        stock,
+      ),
+    };
+  }
+
+  function fillProductForm(formBox, product) {
+    const fields = [
+      "sku",
+      "name",
+      "ko",
+      "category",
+      "type",
+      "badge",
+      "price",
+      "sale",
+      "supplyPrice",
+      "cost",
+      "taxType",
+      "status",
+      "displayStatus",
+      "stock",
+      "safetyStock",
+      "shippingType",
+      "shippingFee",
+      "pointRateOverride",
+      "option",
+      "image",
+      "short",
+      "desc",
+      "searchKeywords",
+      "manufacturer",
+      "supplier",
+      "origin",
+      "brand",
+      "barcode",
+    ];
+    getProductField(formBox, "productId").value = product.id;
+    fields.forEach((field) => {
+      getProductField(formBox, field).value = product[field] ?? "";
+    });
+    getProductField(formBox, "variants").value = formatVariantRows(product);
+    updateProductImagePreview(formBox);
+    formBox.querySelector("[data-product-submit]").textContent = "상품 수정";
+  }
+
+  function resetProductForm(formBox) {
+    formBox.querySelectorAll("input, textarea").forEach((input) => {
+      input.value = "";
+    });
+    getProductField(formBox, "category").value = "화장품";
+    getProductField(formBox, "taxType").value = "taxable";
+    getProductField(formBox, "status").value = "selling";
+    getProductField(formBox, "displayStatus").value = "displayed";
+    getProductField(formBox, "shippingType").value = "default";
+    getProductField(formBox, "shippingFee").value = "3000";
+    getProductField(formBox, "safetyStock").value = "5";
+    updateProductImagePreview(formBox);
+    formBox.querySelector("[data-product-submit]").textContent = "상품 등록";
+  }
+
+  function updateProductImagePreview(formBox) {
+    const preview = formBox.querySelector("[data-product-image-preview]");
+    const image = getProductField(formBox, "image").value.trim();
+    preview.innerHTML = image
+      ? `<img src="${escapeAttribute(image)}" alt="상품 이미지 미리보기" />`
+      : "<span>이미지 없음</span>";
+  }
+
+  function readNumberField(formBox, name) {
+    return Math.max(0, Number(getProductField(formBox, name).value || 0));
+  }
+
+  function parseVariantRows(value, baseSku, fallbackOption, fallbackStock) {
+    const rows = String(value || "")
+      .split(/\n+/)
+      .map((row) => row.trim())
+      .filter(Boolean);
+
+    const parsed = rows.map((row, index) => {
+      const [optionName, sku, stock, priceDelta, status] = row
+        .split("|")
+        .map((part) => part.trim());
+
+      return {
+        id: `${baseSku.toLowerCase()}-${index + 1}`,
+        optionName: optionName || fallbackOption || "기본 옵션",
+        sku: sku || `${baseSku}-OPT${index + 1}`,
+        stock: Math.max(0, Number(stock || 0)),
+        priceDelta: Number(priceDelta || 0),
+        status: status || "selling",
+      };
+    });
+
+    return parsed.length
+      ? parsed
+      : [
+          {
+            id: `${baseSku.toLowerCase()}-default`,
+            optionName: fallbackOption || "기본 옵션",
+            sku: `${baseSku}-STD`,
+            stock: fallbackStock,
+            priceDelta: 0,
+            status: "selling",
+          },
+        ];
+  }
+
+  function formatVariantRows(product) {
+    return (product.variants || [])
+      .map(
+        (variant) =>
+          `${variant.optionName || ""} | ${variant.sku || ""} | ${variant.stock || 0} | ${variant.priceDelta || 0} | ${variant.status || "selling"}`,
+      )
+      .join("\n");
+  }
+
+  function createProductId(product) {
+    const base = createProductSku(product.name || product.ko)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    let id = `product-${base || Date.now()}`;
+    let suffix = 1;
+
+    while (store.products.some((productItem) => productItem.id === id)) {
+      suffix += 1;
+      id = `product-${base}-${suffix}`;
+    }
+
+    return id;
+  }
+
+  function createProductSku(value) {
+    const source = String(value || "PRODUCT")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return source || `PRODUCT-${Date.now()}`;
+  }
+
   function getAgencyField(formBox, name) {
     return formBox.querySelector(`[name="${name}"]`);
   }
@@ -284,7 +564,8 @@ export function createManagementController({
     bindManagementEvents("admin");
     const modal = dom.management.querySelector("#adminDetailModal");
     openDetailModal(modal, createAdminDetailContent(type, store));
-    bindAgencyAdminForm(modal);
+    if (type === "agencies") bindAgencyAdminForm(modal);
+    if (type === "products") bindProductAdminForm(modal);
   }
 
   return { openManagement };
@@ -301,6 +582,9 @@ function createAdminDashboard(store) {
   const headquarters = store.agencies.find((agency) => agency.isHeadquarters);
   const agencyCount = store.agencies.length;
   const memberCount = store.members.length;
+  const sellingProductCount = (store.products || []).filter(
+    (product) => product.status !== "deleted",
+  ).length;
   const monthlyOrders = getCurrentMonthOrders(store);
   const monthlyOrderTotal = monthlyOrders.reduce(
     (sum, order) => sum + order.paidProductAmount,
@@ -325,6 +609,7 @@ function createAdminDashboard(store) {
         ${createMetricCard("admin", "headquarters", "본사 대리점", headquarters.name)}
         ${createMetricCard("admin", "agencies", "대리점 수", `${agencyCount}`)}
         ${createMetricCard("admin", "members", "회원 수", `${memberCount}`)}
+        ${createMetricCard("admin", "products", "상품 수", `${sellingProductCount}`)}
         ${createMetricCard("admin", "orders", "이달의 주문", formatMoney(monthlyOrderTotal))}
         ${createMetricCard("admin", "points", "이달의 적립금", `${monthlyPointSummary.earned.toLocaleString("ko-KR")}P`)}
         ${createMetricCard("admin", "settlements", "정산 대기 영업비", formatMoney(settlementPending))}
@@ -442,6 +727,14 @@ function getAdminDetail(type, store) {
       description:
         "회원별 포인트, 주문 수, 내부 대리점 귀속 정보를 관리자용으로 확인합니다.",
       rows: store.members.map((member) => createMemberDetailRow(member, store)),
+    },
+    products: {
+      label: "Products",
+      title: "상품관리",
+      description:
+        "Cafe24형 상품관리 기준으로 기본정보, 가격, 재고, 표시/판매상태, 배송, 공급사, 옵션 SKU를 관리합니다.",
+      extra: createProductManagementWorkspace(store),
+      rows: [],
     },
     orders: {
       label: "Orders",
@@ -603,6 +896,14 @@ function formatAddress(address = {}) {
 function escapeTextarea(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeAttribute(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
@@ -931,6 +1232,203 @@ function createAgencyManageRow(agency) {
       <div>${agency.commissionRate}%</div>
       <div>${agency.status}</div>
       <div class="agency-row-actions">${controls}</div>
+    </article>
+  `;
+}
+
+function createProductManagementWorkspace(store) {
+  const products = (store.products || []).filter(
+    (product) => product.status !== "deleted",
+  );
+  const activeCount = products.filter(
+    (product) =>
+      product.status === "selling" && product.displayStatus === "displayed",
+  ).length;
+  const lowStockCount = products.filter(
+    (product) => Number(product.stock || 0) <= Number(product.safetyStock || 0),
+  ).length;
+
+  return `
+    <section class="product-management-shell">
+      <aside class="product-list-panel" aria-label="상품 목록">
+        <div class="product-list-summary">
+          <article><span>전체 상품</span><strong>${products.length}</strong></article>
+          <article><span>판매중</span><strong>${activeCount}</strong></article>
+          <article><span>재고주의</span><strong>${lowStockCount}</strong></article>
+        </div>
+        <div class="product-list-tools">
+          <strong>상품 목록</strong>
+          <span>상품명을 선택하면 오른쪽 편집 패널에 불러옵니다.</span>
+        </div>
+        <div class="product-card-list">
+          ${products.map(createProductManageRow).join("")}
+        </div>
+      </aside>
+      <section class="product-editor-panel">
+        <div class="product-editor-title">
+          <div>
+            <strong>상품 편집</strong>
+            <span>필수 항목부터 저장하고, 운영 세부 정보는 그룹별로 보완합니다.</span>
+          </div>
+          <span class="product-editor-badge">Admin only</span>
+        </div>
+        ${createProductAdminForm()}
+      </section>
+    </section>
+  `;
+}
+
+function createProductAdminForm() {
+  return `
+    <div class="agency-admin-form product-admin-form" data-product-form>
+      <input type="hidden" name="productId" />
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>기본 정보</strong>
+          <span>쇼핑몰 노출명, 분류, 검색 기준</span>
+        </div>
+        <div class="product-form-grid">
+          <label>상품명 영문<input class="quantity-input" name="name" placeholder="Daily Tone Up Sunscreen" required /></label>
+          <label>상품명 한글<input class="quantity-input" name="ko" placeholder="데일리 톤업 선스크린" required /></label>
+          <label>상품코드/SKU<input class="quantity-input" name="sku" placeholder="COS-SUN-001" /></label>
+          <label>카테고리
+            <select class="option-select" name="category">
+              <option value="미용기구">미용기구</option>
+              <option value="미용재료">미용재료</option>
+              <option value="화장품" selected>화장품</option>
+            </select>
+          </label>
+          <label>상품유형<input class="quantity-input" name="type" placeholder="Sun Care SPF" /></label>
+          <label>배지<input class="quantity-input" name="badge" placeholder="Best" /></label>
+          <label class="profile-wide">검색 키워드<input class="quantity-input" name="searchKeywords" placeholder="상품명, 효능, 카테고리" /></label>
+          <label class="profile-wide">목록 설명<input class="quantity-input" name="short" placeholder="상품 카드에 표시할 짧은 설명" /></label>
+          <label class="profile-wide">상세 설명<textarea class="quantity-input" name="desc" rows="3" placeholder="상품 상세 설명"></textarea></label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>이미지 등록</strong>
+          <span>URL 또는 로컬 이미지 파일로 대표 이미지를 등록</span>
+        </div>
+        <div class="product-image-editor">
+          <div class="product-image-preview" data-product-image-preview><span>이미지 없음</span></div>
+          <div class="product-image-fields">
+            <label>대표 이미지 URL<input class="quantity-input" name="image" placeholder="https://..." /></label>
+            <label>로컬 이미지 선택<input class="quantity-input" type="file" accept="image/*" data-product-image-file /></label>
+            <button class="cart-button mini-button" type="button" data-product-image-sample>샘플 이미지 적용</button>
+          </div>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>가격 / 판매 / 재고</strong>
+          <span>판매가, 원가, 마진, 품절 기준</span>
+        </div>
+        <div class="product-form-grid">
+          <label>소비자가<input class="quantity-input" name="price" type="number" min="0" /></label>
+          <label>판매가<input class="quantity-input" name="sale" type="number" min="0" required /></label>
+          <label>공급가<input class="quantity-input" name="supplyPrice" type="number" min="0" /></label>
+          <label>원가<input class="quantity-input" name="cost" type="number" min="0" /></label>
+          <label>재고<input class="quantity-input" name="stock" type="number" min="0" /></label>
+          <label>안전재고<input class="quantity-input" name="safetyStock" type="number" min="0" value="5" /></label>
+          <label>판매상태
+            <select class="option-select" name="status">
+              <option value="selling">판매중</option>
+              <option value="soldout">품절</option>
+              <option value="stopped">판매중지</option>
+            </select>
+          </label>
+          <label>진열상태
+            <select class="option-select" name="displayStatus">
+              <option value="displayed">진열함</option>
+              <option value="hidden">진열안함</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>배송 / 정책 / 공급</strong>
+          <span>배송비, 과세, 공급사, 제조 기준</span>
+        </div>
+        <div class="product-form-grid">
+          <label>배송정책
+            <select class="option-select" name="shippingType">
+              <option value="default">기본 배송</option>
+              <option value="free">무료 배송</option>
+              <option value="conditional">조건부 무료</option>
+              <option value="supplier">공급사 배송</option>
+            </select>
+          </label>
+          <label>배송비<input class="quantity-input" name="shippingFee" type="number" min="0" value="3000" /></label>
+          <label>과세
+            <select class="option-select" name="taxType">
+              <option value="taxable">과세</option>
+              <option value="tax_free">면세</option>
+              <option value="zero_tax">영세</option>
+            </select>
+          </label>
+          <label>상품별 적립률<input class="quantity-input" name="pointRateOverride" type="number" min="0" max="100" placeholder="공란이면 기본 적립률" /></label>
+          <label>제조사<input class="quantity-input" name="manufacturer" placeholder="BEAUTY REF." /></label>
+          <label>공급사<input class="quantity-input" name="supplier" placeholder="본사 물류" /></label>
+          <label>원산지<input class="quantity-input" name="origin" placeholder="Korea" /></label>
+          <label>브랜드<input class="quantity-input" name="brand" placeholder="BEAUTY REF." /></label>
+          <label>바코드<input class="quantity-input" name="barcode" placeholder="880..." /></label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>옵션 / SKU</strong>
+          <span>색상, 용량, 밝기 같은 하위 상품군 관리</span>
+        </div>
+        <div class="product-form-grid">
+          <label>대표 옵션<input class="quantity-input" name="option" placeholder="50ml / SPF50+ PA++++" /></label>
+          <label class="profile-wide">옵션 SKU
+            <textarea class="quantity-input" name="variants" rows="4" placeholder="옵션명 | SKU | 재고 | 추가금액 | 상태"></textarea>
+          </label>
+        </div>
+      </section>
+      <div class="agency-form-actions">
+        <button class="buy-button" type="button" data-product-submit>상품 등록</button>
+        <button class="cart-button" type="button" data-product-reset>입력 초기화</button>
+      </div>
+    </div>
+  `;
+}
+
+function createProductManageRow(product) {
+  const margin = product.sale - (product.supplyPrice || product.cost || 0);
+  const stockWarning =
+    Number(product.stock || 0) <= Number(product.safetyStock || 0)
+      ? " · 안전재고 이하"
+      : "";
+  const image = product.image
+    ? `<img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.ko)}" />`
+    : `<span>${product.category}</span>`;
+
+  return `
+    <article class="product-list-card">
+      <div class="product-list-thumb">${image}</div>
+      <div class="product-list-main">
+        <div class="product-list-title">
+          <strong>${product.ko}</strong>
+          <span>${product.name}</span>
+        </div>
+        <div class="product-list-meta">
+          <span>${product.category}</span>
+          <span>${product.sku || product.id}</span>
+          <span>${product.displayStatus} / ${product.status}</span>
+        </div>
+        <div class="product-list-stats">
+          <span>판매가 <strong>${formatMoney(product.sale)}</strong></span>
+          <span>마진 <strong>${formatMoney(margin)}</strong></span>
+          <span>재고 <strong>${product.stock || 0}개${stockWarning}</strong></span>
+        </div>
+      </div>
+      <div class="product-list-actions">
+        <button class="cart-button mini-button" type="button" data-product-edit="${product.id}">편집</button>
+        <button class="cart-button mini-button" type="button" data-product-delete="${product.id}">숨김</button>
+      </div>
     </article>
   `;
 }

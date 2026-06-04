@@ -73,6 +73,7 @@ npm test
 - 회원가입 시 선택 배송지 입력: 우편번호, 배송지, 상세주소
 - Admin 관리 화면: 포인트 설정, 대리점 수, 회원 수, 최근 주문 확인용 데모 대시보드
 - Admin settings 수정: 구매 적립률, 포인트 사용 한도, 친구가입 포인트, 개인 추천 지급률 저장
+- Admin 상품관리: 기본정보, 이미지 등록, 가격/재고, 배송/정책/공급, 옵션 SKU 그룹별 등록/수정/삭제
 - Admin 월 지표: 이달의 주문 누적금액, 이달의 적립포인트 누적 표시 및 상세 팝업
 - Agency 대리점 화면: 전용 코드/링크, 고객 수, 정산 대상 매출 확인용 데모 대시보드
 - Admin/Agency 회원 리스트에서 회원명 클릭 시 기본정보, 배송지, 구매이력, 포인트 이력 상세 확인
@@ -105,7 +106,7 @@ npm test
 
 - DB 파일: `data/beauty-shop.sqlite`
 - API: `GET /api/store`, `PUT /api/store`
-- 주요 테이블: `settings`, `agencies`, `members`, `orders`, `order_items`, `point_ledger`, `agency_settlement_ledger`, `personal_referral_links`, `app_meta`
+- 주요 테이블: `settings`, `agencies`, `products`, `product_variants`, `members`, `orders`, `order_items`, `point_ledger`, `agency_settlement_ledger`, `personal_referral_links`, `app_meta`
 - 브라우저에서 서버로 접속하면 SQLite DB가 우선 사용됨
 - 탐색기에서 `file://`로 직접 실행하거나 서버 API가 응답하지 않으면 IndexedDB fallback 사용
 - IndexedDB/localStorage는 fallback과 호환 백업용이며, 서버 실행 기준의 원본 데이터는 SQLite 파일

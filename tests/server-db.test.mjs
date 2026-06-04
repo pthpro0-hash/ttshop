@@ -23,8 +23,16 @@ try {
     true,
     "database should seed default agencies",
   );
+  assert.equal(
+    seeded.products.length,
+    10,
+    "database should expose seeded product management data",
+  );
 
   const store = cloneDefaultStore();
+  store.products[0].sale = 74000;
+  store.products[0].stock = 12;
+  store.products[0].variants[0].stock = 12;
   store.members.push({
     id: "member-db-test",
     userId: "dbtest01",
@@ -68,6 +76,22 @@ try {
   const order = reloaded.orders.find((item) => item.memberId === member.id);
 
   assert.equal(member.name, "DB 테스트");
+  assert.equal(
+    reloaded.products.find((product) => product.id === "device-led").sale,
+    74000,
+    "product sale price should survive SQLite reload",
+  );
+  assert.equal(
+    reloaded.products.find((product) => product.id === "device-led").variants[0]
+      .stock,
+    12,
+    "product option stock should survive SQLite reload",
+  );
+  assert.equal(
+    reloaded.products.find((product) => product.id === "cos-sun").stock,
+    71,
+    "checkout should decrement managed product stock",
+  );
   assert.equal(member.address.addressDetail, "테스트");
   assert.equal(member.marketingOptIn, false);
   assert.equal(member.internalMemo, "관리 메모");

@@ -1404,10 +1404,11 @@ h1 {
 }
 .admin-modal-card {
   position: relative;
-  width: min(980px, 100%);
+  width: min(1180px, 100%);
   max-height: min(820px, calc(100vh - 48px));
   padding: clamp(22px, 4vw, 38px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--ink);
   background: var(--paper);
 }
@@ -1480,6 +1481,15 @@ body.modal-open {
   font-size: 11px;
   font-weight: 900;
 }
+.product-table-row {
+  grid-template-columns:
+    minmax(190px, 1.3fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr)
+    minmax(120px, 0.8fr) minmax(95px, 0.7fr) minmax(120px, 0.8fr)
+    minmax(120px, auto);
+}
+.product-table-row div {
+  white-space: normal;
+}
 .agency-admin-form {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1495,6 +1505,220 @@ body.modal-open {
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+.product-admin-form {
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.product-admin-form textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.product-management-shell {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.92fr) minmax(0, 1.55fr);
+  gap: 18px;
+  align-items: start;
+}
+.product-list-panel,
+.product-editor-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #fbfaf6;
+}
+.product-list-panel {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 180px);
+  padding: 16px;
+  overflow-y: auto;
+}
+.product-list-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.product-list-summary article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.product-list-summary span,
+.product-list-tools span,
+.product-editor-title span,
+.product-list-title span,
+.product-list-meta,
+.product-list-stats {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+.product-list-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  line-height: 1;
+}
+.product-list-tools,
+.product-editor-title {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.product-list-tools strong,
+.product-editor-title strong {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+}
+.product-card-list {
+  display: grid;
+  gap: 10px;
+}
+.product-list-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.product-list-thumb {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  overflow: hidden;
+  background: #eee9df;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+.product-list-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-list-main,
+.product-list-title {
+  min-width: 0;
+}
+.product-list-title strong,
+.product-list-title span {
+  display: block;
+  overflow: hidden;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-list-title strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.product-list-meta,
+.product-list-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+.product-list-meta span,
+.product-list-stats span {
+  display: inline-flex;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: #f7f5ef;
+  padding: 4px 6px;
+  overflow-wrap: anywhere;
+}
+.product-list-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.product-editor-panel {
+  padding: 18px;
+}
+.product-editor-title {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.product-editor-badge {
+  flex: 0 0 auto;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: 6px 8px;
+}
+.product-form-group {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.product-form-group-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+.product-form-group-head strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+.product-form-group-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.product-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.product-image-editor {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.product-image-preview {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #f1eee6;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.product-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-image-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+.product-image-fields .mini-button {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 .agency-form-actions,
 .agency-row-actions {
@@ -1914,8 +2138,21 @@ footer {
   .admin-settings-form,
   .agency-manage-row,
   .agency-table-row,
-  .agency-admin-form {
+  .agency-admin-form,
+  .product-form-grid,
+  .product-image-fields,
+  .product-management-shell {
     grid-template-columns: 1fr 1fr;
+  }
+  .product-management-shell {
+    grid-template-columns: 1fr;
+  }
+  .product-list-panel {
+    position: static;
+    max-height: none;
+  }
+  .product-image-editor {
+    grid-template-columns: 160px 1fr;
   }
 }
 @media (max-width: 760px) {
@@ -2010,7 +2247,12 @@ footer {
   .admin-settings-form,
   .agency-manage-row,
   .agency-table-row,
-  .agency-admin-form {
+  .agency-admin-form,
+  .product-form-grid,
+  .product-image-editor,
+  .product-image-fields,
+  .product-management-shell,
+  .product-list-summary {
     grid-template-columns: 1fr;
   }
   .agency-table-row div {

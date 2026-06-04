@@ -18,6 +18,49 @@ CREATE TABLE IF NOT EXISTS agencies (
   is_headquarters INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  sku TEXT,
+  name TEXT NOT NULL,
+  ko TEXT NOT NULL,
+  category TEXT NOT NULL,
+  type TEXT,
+  badge TEXT,
+  price INTEGER NOT NULL DEFAULT 0,
+  sale INTEGER NOT NULL DEFAULT 0,
+  supply_price INTEGER NOT NULL DEFAULT 0,
+  cost INTEGER NOT NULL DEFAULT 0,
+  tax_type TEXT NOT NULL DEFAULT 'taxable',
+  status TEXT NOT NULL DEFAULT 'selling',
+  display_status TEXT NOT NULL DEFAULT 'displayed',
+  stock INTEGER NOT NULL DEFAULT 0,
+  safety_stock INTEGER NOT NULL DEFAULT 0,
+  shipping_type TEXT NOT NULL DEFAULT 'default',
+  shipping_fee INTEGER NOT NULL DEFAULT 0,
+  point_rate_override REAL,
+  option_text TEXT,
+  image TEXT,
+  short TEXT,
+  desc TEXT,
+  search_keywords TEXT,
+  manufacturer TEXT,
+  supplier TEXT,
+  origin TEXT,
+  brand TEXT,
+  barcode TEXT
+);
+
+CREATE TABLE IF NOT EXISTS product_variants (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  option_name TEXT NOT NULL,
+  sku TEXT,
+  price_delta INTEGER NOT NULL DEFAULT 0,
+  stock INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'selling',
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS members (
   id TEXT PRIMARY KEY,
   user_id TEXT,

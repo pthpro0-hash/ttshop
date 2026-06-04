@@ -1,3 +1,5 @@
+import { products as catalogProducts } from "./catalog.js";
+
 export const STORE_KEY = "beauty-ref-demo-store-v1";
 const DB_NAME = "beauty-ref-local-db";
 const DB_VERSION = 1;
@@ -13,6 +15,36 @@ export const defaultStore = {
     personalReferrerRewardRate: 10,
     personalBuyerBonusRate: 5,
   },
+  products: catalogProducts.map((product, index) => ({
+    ...product,
+    sku: product.id.toUpperCase().replace(/[^A-Z0-9]/g, "-"),
+    status: "selling",
+    displayStatus: "displayed",
+    stock: 100 - index * 3,
+    safetyStock: 5,
+    supplyPrice: Math.floor(product.sale * 0.65),
+    cost: Math.floor(product.sale * 0.55),
+    taxType: "taxable",
+    shippingType: "default",
+    shippingFee: 3000,
+    pointRateOverride: "",
+    manufacturer: "BEAUTY REF.",
+    supplier: "본사 물류",
+    origin: "Korea",
+    brand: "BEAUTY REF.",
+    barcode: "",
+    searchKeywords: `${product.name}, ${product.ko}, ${product.category}`,
+    variants: [
+      {
+        id: `${product.id}-default`,
+        optionName: product.option,
+        sku: `${product.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-STD`,
+        priceDelta: 0,
+        stock: 100 - index * 3,
+        status: "selling",
+      },
+    ],
+  })),
   agencies: [
     {
       id: "agency-hq",
@@ -217,6 +249,7 @@ function normalizeStore(store) {
     ...store,
     settings: { ...cloneDefaultStore().settings, ...store?.settings },
     agencies: store?.agencies || cloneDefaultStore().agencies,
+    products: store?.products || cloneDefaultStore().products,
     members: store?.members || cloneDefaultStore().members,
     orders: store?.orders || cloneDefaultStore().orders,
     pointLedger: store?.pointLedger || cloneDefaultStore().pointLedger,

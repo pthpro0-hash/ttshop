@@ -19,9 +19,9 @@ async function createDom() {
   const root = path.resolve(__dirname, "..");
   const html = fs
     .readFileSync(path.join(root, "index.html"), "utf8")
-    .replace(/<link[^>]+href="style\.css\?v=20260602-point-preview"[^>]*>/, "")
+    .replace(/<link[^>]+href="style\.css\?v=20260604-product-groups"[^>]*>/, "")
     .replace(
-      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260602-point-preview"[\s\S]*?<\/script>/,
+      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260604-product-groups"[\s\S]*?<\/script>/,
       "",
     );
   const errors = [];
@@ -201,7 +201,7 @@ function input(element, value) {
   assert.doesNotMatch(html, /type="module"/);
   assert.match(
     html,
-    /src="scripts\/app\.bundle\.js\?v=20260602-point-preview"/,
+    /src="scripts\/app\.bundle\.js\?v=20260604-product-groups"/,
   );
   assert.match(html, /id="managementView"/);
 
@@ -553,7 +553,7 @@ function input(element, value) {
   );
   assert.match(
     document.querySelector("#managementView").textContent,
-    /이달의 주문|76,000원|이달의 적립금|3,800P/,
+    /상품 수\s*10|이달의 주문|76,000원|이달의 적립금|3,800P/,
     "admin dashboard should show monthly order and point totals",
   );
   const settingsForm = document.querySelector("[data-admin-settings-form]");
@@ -665,6 +665,57 @@ function input(element, value) {
   click(
     dom.window,
     document.querySelector("#adminDetailModal [data-modal-close]"),
+  );
+  click(dom.window, document.querySelector('[data-admin-detail="products"]'));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /상품관리|기본 정보|이미지 등록|가격 \/ 판매 \/ 재고|배송 \/ 정책 \/ 공급|옵션 \/ SKU|Daily Tone Up Sunscreen/,
+    "admin product card should show grouped product management form and list",
+  );
+  assert.ok(
+    document.querySelector("[data-product-image-preview]"),
+    "product management should include image preview",
+  );
+  assert.ok(
+    document.querySelector("[data-product-image-file]"),
+    "product management should include local image registration control",
+  );
+  click(dom.window, document.querySelector("[data-product-image-sample]"));
+  assert.match(
+    document.querySelector('[data-product-form] [name="image"]').value,
+    /^https:\/\/images\.unsplash\.com\//,
+    "sample image button should populate the image field",
+  );
+  click(dom.window, document.querySelector('[data-product-edit="cos-sun"]'));
+  const productForm = document.querySelector("[data-product-form]");
+  input(productForm.querySelector('[name="sale"]'), "24000");
+  input(productForm.querySelector('[name="stock"]'), "33");
+  input(
+    productForm.querySelector('[name="variants"]'),
+    "50ml / SPF50+ PA++++ | COS-SUN-STD | 33 | 0 | selling",
+  );
+  click(dom.window, productForm.querySelector("[data-product-submit]"));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /데일리 톤업 선스크린|24,000원|33개/,
+    "admin should update product price and stock",
+  );
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.find(
+      (product) => product.id === "cos-sun",
+    ).sale,
+    24000,
+    "product management should persist product sale price",
+  );
+  click(
+    dom.window,
+    document.querySelector("#adminDetailModal [data-modal-close]"),
+  );
+  click(dom.window, document.querySelector("#logoHome"));
+  assert.match(
+    document.querySelector(".product-card[data-id='cos-sun']").textContent,
+    /할인판매가 :\s*24,000원/,
+    "shop product card should render updated admin product data",
   );
   click(dom.window, document.querySelector('[data-admin-detail="agencies"]'));
   const agencyForm = document.querySelector("[data-agency-form]");

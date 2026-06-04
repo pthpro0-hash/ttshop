@@ -1,9 +1,4 @@
-import {
-  CATEGORIES,
-  categoryCopy,
-  getProduct,
-  products,
-} from "../data/catalog.js";
+import { CATEGORIES, categoryCopy } from "../data/catalog.js";
 import {
   calculatePurchasePoints,
   completeBypassPayment,
@@ -32,6 +27,16 @@ export function createShopController({
 
   const formatPoints = (points) => `${points.toLocaleString("ko-KR")}P`;
 
+  const getProducts = () =>
+    (store.products || []).filter(
+      (product) =>
+        product.displayStatus !== "hidden" && product.status !== "deleted",
+    );
+
+  const getProduct = (id) =>
+    getProducts().find((product) => product.id === id) ||
+    (store.products || []).find((product) => product.id === id);
+
   function getTotals() {
     const subtotal = state.cart.reduce(
       (sum, item) => sum + item.sale * item.qty,
@@ -58,10 +63,11 @@ export function createShopController({
       );
     });
 
+    const visibleProducts = getProducts();
     const list =
       category === "all"
-        ? products
-        : products.filter((product) => product.category === category);
+        ? visibleProducts
+        : visibleProducts.filter((product) => product.category === category);
     dom.count.textContent =
       category === "all"
         ? `All products · ${list.length} items`
@@ -93,7 +99,7 @@ export function createShopController({
   function openDetail(product) {
     if (!product) return;
 
-    const copy = categoryCopy[product.category];
+    const copy = categoryCopy[product.category] || categoryCopy["화장품"];
     dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">← Back to shop</button>
@@ -198,6 +204,16 @@ export function createShopController({
     if (!requireLogin()) return false;
 
     const quantity = getQuantity();
+    if (product.status !== "selling" || Number(product.stock || 0) <= 0) {
+      showToast("현재 구매할 수 없는 상품입니다.");
+      return false;
+    }
+    if (quantity > Number(product.stock || 0)) {
+      showToast(
+        `재고는 ${product.stock.toLocaleString("ko-KR")}개까지 구매할 수 있습니다.`,
+      );
+      return false;
+    }
     const item = state.cart.find((cartItem) => cartItem.id === product.id);
 
     if (item) {
@@ -461,6 +477,7 @@ export function createShopController({
     if (!ledItem) return "";
 
     const product = getProduct("device-led");
+    if (!product) return "";
     return `
     <section class="checkout-product-detail" id="checkoutLedDetail">
       <div class="checkout-detail-media">
@@ -630,14 +647,15 @@ export function createShopController({
   }
 
   function validateCatalog() {
-    const categorySet = new Set(products.map((product) => product.category));
+    const productList = store.products || [];
+    const categorySet = new Set(productList.map((product) => product.category));
     const hasRequiredCategories = CATEGORIES.every((category) =>
       categorySet.has(category),
     );
 
-    if (products.length !== 10 || !hasRequiredCategories) {
+    if (productList.length < 10 || !hasRequiredCategories) {
       console.warn(
-        "상품 데이터는 총 10개와 지정된 3개 카테고리를 유지해야 합니다.",
+        "상품 데이터는 최소 10개와 지정된 3개 카테고리를 유지해야 합니다.",
       );
     }
   }

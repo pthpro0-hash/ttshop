@@ -1,4 +1,214 @@
 (() => {
+  // scripts/data/catalog.js
+  var CATEGORIES = [
+    "\uBBF8\uC6A9\uAE30\uAD6C",
+    "\uBBF8\uC6A9\uC7AC\uB8CC",
+    "\uD654\uC7A5\uD488",
+  ];
+  var products = [
+    {
+      id: "device-led",
+      name: "LED Skin Lifting Device",
+      ko: "LED \uC2A4\uD0A8 \uB9AC\uD504\uD305 \uB514\uBC14\uC774\uC2A4",
+      category: "\uBBF8\uC6A9\uAE30\uAD6C",
+      type: "Home Beauty Device",
+      badge: "Best",
+      price: 89e3,
+      sale: 76e3,
+      option: "1ea / Warm White",
+      short:
+        "\uC9D1\uC5D0\uC11C\uB3C4 \uAC04\uD3B8\uD558\uAC8C \uC0AC\uC6A9\uD558\uB294 \uD648\uCF00\uC5B4 \uBBF8\uC6A9\uAE30\uAE30.",
+      desc: "\uD53C\uBD80 \uD0C4\uB825 \uCF00\uC5B4\uC640 \uB370\uC77C\uB9AC \uD648\uCF00\uC5B4 \uB8E8\uD2F4\uC744 \uC704\uD574 \uC124\uACC4\uD55C \uAC10\uAC01\uC801\uC778 LED \uBBF8\uC6A9\uAE30\uAE30\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "device-brush",
+      name: "Scalp Massage Brush",
+      ko: "\uC2A4\uCE7C\uD504 \uB9C8\uC0AC\uC9C0 \uBE0C\uB7EC\uC2DC",
+      category: "\uBBF8\uC6A9\uAE30\uAD6C",
+      type: "Scalp Care Tool",
+      badge: "New",
+      price: 18e3,
+      sale: 15e3,
+      option: "1ea / Soft Silicone",
+      short:
+        "\uB450\uD53C\uB97C \uBD80\uB4DC\uB7FD\uAC8C \uB9C8\uC0AC\uC9C0\uD574\uC8FC\uB294 \uC2E4\uB9AC\uCF58 \uBE0C\uB7EC\uC2DC.",
+      desc: "\uC0F4\uD478\uC640 \uD568\uAED8 \uC0AC\uC6A9\uD558\uBA74 \uB450\uD53C\uB97C \uAC1C\uC6B4\uD558\uAC8C \uCF00\uC5B4\uD560 \uC218 \uC788\uB294 \uC18C\uD504\uD2B8 \uC2E4\uB9AC\uCF58 \uB9C8\uC0AC\uC9C0 \uBE0C\uB7EC\uC2DC\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "device-nail",
+      name: "Nail Care Tool Set",
+      ko: "\uB124\uC77C \uCF00\uC5B4 \uD234 \uC138\uD2B8",
+      category: "\uBBF8\uC6A9\uAE30\uAD6C",
+      type: "Nail Tool Set",
+      badge: "Hot",
+      price: 22e3,
+      sale: 18e3,
+      option: "3pcs Set / Silver",
+      short:
+        "\uC140\uD504 \uB124\uC77C \uAD00\uB9AC\uB97C \uC704\uD55C \uAE30\uBCF8 \uD234 \uC138\uD2B8.",
+      desc: "\uD050\uD2F0\uD074 \uC815\uB9AC\uC640 \uC190\uD1B1 \uB77C\uC778 \uCF00\uC5B4\uB97C \uC9D1\uC5D0\uC11C\uB3C4 \uAE54\uB054\uD558\uAC8C \uD560 \uC218 \uC788\uB294 \uAE30\uBCF8 \uB124\uC77C \uD234 \uAD6C\uC131\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "mat-ampoule",
+      name: "Salon Hair Ampoule Pack",
+      ko: "\uC0B4\uB871 \uD5E4\uC5B4 \uC570\uD50C \uD329",
+      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
+      type: "Hair Treatment Material",
+      badge: "Best",
+      price: 32e3,
+      sale: 27e3,
+      option: "10ea / Repair",
+      short:
+        "\uC190\uC0C1 \uBAA8\uBC1C \uC9D1\uC911 \uCF00\uC5B4\uC6A9 \uC0B4\uB871 \uC570\uD50C.",
+      desc: "\uAC70\uCE60\uACE0 \uD478\uC11D\uD55C \uBAA8\uBC1C\uC5D0 \uC601\uC591\uAC10\uC744 \uCC44\uC6CC\uC8FC\uB294 \uC0B4\uB871 \uC2A4\uD0C0\uC77C\uC758 \uC9D1\uC911 \uD5E4\uC5B4 \uCF00\uC5B4 \uC570\uD50C \uD329\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "mat-glue",
+      name: "Professional Eyelash Glue",
+      ko: "\uD504\uB85C\uD398\uC154\uB110 \uC18D\uB208\uC379 \uAE00\uB8E8",
+      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
+      type: "Eyelash Material",
+      badge: "New",
+      price: 16e3,
+      sale: 13e3,
+      option: "5ml / Clear",
+      short:
+        "\uC18D\uB208\uC379 \uC5F0\uC7A5\uACFC \uC140\uD504 \uC5F0\uCD9C\uC744 \uC704\uD55C \uC804\uC6A9 \uAE00\uB8E8.",
+      desc: "\uAE54\uB054\uD55C \uB9C8\uBB34\uB9AC\uC640 \uC548\uC815\uC801\uC778 \uACE0\uC815\uAC10\uC744 \uACE0\uB824\uD55C \uC18D\uB208\uC379 \uC804\uC6A9 \uAE00\uB8E8\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "mat-pack",
+      name: "Moisture Modeling Pack",
+      ko: "\uBAA8\uC774\uC2A4\uCC98 \uBAA8\uB378\uB9C1 \uD329",
+      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
+      type: "Esthetic Pack Material",
+      badge: "Hot",
+      price: 28e3,
+      sale: 23e3,
+      option: "5ea / Hydration",
+      short:
+        "\uC5D0\uC2A4\uD14C\uD2F1 \uB290\uB08C\uC758 \uACE0\uBCF4\uC2B5 \uBAA8\uB378\uB9C1 \uD329.",
+      desc: "\uD53C\uBD80\uC5D0 \uCFE8\uB9C1\uAC10\uACFC \uC218\uBD84\uAC10\uC744 \uBE60\uB974\uAC8C \uC804\uB2EC\uD558\uB294 \uD648 \uC5D0\uC2A4\uD14C\uD2F1\uC6A9 \uBAA8\uB378\uB9C1 \uD329\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-cream",
+      name: "Calm Dew Barrier Cream",
+      ko: "\uCE84 \uB4C0 \uBC30\uB9AC\uC5B4 \uD06C\uB9BC",
+      category: "\uD654\uC7A5\uD488",
+      type: "Skincare Cream",
+      badge: "Best",
+      price: 38e3,
+      sale: 32e3,
+      option: "50ml / \uBB34\uD5A5",
+      short:
+        "\uC18D\uAC74\uC870\uC640 \uC7A5\uBCBD \uCF00\uC5B4\uB97C \uC704\uD55C \uCD09\uCD09\uD55C \uB370\uC77C\uB9AC \uD06C\uB9BC.",
+      desc: "\uBBFC\uAC10\uD55C \uD53C\uBD80\uB3C4 \uB9E4\uC77C \uD3B8\uC548\uD558\uAC8C \uC0AC\uC6A9\uD560 \uC218 \uC788\uB3C4\uB85D \uBB34\uAC81\uC9C0 \uC54A\uC740 \uBCF4\uC2B5\uB9C9\uC744 \uB0A8\uAE30\uB294 \uC7A5\uBCBD \uCF00\uC5B4 \uD06C\uB9BC\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-serum",
+      name: "Glass Skin Glow Serum",
+      ko: "\uAE00\uB798\uC2A4 \uC2A4\uD0A8 \uAE00\uB85C\uC6B0 \uC138\uB7FC",
+      category: "\uD654\uC7A5\uD488",
+      type: "Skincare Serum",
+      badge: "New",
+      price: 42e3,
+      sale: 36e3,
+      option: "30ml / \uC724\uAD11 \uCF00\uC5B4",
+      short:
+        "\uD53C\uBD80\uACB0\uACFC \uAD11\uCC44\uB97C \uB9E4\uB044\uB7FD\uAC8C \uC815\uB3C8\uD558\uB294 \uC218\uBD84 \uC138\uB7FC.",
+      desc: "\uB048\uC801\uC784 \uC5C6\uC774 \uD761\uC218\uB418\uB294 \uC6CC\uD130 \uC824 \uD14D\uC2A4\uCC98\uB85C \uD53C\uBD80\uACB0\uC744 \uC815\uB3C8\uD558\uACE0 \uC740\uC740\uD55C \uC724\uAE30\uB97C \uB354\uD574\uC8FC\uB294 \uB370\uC77C\uB9AC \uC138\uB7FC\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-lip",
+      name: "Velvet Tint Balm",
+      ko: "\uBCA8\uBCB3 \uD2F4\uD2B8 \uBC24",
+      category: "\uD654\uC7A5\uD488",
+      type: "Makeup Lip Balm",
+      badge: "Hot",
+      price: 24e3,
+      sale: 19e3,
+      option: "03 Rose Fig",
+      short:
+        "\uC785\uC220\uC740 \uD3B8\uC548\uD558\uAC8C, \uCEEC\uB7EC\uB294 \uBD84\uC704\uAE30 \uC788\uAC8C \uB0A8\uAE30\uB294 \uD2F4\uD2B8 \uBC24.",
+      desc: "\uBC24\uCC98\uB7FC \uBD80\uB4DC\uB7FD\uAC8C \uBC1C\uB9AC\uBA74\uC11C \uC740\uC740\uD55C \uCEEC\uB7EC\uAC00 \uB0A8\uC544 \uB370\uC77C\uB9AC \uBA54\uC774\uD06C\uC5C5\uC5D0 \uC5B4\uC6B8\uB9AC\uB294 \uB9BD \uC81C\uD488\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=1200&q=80",
+    },
+    {
+      id: "cos-sun",
+      name: "Daily Tone Up Sunscreen",
+      ko: "\uB370\uC77C\uB9AC \uD1A4\uC5C5 \uC120\uC2A4\uD06C\uB9B0",
+      category: "\uD654\uC7A5\uD488",
+      type: "Sun Care SPF",
+      badge: "Best",
+      price: 3e4,
+      sale: 25e3,
+      option: "50ml / SPF50+ PA++++",
+      short:
+        "\uBC31\uD0C1\uC740 \uC904\uC774\uACE0 \uD53C\uBD80\uD1A4\uC740 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uC815\uB3C8\uD558\uB294 \uC120\uD06C\uB9BC.",
+      desc: "\uC2A4\uD0A8\uCF00\uC5B4 \uB9C8\uC9C0\uB9C9 \uB2E8\uACC4\uC5D0\uC11C \uD53C\uBD80\uD1A4\uC744 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uBC1D\uD600\uC8FC\uACE0 \uC790\uC678\uC120 \uCC28\uB2E8\uAE4C\uC9C0 \uB3D5\uB294 \uB370\uC77C\uB9AC \uC120\uCF00\uC5B4\uC785\uB2C8\uB2E4.",
+      image:
+        "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=1200&q=80",
+    },
+  ];
+  var categoryCopy = {
+    미용기구: {
+      benefits: [
+        "\uAC04\uD3B8\uD55C \uD648\uCF00\uC5B4 \uB8E8\uD2F4",
+        "\uAE54\uB054\uD55C \uB514\uC790\uC778\uACFC \uBCF4\uAD00\uC131",
+        "\uCD08\uBCF4\uC790\uB3C4 \uC26C\uC6B4 \uC0AC\uC6A9\uAC10",
+      ],
+      material:
+        "\uBBF8\uC6A9\uAE30\uAE30 \uBCF8\uCCB4, \uC804\uC6A9 \uD328\uD0A4\uC9C0, \uC0AC\uC6A9 \uC124\uBA85\uC11C",
+      usage:
+        "\uC138\uC548 \uB610\uB294 \uC0F4\uD478 \uD6C4 \uD544\uC694\uD55C \uBD80\uC704\uC5D0 \uBD80\uB4DC\uB7FD\uAC8C \uC0AC\uC6A9\uD558\uC138\uC694. \uC0AC\uC6A9 \uD6C4\uC5D0\uB294 \uB9C8\uB978 \uCC9C\uC73C\uB85C \uB2E6\uC544 \uBCF4\uAD00\uD569\uB2C8\uB2E4.",
+      review:
+        "\uB514\uC790\uC778\uC774 \uAE54\uB054\uD558\uACE0 \uC9D1\uC5D0\uC11C \uAD00\uB9AC\uD558\uAE30 \uC88B\uC544 \uB9E4\uC77C \uC190\uC774 \uAC04\uB2E4\uB294 \uBC18\uC751\uC774 \uB9CE\uC2B5\uB2C8\uB2E4.",
+    },
+    미용재료: {
+      benefits: [
+        "\uC0B4\uB871\uAE09 \uCF00\uC5B4 \uB8E8\uD2F4",
+        "\uC804\uBB38\uC801\uC778 \uC0AC\uC6A9\uAC10",
+        "\uD648\uCF00\uC5B4\uC640 \uB9E4\uC7A5 \uC0AC\uC6A9 \uBAA8\uB450 \uC801\uD569",
+      ],
+      material:
+        "\uC804\uBB38 \uBBF8\uC6A9\uC7AC\uB8CC \uBCA0\uC774\uC2A4, \uBCF4\uC2B5/\uCF00\uC5B4 \uC131\uBD84, \uC804\uC6A9 \uD328\uD0A4\uC9C0",
+      usage:
+        "\uC81C\uD488 \uD2B9\uC131\uC5D0 \uB9DE\uAC8C \uC801\uC815\uB7C9\uC744 \uB35C\uC5B4 \uC0AC\uC6A9\uD558\uACE0, \uD544\uC694\uD55C \uACBD\uC6B0 \uCDA9\uBD84\uD788 \uD5F9\uAD88 \uB9C8\uBB34\uB9AC\uD569\uB2C8\uB2E4.",
+      review:
+        "\uC9D1\uC5D0\uC11C\uB3C4 \uAD00\uB9AC\uBC1B\uC740 \uB4EF\uD55C \uB290\uB08C\uC774 \uB098\uACE0 \uC0AC\uC6A9\uBC95\uC774 \uC5B4\uB835\uC9C0 \uC54A\uB2E4\uB294 \uD6C4\uAE30\uAC00 \uB9CE\uC2B5\uB2C8\uB2E4.",
+    },
+    화장품: {
+      benefits: [
+        "\uB370\uC77C\uB9AC \uBDF0\uD2F0 \uB8E8\uD2F4",
+        "\uCD09\uCD09\uD558\uACE0 \uD3B8\uC548\uD55C \uC0AC\uC6A9\uAC10",
+        "\uAC10\uAC01\uC801\uC778 \uD328\uD0A4\uC9C0",
+      ],
+      material:
+        "\uBCF4\uC2B5 \uC131\uBD84, \uD53C\uBD80 \uCEE8\uB514\uC154\uB2DD \uC131\uBD84, \uC2DD\uBB3C \uC720\uB798 \uCD94\uCD9C\uBB3C",
+      usage:
+        "\uAE30\uCD08 \uB8E8\uD2F4 \uB610\uB294 \uBA54\uC774\uD06C\uC5C5 \uB2E8\uACC4\uC5D0 \uB9DE\uCDB0 \uC801\uB2F9\uB7C9\uC744 \uBD80\uB4DC\uB7FD\uAC8C \uD3B4 \uBC1C\uB77C\uC8FC\uC138\uC694.",
+      review:
+        "\uBC1C\uB9BC\uC131\uC774 \uC88B\uACE0 \uB9E4\uC77C \uC4F0\uAE30 \uBD80\uB2F4 \uC5C6\uB294 \uC81C\uD488\uC774\uB77C\uB294 \uBC18\uC751\uC774 \uB9CE\uC2B5\uB2C8\uB2E4.",
+    },
+  };
+
   // scripts/data/demo-store.js
   var STORE_KEY = "beauty-ref-demo-store-v1";
   var DB_NAME = "beauty-ref-local-db";
@@ -14,6 +224,36 @@
       personalReferrerRewardRate: 10,
       personalBuyerBonusRate: 5,
     },
+    products: products.map((product, index) => ({
+      ...product,
+      sku: product.id.toUpperCase().replace(/[^A-Z0-9]/g, "-"),
+      status: "selling",
+      displayStatus: "displayed",
+      stock: 100 - index * 3,
+      safetyStock: 5,
+      supplyPrice: Math.floor(product.sale * 0.65),
+      cost: Math.floor(product.sale * 0.55),
+      taxType: "taxable",
+      shippingType: "default",
+      shippingFee: 3e3,
+      pointRateOverride: "",
+      manufacturer: "BEAUTY REF.",
+      supplier: "\uBCF8\uC0AC \uBB3C\uB958",
+      origin: "Korea",
+      brand: "BEAUTY REF.",
+      barcode: "",
+      searchKeywords: `${product.name}, ${product.ko}, ${product.category}`,
+      variants: [
+        {
+          id: `${product.id}-default`,
+          optionName: product.option,
+          sku: `${product.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-STD`,
+          priceDelta: 0,
+          stock: 100 - index * 3,
+          status: "selling",
+        },
+      ],
+    })),
     agencies: [
       {
         id: "agency-hq",
@@ -215,6 +455,9 @@
       agencies:
         (store == null ? void 0 : store.agencies) ||
         cloneDefaultStore().agencies,
+      products:
+        (store == null ? void 0 : store.products) ||
+        cloneDefaultStore().products,
       members:
         (store == null ? void 0 : store.members) || cloneDefaultStore().members,
       orders:
@@ -529,13 +772,13 @@
         </div>
         <form class="profile-form" data-profile-form>
           <div class="profile-form-grid">
-            <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" value="${escapeAttribute(member.userId || member.id)}" readonly /></label>
-            <label>\uC774\uB984<input class="quantity-input" name="name" value="${escapeAttribute(member.name)}" /></label>
-            <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" value="${escapeAttribute(member.phone)}" /></label>
-            <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" value="${escapeAttribute(member.email)}" /></label>
-            <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="postcode" value="${escapeAttribute((_a = member.address) == null ? void 0 : _a.postcode)}" /></label>
-            <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" value="${escapeAttribute((_b = member.address) == null ? void 0 : _b.address)}" /></label>
-            <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" value="${escapeAttribute((_c = member.address) == null ? void 0 : _c.addressDetail)}" /></label>
+            <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" value="${escapeAttribute2(member.userId || member.id)}" readonly /></label>
+            <label>\uC774\uB984<input class="quantity-input" name="name" value="${escapeAttribute2(member.name)}" /></label>
+            <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" value="${escapeAttribute2(member.phone)}" /></label>
+            <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" value="${escapeAttribute2(member.email)}" /></label>
+            <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="postcode" value="${escapeAttribute2((_a = member.address) == null ? void 0 : _a.postcode)}" /></label>
+            <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" value="${escapeAttribute2((_b = member.address) == null ? void 0 : _b.address)}" /></label>
+            <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" value="${escapeAttribute2((_c = member.address) == null ? void 0 : _c.addressDetail)}" /></label>
             <label>\uAE30\uBCF8 \uACB0\uC81C\uC218\uB2E8
               <select class="option-select" name="paymentMethod">
                 ${createOption("\uC2E0\uC6A9\uCE74\uB4DC", member.paymentMethod)}
@@ -984,7 +1227,7 @@
       });
       if (changed) persistStore(store);
     }
-    function escapeAttribute(value) {
+    function escapeAttribute2(value) {
       return String(value || "")
         .replace(/&/g, "&amp;")
         .replace(/"/g, "&quot;")
@@ -1139,6 +1382,12 @@
           ) {
             bindAgencyAdminForm(modal);
           }
+          if (
+            modalSelector === "#adminDetailModal" &&
+            detailType === "products"
+          ) {
+            bindProductAdminForm(modal);
+          }
         };
         card.addEventListener("click", open);
         card.addEventListener("keydown", (event) => {
@@ -1266,6 +1515,258 @@
             "\uB300\uB9AC\uC810 \uB4F1\uB85D";
         });
     }
+    function bindProductAdminForm(modal) {
+      const formBox = modal.querySelector("[data-product-form]");
+      if (!formBox) return;
+      formBox
+        .querySelector("[data-product-submit]")
+        .addEventListener("click", () => {
+          saveProductFromForm(formBox);
+          persistStore(store);
+          reopenAdminDetail("products");
+        });
+      modal.querySelectorAll("[data-product-edit]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const product = store.products.find(
+            (item) => item.id === button.dataset.productEdit,
+          );
+          if (!product) return;
+          fillProductForm(formBox, product);
+        });
+      });
+      modal.querySelectorAll("[data-product-delete]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const product = store.products.find(
+            (item) => item.id === button.dataset.productDelete,
+          );
+          if (!product) return;
+          product.status = "deleted";
+          product.displayStatus = "hidden";
+          persistStore(store);
+          reopenAdminDetail("products");
+        });
+      });
+      formBox
+        .querySelector("[data-product-reset]")
+        .addEventListener("click", () => resetProductForm(formBox));
+      getProductField(formBox, "image").addEventListener("input", () =>
+        updateProductImagePreview(formBox),
+      );
+      formBox
+        .querySelector("[data-product-image-sample]")
+        .addEventListener("click", () => {
+          getProductField(formBox, "image").value =
+            "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1200&q=80";
+          updateProductImagePreview(formBox);
+        });
+      formBox
+        .querySelector("[data-product-image-file]")
+        .addEventListener("change", (event) => {
+          var _a;
+          const file = (_a = event.target.files) == null ? void 0 : _a[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.addEventListener("load", () => {
+            getProductField(formBox, "image").value = reader.result;
+            updateProductImagePreview(formBox);
+          });
+          reader.readAsDataURL(file);
+        });
+      updateProductImagePreview(formBox);
+    }
+    function getProductField(formBox, name) {
+      return formBox.querySelector(`[name="${name}"]`);
+    }
+    function saveProductFromForm(formBox) {
+      const productId = getProductField(formBox, "productId").value;
+      const payload = readProductForm(formBox);
+      if (!payload.name || !payload.ko || !payload.category || !payload.sale) {
+        return;
+      }
+      if (productId) {
+        const product = store.products.find((item) => item.id === productId);
+        if (!product) return;
+        Object.assign(product, payload);
+        return;
+      }
+      store.products.push({
+        id: createProductId(payload),
+        ...payload,
+      });
+    }
+    function readProductForm(formBox) {
+      const price = readNumberField(formBox, "price");
+      const sale = readNumberField(formBox, "sale");
+      const stock = readNumberField(formBox, "stock");
+      const option = getProductField(formBox, "option").value.trim();
+      const sku =
+        getProductField(formBox, "sku").value.trim() ||
+        createProductSku(getProductField(formBox, "name").value);
+      return {
+        sku,
+        name: getProductField(formBox, "name").value.trim(),
+        ko: getProductField(formBox, "ko").value.trim(),
+        category: getProductField(formBox, "category").value,
+        type: getProductField(formBox, "type").value.trim(),
+        badge: getProductField(formBox, "badge").value.trim(),
+        price,
+        sale,
+        supplyPrice: readNumberField(formBox, "supplyPrice"),
+        cost: readNumberField(formBox, "cost"),
+        taxType: getProductField(formBox, "taxType").value,
+        status: getProductField(formBox, "status").value,
+        displayStatus: getProductField(formBox, "displayStatus").value,
+        stock,
+        safetyStock: readNumberField(formBox, "safetyStock"),
+        shippingType: getProductField(formBox, "shippingType").value,
+        shippingFee: readNumberField(formBox, "shippingFee"),
+        pointRateOverride: getProductField(formBox, "pointRateOverride").value,
+        option,
+        image: getProductField(formBox, "image").value.trim(),
+        short: getProductField(formBox, "short").value.trim(),
+        desc: getProductField(formBox, "desc").value.trim(),
+        searchKeywords: getProductField(formBox, "searchKeywords").value.trim(),
+        manufacturer: getProductField(formBox, "manufacturer").value.trim(),
+        supplier: getProductField(formBox, "supplier").value.trim(),
+        origin: getProductField(formBox, "origin").value.trim(),
+        brand: getProductField(formBox, "brand").value.trim(),
+        barcode: getProductField(formBox, "barcode").value.trim(),
+        variants: parseVariantRows(
+          getProductField(formBox, "variants").value,
+          sku,
+          option,
+          stock,
+        ),
+      };
+    }
+    function fillProductForm(formBox, product) {
+      const fields = [
+        "sku",
+        "name",
+        "ko",
+        "category",
+        "type",
+        "badge",
+        "price",
+        "sale",
+        "supplyPrice",
+        "cost",
+        "taxType",
+        "status",
+        "displayStatus",
+        "stock",
+        "safetyStock",
+        "shippingType",
+        "shippingFee",
+        "pointRateOverride",
+        "option",
+        "image",
+        "short",
+        "desc",
+        "searchKeywords",
+        "manufacturer",
+        "supplier",
+        "origin",
+        "brand",
+        "barcode",
+      ];
+      getProductField(formBox, "productId").value = product.id;
+      fields.forEach((field) => {
+        var _a;
+        getProductField(formBox, field).value =
+          (_a = product[field]) != null ? _a : "";
+      });
+      getProductField(formBox, "variants").value = formatVariantRows(product);
+      updateProductImagePreview(formBox);
+      formBox.querySelector("[data-product-submit]").textContent =
+        "\uC0C1\uD488 \uC218\uC815";
+    }
+    function resetProductForm(formBox) {
+      formBox.querySelectorAll("input, textarea").forEach((input) => {
+        input.value = "";
+      });
+      getProductField(formBox, "category").value = "\uD654\uC7A5\uD488";
+      getProductField(formBox, "taxType").value = "taxable";
+      getProductField(formBox, "status").value = "selling";
+      getProductField(formBox, "displayStatus").value = "displayed";
+      getProductField(formBox, "shippingType").value = "default";
+      getProductField(formBox, "shippingFee").value = "3000";
+      getProductField(formBox, "safetyStock").value = "5";
+      updateProductImagePreview(formBox);
+      formBox.querySelector("[data-product-submit]").textContent =
+        "\uC0C1\uD488 \uB4F1\uB85D";
+    }
+    function updateProductImagePreview(formBox) {
+      const preview = formBox.querySelector("[data-product-image-preview]");
+      const image = getProductField(formBox, "image").value.trim();
+      preview.innerHTML = image
+        ? `<img src="${escapeAttribute(image)}" alt="\uC0C1\uD488 \uC774\uBBF8\uC9C0 \uBBF8\uB9AC\uBCF4\uAE30" />`
+        : "<span>\uC774\uBBF8\uC9C0 \uC5C6\uC74C</span>";
+    }
+    function readNumberField(formBox, name) {
+      return Math.max(0, Number(getProductField(formBox, name).value || 0));
+    }
+    function parseVariantRows(value, baseSku, fallbackOption, fallbackStock) {
+      const rows = String(value || "")
+        .split(/\n+/)
+        .map((row) => row.trim())
+        .filter(Boolean);
+      const parsed = rows.map((row, index) => {
+        const [optionName, sku, stock, priceDelta, status] = row
+          .split("|")
+          .map((part) => part.trim());
+        return {
+          id: `${baseSku.toLowerCase()}-${index + 1}`,
+          optionName:
+            optionName || fallbackOption || "\uAE30\uBCF8 \uC635\uC158",
+          sku: sku || `${baseSku}-OPT${index + 1}`,
+          stock: Math.max(0, Number(stock || 0)),
+          priceDelta: Number(priceDelta || 0),
+          status: status || "selling",
+        };
+      });
+      return parsed.length
+        ? parsed
+        : [
+            {
+              id: `${baseSku.toLowerCase()}-default`,
+              optionName: fallbackOption || "\uAE30\uBCF8 \uC635\uC158",
+              sku: `${baseSku}-STD`,
+              stock: fallbackStock,
+              priceDelta: 0,
+              status: "selling",
+            },
+          ];
+    }
+    function formatVariantRows(product) {
+      return (product.variants || [])
+        .map(
+          (variant) =>
+            `${variant.optionName || ""} | ${variant.sku || ""} | ${variant.stock || 0} | ${variant.priceDelta || 0} | ${variant.status || "selling"}`,
+        )
+        .join("\n");
+    }
+    function createProductId(product) {
+      const base = createProductSku(product.name || product.ko)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      let id = `product-${base || Date.now()}`;
+      let suffix = 1;
+      while (store.products.some((productItem) => productItem.id === id)) {
+        suffix += 1;
+        id = `product-${base}-${suffix}`;
+      }
+      return id;
+    }
+    function createProductSku(value) {
+      const source = String(value || "PRODUCT")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      return source || `PRODUCT-${Date.now()}`;
+    }
     function getAgencyField(formBox, name) {
       return formBox.querySelector(`[name="${name}"]`);
     }
@@ -1310,7 +1811,8 @@
       bindManagementEvents("admin");
       const modal = dom.management.querySelector("#adminDetailModal");
       openDetailModal(modal, createAdminDetailContent(type, store));
-      bindAgencyAdminForm(modal);
+      if (type === "agencies") bindAgencyAdminForm(modal);
+      if (type === "products") bindProductAdminForm(modal);
     }
     return { openManagement };
   }
@@ -1323,6 +1825,9 @@
     const headquarters = store.agencies.find((agency) => agency.isHeadquarters);
     const agencyCount = store.agencies.length;
     const memberCount = store.members.length;
+    const sellingProductCount = (store.products || []).filter(
+      (product) => product.status !== "deleted",
+    ).length;
     const monthlyOrders = getCurrentMonthOrders(store);
     const monthlyOrderTotal = monthlyOrders.reduce(
       (sum, order) => sum + order.paidProductAmount,
@@ -1346,6 +1851,7 @@
         ${createMetricCard("admin", "headquarters", "\uBCF8\uC0AC \uB300\uB9AC\uC810", headquarters.name)}
         ${createMetricCard("admin", "agencies", "\uB300\uB9AC\uC810 \uC218", `${agencyCount}`)}
         ${createMetricCard("admin", "members", "\uD68C\uC6D0 \uC218", `${memberCount}`)}
+        ${createMetricCard("admin", "products", "\uC0C1\uD488 \uC218", `${sellingProductCount}`)}
         ${createMetricCard("admin", "orders", "\uC774\uB2EC\uC758 \uC8FC\uBB38", formatMoney(monthlyOrderTotal))}
         ${createMetricCard("admin", "points", "\uC774\uB2EC\uC758 \uC801\uB9BD\uAE08", `${monthlyPointSummary.earned.toLocaleString("ko-KR")}P`)}
         ${createMetricCard("admin", "settlements", "\uC815\uC0B0 \uB300\uAE30 \uC601\uC5C5\uBE44", formatMoney(settlementPending))}
@@ -1454,6 +1960,14 @@
         rows: store.members.map((member) =>
           createMemberDetailRow(member, store),
         ),
+      },
+      products: {
+        label: "Products",
+        title: "\uC0C1\uD488\uAD00\uB9AC",
+        description:
+          "Cafe24\uD615 \uC0C1\uD488\uAD00\uB9AC \uAE30\uC900\uC73C\uB85C \uAE30\uBCF8\uC815\uBCF4, \uAC00\uACA9, \uC7AC\uACE0, \uD45C\uC2DC/\uD310\uB9E4\uC0C1\uD0DC, \uBC30\uC1A1, \uACF5\uAE09\uC0AC, \uC635\uC158 SKU\uB97C \uAD00\uB9AC\uD569\uB2C8\uB2E4.",
+        extra: createProductManagementWorkspace(store),
+        rows: [],
       },
       orders: {
         label: "Orders",
@@ -1605,6 +2119,13 @@
   function escapeTextarea(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  function escapeAttribute(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
   }
@@ -1914,6 +2435,199 @@
     </article>
   `;
   }
+  function createProductManagementWorkspace(store) {
+    const products2 = (store.products || []).filter(
+      (product) => product.status !== "deleted",
+    );
+    const activeCount = products2.filter(
+      (product) =>
+        product.status === "selling" && product.displayStatus === "displayed",
+    ).length;
+    const lowStockCount = products2.filter(
+      (product) =>
+        Number(product.stock || 0) <= Number(product.safetyStock || 0),
+    ).length;
+    return `
+    <section class="product-management-shell">
+      <aside class="product-list-panel" aria-label="\uC0C1\uD488 \uBAA9\uB85D">
+        <div class="product-list-summary">
+          <article><span>\uC804\uCCB4 \uC0C1\uD488</span><strong>${products2.length}</strong></article>
+          <article><span>\uD310\uB9E4\uC911</span><strong>${activeCount}</strong></article>
+          <article><span>\uC7AC\uACE0\uC8FC\uC758</span><strong>${lowStockCount}</strong></article>
+        </div>
+        <div class="product-list-tools">
+          <strong>\uC0C1\uD488 \uBAA9\uB85D</strong>
+          <span>\uC0C1\uD488\uBA85\uC744 \uC120\uD0DD\uD558\uBA74 \uC624\uB978\uCABD \uD3B8\uC9D1 \uD328\uB110\uC5D0 \uBD88\uB7EC\uC635\uB2C8\uB2E4.</span>
+        </div>
+        <div class="product-card-list">
+          ${products2.map(createProductManageRow).join("")}
+        </div>
+      </aside>
+      <section class="product-editor-panel">
+        <div class="product-editor-title">
+          <div>
+            <strong>\uC0C1\uD488 \uD3B8\uC9D1</strong>
+            <span>\uD544\uC218 \uD56D\uBAA9\uBD80\uD130 \uC800\uC7A5\uD558\uACE0, \uC6B4\uC601 \uC138\uBD80 \uC815\uBCF4\uB294 \uADF8\uB8F9\uBCC4\uB85C \uBCF4\uC644\uD569\uB2C8\uB2E4.</span>
+          </div>
+          <span class="product-editor-badge">Admin only</span>
+        </div>
+        ${createProductAdminForm()}
+      </section>
+    </section>
+  `;
+  }
+  function createProductAdminForm() {
+    return `
+    <div class="agency-admin-form product-admin-form" data-product-form>
+      <input type="hidden" name="productId" />
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>\uAE30\uBCF8 \uC815\uBCF4</strong>
+          <span>\uC1FC\uD551\uBAB0 \uB178\uCD9C\uBA85, \uBD84\uB958, \uAC80\uC0C9 \uAE30\uC900</span>
+        </div>
+        <div class="product-form-grid">
+          <label>\uC0C1\uD488\uBA85 \uC601\uBB38<input class="quantity-input" name="name" placeholder="Daily Tone Up Sunscreen" required /></label>
+          <label>\uC0C1\uD488\uBA85 \uD55C\uAE00<input class="quantity-input" name="ko" placeholder="\uB370\uC77C\uB9AC \uD1A4\uC5C5 \uC120\uC2A4\uD06C\uB9B0" required /></label>
+          <label>\uC0C1\uD488\uCF54\uB4DC/SKU<input class="quantity-input" name="sku" placeholder="COS-SUN-001" /></label>
+          <label>\uCE74\uD14C\uACE0\uB9AC
+            <select class="option-select" name="category">
+              <option value="\uBBF8\uC6A9\uAE30\uAD6C">\uBBF8\uC6A9\uAE30\uAD6C</option>
+              <option value="\uBBF8\uC6A9\uC7AC\uB8CC">\uBBF8\uC6A9\uC7AC\uB8CC</option>
+              <option value="\uD654\uC7A5\uD488" selected>\uD654\uC7A5\uD488</option>
+            </select>
+          </label>
+          <label>\uC0C1\uD488\uC720\uD615<input class="quantity-input" name="type" placeholder="Sun Care SPF" /></label>
+          <label>\uBC30\uC9C0<input class="quantity-input" name="badge" placeholder="Best" /></label>
+          <label class="profile-wide">\uAC80\uC0C9 \uD0A4\uC6CC\uB4DC<input class="quantity-input" name="searchKeywords" placeholder="\uC0C1\uD488\uBA85, \uD6A8\uB2A5, \uCE74\uD14C\uACE0\uB9AC" /></label>
+          <label class="profile-wide">\uBAA9\uB85D \uC124\uBA85<input class="quantity-input" name="short" placeholder="\uC0C1\uD488 \uCE74\uB4DC\uC5D0 \uD45C\uC2DC\uD560 \uC9E7\uC740 \uC124\uBA85" /></label>
+          <label class="profile-wide">\uC0C1\uC138 \uC124\uBA85<textarea class="quantity-input" name="desc" rows="3" placeholder="\uC0C1\uD488 \uC0C1\uC138 \uC124\uBA85"></textarea></label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>\uC774\uBBF8\uC9C0 \uB4F1\uB85D</strong>
+          <span>URL \uB610\uB294 \uB85C\uCEEC \uC774\uBBF8\uC9C0 \uD30C\uC77C\uB85C \uB300\uD45C \uC774\uBBF8\uC9C0\uB97C \uB4F1\uB85D</span>
+        </div>
+        <div class="product-image-editor">
+          <div class="product-image-preview" data-product-image-preview><span>\uC774\uBBF8\uC9C0 \uC5C6\uC74C</span></div>
+          <div class="product-image-fields">
+            <label>\uB300\uD45C \uC774\uBBF8\uC9C0 URL<input class="quantity-input" name="image" placeholder="https://..." /></label>
+            <label>\uB85C\uCEEC \uC774\uBBF8\uC9C0 \uC120\uD0DD<input class="quantity-input" type="file" accept="image/*" data-product-image-file /></label>
+            <button class="cart-button mini-button" type="button" data-product-image-sample>\uC0D8\uD50C \uC774\uBBF8\uC9C0 \uC801\uC6A9</button>
+          </div>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>\uAC00\uACA9 / \uD310\uB9E4 / \uC7AC\uACE0</strong>
+          <span>\uD310\uB9E4\uAC00, \uC6D0\uAC00, \uB9C8\uC9C4, \uD488\uC808 \uAE30\uC900</span>
+        </div>
+        <div class="product-form-grid">
+          <label>\uC18C\uBE44\uC790\uAC00<input class="quantity-input" name="price" type="number" min="0" /></label>
+          <label>\uD310\uB9E4\uAC00<input class="quantity-input" name="sale" type="number" min="0" required /></label>
+          <label>\uACF5\uAE09\uAC00<input class="quantity-input" name="supplyPrice" type="number" min="0" /></label>
+          <label>\uC6D0\uAC00<input class="quantity-input" name="cost" type="number" min="0" /></label>
+          <label>\uC7AC\uACE0<input class="quantity-input" name="stock" type="number" min="0" /></label>
+          <label>\uC548\uC804\uC7AC\uACE0<input class="quantity-input" name="safetyStock" type="number" min="0" value="5" /></label>
+          <label>\uD310\uB9E4\uC0C1\uD0DC
+            <select class="option-select" name="status">
+              <option value="selling">\uD310\uB9E4\uC911</option>
+              <option value="soldout">\uD488\uC808</option>
+              <option value="stopped">\uD310\uB9E4\uC911\uC9C0</option>
+            </select>
+          </label>
+          <label>\uC9C4\uC5F4\uC0C1\uD0DC
+            <select class="option-select" name="displayStatus">
+              <option value="displayed">\uC9C4\uC5F4\uD568</option>
+              <option value="hidden">\uC9C4\uC5F4\uC548\uD568</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>\uBC30\uC1A1 / \uC815\uCC45 / \uACF5\uAE09</strong>
+          <span>\uBC30\uC1A1\uBE44, \uACFC\uC138, \uACF5\uAE09\uC0AC, \uC81C\uC870 \uAE30\uC900</span>
+        </div>
+        <div class="product-form-grid">
+          <label>\uBC30\uC1A1\uC815\uCC45
+            <select class="option-select" name="shippingType">
+              <option value="default">\uAE30\uBCF8 \uBC30\uC1A1</option>
+              <option value="free">\uBB34\uB8CC \uBC30\uC1A1</option>
+              <option value="conditional">\uC870\uAC74\uBD80 \uBB34\uB8CC</option>
+              <option value="supplier">\uACF5\uAE09\uC0AC \uBC30\uC1A1</option>
+            </select>
+          </label>
+          <label>\uBC30\uC1A1\uBE44<input class="quantity-input" name="shippingFee" type="number" min="0" value="3000" /></label>
+          <label>\uACFC\uC138
+            <select class="option-select" name="taxType">
+              <option value="taxable">\uACFC\uC138</option>
+              <option value="tax_free">\uBA74\uC138</option>
+              <option value="zero_tax">\uC601\uC138</option>
+            </select>
+          </label>
+          <label>\uC0C1\uD488\uBCC4 \uC801\uB9BD\uB960<input class="quantity-input" name="pointRateOverride" type="number" min="0" max="100" placeholder="\uACF5\uB780\uC774\uBA74 \uAE30\uBCF8 \uC801\uB9BD\uB960" /></label>
+          <label>\uC81C\uC870\uC0AC<input class="quantity-input" name="manufacturer" placeholder="BEAUTY REF." /></label>
+          <label>\uACF5\uAE09\uC0AC<input class="quantity-input" name="supplier" placeholder="\uBCF8\uC0AC \uBB3C\uB958" /></label>
+          <label>\uC6D0\uC0B0\uC9C0<input class="quantity-input" name="origin" placeholder="Korea" /></label>
+          <label>\uBE0C\uB79C\uB4DC<input class="quantity-input" name="brand" placeholder="BEAUTY REF." /></label>
+          <label>\uBC14\uCF54\uB4DC<input class="quantity-input" name="barcode" placeholder="880..." /></label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>\uC635\uC158 / SKU</strong>
+          <span>\uC0C9\uC0C1, \uC6A9\uB7C9, \uBC1D\uAE30 \uAC19\uC740 \uD558\uC704 \uC0C1\uD488\uAD70 \uAD00\uB9AC</span>
+        </div>
+        <div class="product-form-grid">
+          <label>\uB300\uD45C \uC635\uC158<input class="quantity-input" name="option" placeholder="50ml / SPF50+ PA++++" /></label>
+          <label class="profile-wide">\uC635\uC158 SKU
+            <textarea class="quantity-input" name="variants" rows="4" placeholder="\uC635\uC158\uBA85 | SKU | \uC7AC\uACE0 | \uCD94\uAC00\uAE08\uC561 | \uC0C1\uD0DC"></textarea>
+          </label>
+        </div>
+      </section>
+      <div class="agency-form-actions">
+        <button class="buy-button" type="button" data-product-submit>\uC0C1\uD488 \uB4F1\uB85D</button>
+        <button class="cart-button" type="button" data-product-reset>\uC785\uB825 \uCD08\uAE30\uD654</button>
+      </div>
+    </div>
+  `;
+  }
+  function createProductManageRow(product) {
+    const margin = product.sale - (product.supplyPrice || product.cost || 0);
+    const stockWarning =
+      Number(product.stock || 0) <= Number(product.safetyStock || 0)
+        ? " \xB7 \uC548\uC804\uC7AC\uACE0 \uC774\uD558"
+        : "";
+    const image = product.image
+      ? `<img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.ko)}" />`
+      : `<span>${product.category}</span>`;
+    return `
+    <article class="product-list-card">
+      <div class="product-list-thumb">${image}</div>
+      <div class="product-list-main">
+        <div class="product-list-title">
+          <strong>${product.ko}</strong>
+          <span>${product.name}</span>
+        </div>
+        <div class="product-list-meta">
+          <span>${product.category}</span>
+          <span>${product.sku || product.id}</span>
+          <span>${product.displayStatus} / ${product.status}</span>
+        </div>
+        <div class="product-list-stats">
+          <span>\uD310\uB9E4\uAC00 <strong>${formatMoney(product.sale)}</strong></span>
+          <span>\uB9C8\uC9C4 <strong>${formatMoney(margin)}</strong></span>
+          <span>\uC7AC\uACE0 <strong>${product.stock || 0}\uAC1C${stockWarning}</strong></span>
+        </div>
+      </div>
+      <div class="product-list-actions">
+        <button class="cart-button mini-button" type="button" data-product-edit="${product.id}">\uD3B8\uC9D1</button>
+        <button class="cart-button mini-button" type="button" data-product-delete="${product.id}">\uC228\uAE40</button>
+      </div>
+    </article>
+  `;
+  }
   function createAgencyIdentifiers(name) {
     const romanized = romanizeText(name)
       .split(/\s+/)
@@ -2071,217 +2785,6 @@
   `;
   }
 
-  // scripts/data/catalog.js
-  var CATEGORIES = [
-    "\uBBF8\uC6A9\uAE30\uAD6C",
-    "\uBBF8\uC6A9\uC7AC\uB8CC",
-    "\uD654\uC7A5\uD488",
-  ];
-  var products = [
-    {
-      id: "device-led",
-      name: "LED Skin Lifting Device",
-      ko: "LED \uC2A4\uD0A8 \uB9AC\uD504\uD305 \uB514\uBC14\uC774\uC2A4",
-      category: "\uBBF8\uC6A9\uAE30\uAD6C",
-      type: "Home Beauty Device",
-      badge: "Best",
-      price: 89e3,
-      sale: 76e3,
-      option: "1ea / Warm White",
-      short:
-        "\uC9D1\uC5D0\uC11C\uB3C4 \uAC04\uD3B8\uD558\uAC8C \uC0AC\uC6A9\uD558\uB294 \uD648\uCF00\uC5B4 \uBBF8\uC6A9\uAE30\uAE30.",
-      desc: "\uD53C\uBD80 \uD0C4\uB825 \uCF00\uC5B4\uC640 \uB370\uC77C\uB9AC \uD648\uCF00\uC5B4 \uB8E8\uD2F4\uC744 \uC704\uD574 \uC124\uACC4\uD55C \uAC10\uAC01\uC801\uC778 LED \uBBF8\uC6A9\uAE30\uAE30\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "device-brush",
-      name: "Scalp Massage Brush",
-      ko: "\uC2A4\uCE7C\uD504 \uB9C8\uC0AC\uC9C0 \uBE0C\uB7EC\uC2DC",
-      category: "\uBBF8\uC6A9\uAE30\uAD6C",
-      type: "Scalp Care Tool",
-      badge: "New",
-      price: 18e3,
-      sale: 15e3,
-      option: "1ea / Soft Silicone",
-      short:
-        "\uB450\uD53C\uB97C \uBD80\uB4DC\uB7FD\uAC8C \uB9C8\uC0AC\uC9C0\uD574\uC8FC\uB294 \uC2E4\uB9AC\uCF58 \uBE0C\uB7EC\uC2DC.",
-      desc: "\uC0F4\uD478\uC640 \uD568\uAED8 \uC0AC\uC6A9\uD558\uBA74 \uB450\uD53C\uB97C \uAC1C\uC6B4\uD558\uAC8C \uCF00\uC5B4\uD560 \uC218 \uC788\uB294 \uC18C\uD504\uD2B8 \uC2E4\uB9AC\uCF58 \uB9C8\uC0AC\uC9C0 \uBE0C\uB7EC\uC2DC\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "device-nail",
-      name: "Nail Care Tool Set",
-      ko: "\uB124\uC77C \uCF00\uC5B4 \uD234 \uC138\uD2B8",
-      category: "\uBBF8\uC6A9\uAE30\uAD6C",
-      type: "Nail Tool Set",
-      badge: "Hot",
-      price: 22e3,
-      sale: 18e3,
-      option: "3pcs Set / Silver",
-      short:
-        "\uC140\uD504 \uB124\uC77C \uAD00\uB9AC\uB97C \uC704\uD55C \uAE30\uBCF8 \uD234 \uC138\uD2B8.",
-      desc: "\uD050\uD2F0\uD074 \uC815\uB9AC\uC640 \uC190\uD1B1 \uB77C\uC778 \uCF00\uC5B4\uB97C \uC9D1\uC5D0\uC11C\uB3C4 \uAE54\uB054\uD558\uAC8C \uD560 \uC218 \uC788\uB294 \uAE30\uBCF8 \uB124\uC77C \uD234 \uAD6C\uC131\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "mat-ampoule",
-      name: "Salon Hair Ampoule Pack",
-      ko: "\uC0B4\uB871 \uD5E4\uC5B4 \uC570\uD50C \uD329",
-      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
-      type: "Hair Treatment Material",
-      badge: "Best",
-      price: 32e3,
-      sale: 27e3,
-      option: "10ea / Repair",
-      short:
-        "\uC190\uC0C1 \uBAA8\uBC1C \uC9D1\uC911 \uCF00\uC5B4\uC6A9 \uC0B4\uB871 \uC570\uD50C.",
-      desc: "\uAC70\uCE60\uACE0 \uD478\uC11D\uD55C \uBAA8\uBC1C\uC5D0 \uC601\uC591\uAC10\uC744 \uCC44\uC6CC\uC8FC\uB294 \uC0B4\uB871 \uC2A4\uD0C0\uC77C\uC758 \uC9D1\uC911 \uD5E4\uC5B4 \uCF00\uC5B4 \uC570\uD50C \uD329\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "mat-glue",
-      name: "Professional Eyelash Glue",
-      ko: "\uD504\uB85C\uD398\uC154\uB110 \uC18D\uB208\uC379 \uAE00\uB8E8",
-      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
-      type: "Eyelash Material",
-      badge: "New",
-      price: 16e3,
-      sale: 13e3,
-      option: "5ml / Clear",
-      short:
-        "\uC18D\uB208\uC379 \uC5F0\uC7A5\uACFC \uC140\uD504 \uC5F0\uCD9C\uC744 \uC704\uD55C \uC804\uC6A9 \uAE00\uB8E8.",
-      desc: "\uAE54\uB054\uD55C \uB9C8\uBB34\uB9AC\uC640 \uC548\uC815\uC801\uC778 \uACE0\uC815\uAC10\uC744 \uACE0\uB824\uD55C \uC18D\uB208\uC379 \uC804\uC6A9 \uAE00\uB8E8\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "mat-pack",
-      name: "Moisture Modeling Pack",
-      ko: "\uBAA8\uC774\uC2A4\uCC98 \uBAA8\uB378\uB9C1 \uD329",
-      category: "\uBBF8\uC6A9\uC7AC\uB8CC",
-      type: "Esthetic Pack Material",
-      badge: "Hot",
-      price: 28e3,
-      sale: 23e3,
-      option: "5ea / Hydration",
-      short:
-        "\uC5D0\uC2A4\uD14C\uD2F1 \uB290\uB08C\uC758 \uACE0\uBCF4\uC2B5 \uBAA8\uB378\uB9C1 \uD329.",
-      desc: "\uD53C\uBD80\uC5D0 \uCFE8\uB9C1\uAC10\uACFC \uC218\uBD84\uAC10\uC744 \uBE60\uB974\uAC8C \uC804\uB2EC\uD558\uB294 \uD648 \uC5D0\uC2A4\uD14C\uD2F1\uC6A9 \uBAA8\uB378\uB9C1 \uD329\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "cos-cream",
-      name: "Calm Dew Barrier Cream",
-      ko: "\uCE84 \uB4C0 \uBC30\uB9AC\uC5B4 \uD06C\uB9BC",
-      category: "\uD654\uC7A5\uD488",
-      type: "Skincare Cream",
-      badge: "Best",
-      price: 38e3,
-      sale: 32e3,
-      option: "50ml / \uBB34\uD5A5",
-      short:
-        "\uC18D\uAC74\uC870\uC640 \uC7A5\uBCBD \uCF00\uC5B4\uB97C \uC704\uD55C \uCD09\uCD09\uD55C \uB370\uC77C\uB9AC \uD06C\uB9BC.",
-      desc: "\uBBFC\uAC10\uD55C \uD53C\uBD80\uB3C4 \uB9E4\uC77C \uD3B8\uC548\uD558\uAC8C \uC0AC\uC6A9\uD560 \uC218 \uC788\uB3C4\uB85D \uBB34\uAC81\uC9C0 \uC54A\uC740 \uBCF4\uC2B5\uB9C9\uC744 \uB0A8\uAE30\uB294 \uC7A5\uBCBD \uCF00\uC5B4 \uD06C\uB9BC\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "cos-serum",
-      name: "Glass Skin Glow Serum",
-      ko: "\uAE00\uB798\uC2A4 \uC2A4\uD0A8 \uAE00\uB85C\uC6B0 \uC138\uB7FC",
-      category: "\uD654\uC7A5\uD488",
-      type: "Skincare Serum",
-      badge: "New",
-      price: 42e3,
-      sale: 36e3,
-      option: "30ml / \uC724\uAD11 \uCF00\uC5B4",
-      short:
-        "\uD53C\uBD80\uACB0\uACFC \uAD11\uCC44\uB97C \uB9E4\uB044\uB7FD\uAC8C \uC815\uB3C8\uD558\uB294 \uC218\uBD84 \uC138\uB7FC.",
-      desc: "\uB048\uC801\uC784 \uC5C6\uC774 \uD761\uC218\uB418\uB294 \uC6CC\uD130 \uC824 \uD14D\uC2A4\uCC98\uB85C \uD53C\uBD80\uACB0\uC744 \uC815\uB3C8\uD558\uACE0 \uC740\uC740\uD55C \uC724\uAE30\uB97C \uB354\uD574\uC8FC\uB294 \uB370\uC77C\uB9AC \uC138\uB7FC\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "cos-lip",
-      name: "Velvet Tint Balm",
-      ko: "\uBCA8\uBCB3 \uD2F4\uD2B8 \uBC24",
-      category: "\uD654\uC7A5\uD488",
-      type: "Makeup Lip Balm",
-      badge: "Hot",
-      price: 24e3,
-      sale: 19e3,
-      option: "03 Rose Fig",
-      short:
-        "\uC785\uC220\uC740 \uD3B8\uC548\uD558\uAC8C, \uCEEC\uB7EC\uB294 \uBD84\uC704\uAE30 \uC788\uAC8C \uB0A8\uAE30\uB294 \uD2F4\uD2B8 \uBC24.",
-      desc: "\uBC24\uCC98\uB7FC \uBD80\uB4DC\uB7FD\uAC8C \uBC1C\uB9AC\uBA74\uC11C \uC740\uC740\uD55C \uCEEC\uB7EC\uAC00 \uB0A8\uC544 \uB370\uC77C\uB9AC \uBA54\uC774\uD06C\uC5C5\uC5D0 \uC5B4\uC6B8\uB9AC\uB294 \uB9BD \uC81C\uD488\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: "cos-sun",
-      name: "Daily Tone Up Sunscreen",
-      ko: "\uB370\uC77C\uB9AC \uD1A4\uC5C5 \uC120\uC2A4\uD06C\uB9B0",
-      category: "\uD654\uC7A5\uD488",
-      type: "Sun Care SPF",
-      badge: "Best",
-      price: 3e4,
-      sale: 25e3,
-      option: "50ml / SPF50+ PA++++",
-      short:
-        "\uBC31\uD0C1\uC740 \uC904\uC774\uACE0 \uD53C\uBD80\uD1A4\uC740 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uC815\uB3C8\uD558\uB294 \uC120\uD06C\uB9BC.",
-      desc: "\uC2A4\uD0A8\uCF00\uC5B4 \uB9C8\uC9C0\uB9C9 \uB2E8\uACC4\uC5D0\uC11C \uD53C\uBD80\uD1A4\uC744 \uC790\uC5F0\uC2A4\uB7FD\uAC8C \uBC1D\uD600\uC8FC\uACE0 \uC790\uC678\uC120 \uCC28\uB2E8\uAE4C\uC9C0 \uB3D5\uB294 \uB370\uC77C\uB9AC \uC120\uCF00\uC5B4\uC785\uB2C8\uB2E4.",
-      image:
-        "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=1200&q=80",
-    },
-  ];
-  var categoryCopy = {
-    미용기구: {
-      benefits: [
-        "\uAC04\uD3B8\uD55C \uD648\uCF00\uC5B4 \uB8E8\uD2F4",
-        "\uAE54\uB054\uD55C \uB514\uC790\uC778\uACFC \uBCF4\uAD00\uC131",
-        "\uCD08\uBCF4\uC790\uB3C4 \uC26C\uC6B4 \uC0AC\uC6A9\uAC10",
-      ],
-      material:
-        "\uBBF8\uC6A9\uAE30\uAE30 \uBCF8\uCCB4, \uC804\uC6A9 \uD328\uD0A4\uC9C0, \uC0AC\uC6A9 \uC124\uBA85\uC11C",
-      usage:
-        "\uC138\uC548 \uB610\uB294 \uC0F4\uD478 \uD6C4 \uD544\uC694\uD55C \uBD80\uC704\uC5D0 \uBD80\uB4DC\uB7FD\uAC8C \uC0AC\uC6A9\uD558\uC138\uC694. \uC0AC\uC6A9 \uD6C4\uC5D0\uB294 \uB9C8\uB978 \uCC9C\uC73C\uB85C \uB2E6\uC544 \uBCF4\uAD00\uD569\uB2C8\uB2E4.",
-      review:
-        "\uB514\uC790\uC778\uC774 \uAE54\uB054\uD558\uACE0 \uC9D1\uC5D0\uC11C \uAD00\uB9AC\uD558\uAE30 \uC88B\uC544 \uB9E4\uC77C \uC190\uC774 \uAC04\uB2E4\uB294 \uBC18\uC751\uC774 \uB9CE\uC2B5\uB2C8\uB2E4.",
-    },
-    미용재료: {
-      benefits: [
-        "\uC0B4\uB871\uAE09 \uCF00\uC5B4 \uB8E8\uD2F4",
-        "\uC804\uBB38\uC801\uC778 \uC0AC\uC6A9\uAC10",
-        "\uD648\uCF00\uC5B4\uC640 \uB9E4\uC7A5 \uC0AC\uC6A9 \uBAA8\uB450 \uC801\uD569",
-      ],
-      material:
-        "\uC804\uBB38 \uBBF8\uC6A9\uC7AC\uB8CC \uBCA0\uC774\uC2A4, \uBCF4\uC2B5/\uCF00\uC5B4 \uC131\uBD84, \uC804\uC6A9 \uD328\uD0A4\uC9C0",
-      usage:
-        "\uC81C\uD488 \uD2B9\uC131\uC5D0 \uB9DE\uAC8C \uC801\uC815\uB7C9\uC744 \uB35C\uC5B4 \uC0AC\uC6A9\uD558\uACE0, \uD544\uC694\uD55C \uACBD\uC6B0 \uCDA9\uBD84\uD788 \uD5F9\uAD88 \uB9C8\uBB34\uB9AC\uD569\uB2C8\uB2E4.",
-      review:
-        "\uC9D1\uC5D0\uC11C\uB3C4 \uAD00\uB9AC\uBC1B\uC740 \uB4EF\uD55C \uB290\uB08C\uC774 \uB098\uACE0 \uC0AC\uC6A9\uBC95\uC774 \uC5B4\uB835\uC9C0 \uC54A\uB2E4\uB294 \uD6C4\uAE30\uAC00 \uB9CE\uC2B5\uB2C8\uB2E4.",
-    },
-    화장품: {
-      benefits: [
-        "\uB370\uC77C\uB9AC \uBDF0\uD2F0 \uB8E8\uD2F4",
-        "\uCD09\uCD09\uD558\uACE0 \uD3B8\uC548\uD55C \uC0AC\uC6A9\uAC10",
-        "\uAC10\uAC01\uC801\uC778 \uD328\uD0A4\uC9C0",
-      ],
-      material:
-        "\uBCF4\uC2B5 \uC131\uBD84, \uD53C\uBD80 \uCEE8\uB514\uC154\uB2DD \uC131\uBD84, \uC2DD\uBB3C \uC720\uB798 \uCD94\uCD9C\uBB3C",
-      usage:
-        "\uAE30\uCD08 \uB8E8\uD2F4 \uB610\uB294 \uBA54\uC774\uD06C\uC5C5 \uB2E8\uACC4\uC5D0 \uB9DE\uCDB0 \uC801\uB2F9\uB7C9\uC744 \uBD80\uB4DC\uB7FD\uAC8C \uD3B4 \uBC1C\uB77C\uC8FC\uC138\uC694.",
-      review:
-        "\uBC1C\uB9BC\uC131\uC774 \uC88B\uACE0 \uB9E4\uC77C \uC4F0\uAE30 \uBD80\uB2F4 \uC5C6\uB294 \uC81C\uD488\uC774\uB77C\uB294 \uBC18\uC751\uC774 \uB9CE\uC2B5\uB2C8\uB2E4.",
-    },
-  };
-  var getProduct = (id) => products.find((item) => item.id === id);
-
   // scripts/domain/order-processing.js
   function completeBypassPayment({ cart, store, payment }) {
     var _a;
@@ -2327,6 +2830,7 @@
       })),
     };
     store.orders.unshift(order);
+    decrementProductStock(store, cart);
     member.points += earnedPoints;
     store.pointLedger.unshift({
       id: createId("point", store.pointLedger.length + 1),
@@ -2362,6 +2866,24 @@
         paidAmount,
       },
     };
+  }
+  function decrementProductStock(store, cart) {
+    cart.forEach((item) => {
+      var _a;
+      const product = (store.products || []).find(
+        (productItem) => productItem.id === item.id,
+      );
+      if (!product) return;
+      product.stock = Math.max(0, Number(product.stock || 0) - item.qty);
+      const variant =
+        (product.variants || []).find(
+          (variantItem) => variantItem.optionName === item.option,
+        ) || ((_a = product.variants) == null ? void 0 : _a[0]);
+      if (variant) {
+        variant.stock = Math.max(0, Number(variant.stock || 0) - item.qty);
+      }
+      if (product.stock <= 0) product.status = "soldout";
+    });
   }
   function createPurchasedProductReferralLinks({
     cart,
@@ -2455,6 +2977,14 @@
     const getPurchasePoints = (amount) =>
       calculatePurchasePoints(amount, getPurchasePointRate());
     const formatPoints = (points) => `${points.toLocaleString("ko-KR")}P`;
+    const getProducts = () =>
+      (store.products || []).filter(
+        (product) =>
+          product.displayStatus !== "hidden" && product.status !== "deleted",
+      );
+    const getProduct = (id) =>
+      getProducts().find((product) => product.id === id) ||
+      (store.products || []).find((product) => product.id === id);
     function getTotals() {
       const subtotal = state.cart.reduce(
         (sum, item) => sum + item.sale * item.qty,
@@ -2477,10 +3007,11 @@
           button.dataset.category === category,
         );
       });
+      const visibleProducts = getProducts();
       const list =
         category === "all"
-          ? products
-          : products.filter((product) => product.category === category);
+          ? visibleProducts
+          : visibleProducts.filter((product) => product.category === category);
       dom.count.textContent =
         category === "all"
           ? `All products \xB7 ${list.length} items`
@@ -2508,7 +3039,8 @@
     }
     function openDetail(product) {
       if (!product) return;
-      const copy = categoryCopy[product.category];
+      const copy =
+        categoryCopy[product.category] || categoryCopy["\uD654\uC7A5\uD488"];
       dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">\u2190 Back to shop</button>
@@ -2611,6 +3143,18 @@
     function addToCart(product, message) {
       if (!requireLogin()) return false;
       const quantity = getQuantity();
+      if (product.status !== "selling" || Number(product.stock || 0) <= 0) {
+        showToast(
+          "\uD604\uC7AC \uAD6C\uB9E4\uD560 \uC218 \uC5C6\uB294 \uC0C1\uD488\uC785\uB2C8\uB2E4.",
+        );
+        return false;
+      }
+      if (quantity > Number(product.stock || 0)) {
+        showToast(
+          `\uC7AC\uACE0\uB294 ${product.stock.toLocaleString("ko-KR")}\uAC1C\uAE4C\uC9C0 \uAD6C\uB9E4\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`,
+        );
+        return false;
+      }
       const item = state.cart.find((cartItem) => cartItem.id === product.id);
       if (item) {
         item.qty += quantity;
@@ -2862,6 +3406,7 @@
       const ledItem = state.cart.find((item) => item.id === "device-led");
       if (!ledItem) return "";
       const product = getProduct("device-led");
+      if (!product) return "";
       return `
     <section class="checkout-product-detail" id="checkoutLedDetail">
       <div class="checkout-detail-media">
@@ -3019,13 +3564,16 @@
       });
     }
     function validateCatalog() {
-      const categorySet = new Set(products.map((product) => product.category));
+      const productList = store.products || [];
+      const categorySet = new Set(
+        productList.map((product) => product.category),
+      );
       const hasRequiredCategories = CATEGORIES.every((category) =>
         categorySet.has(category),
       );
-      if (products.length !== 10 || !hasRequiredCategories) {
+      if (productList.length < 10 || !hasRequiredCategories) {
         console.warn(
-          "\uC0C1\uD488 \uB370\uC774\uD130\uB294 \uCD1D 10\uAC1C\uC640 \uC9C0\uC815\uB41C 3\uAC1C \uCE74\uD14C\uACE0\uB9AC\uB97C \uC720\uC9C0\uD574\uC57C \uD569\uB2C8\uB2E4.",
+          "\uC0C1\uD488 \uB370\uC774\uD130\uB294 \uCD5C\uC18C 10\uAC1C\uC640 \uC9C0\uC815\uB41C 3\uAC1C \uCE74\uD14C\uACE0\uB9AC\uB97C \uC720\uC9C0\uD574\uC57C \uD569\uB2C8\uB2E4.",
         );
       }
     }

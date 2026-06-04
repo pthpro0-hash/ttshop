@@ -45,6 +45,19 @@ export function readStore(database) {
     .prepare("SELECT * FROM agencies ORDER BY is_headquarters DESC, name ASC")
     .all()
     .map(mapAgency);
+  store.products = database
+    .prepare("SELECT * FROM products ORDER BY category ASC, name ASC")
+    .all()
+    .map((product) => ({
+      ...mapProduct(product),
+      variants: database
+        .prepare(
+          "SELECT * FROM product_variants WHERE product_id = ? ORDER BY id ASC",
+        )
+        .all(product.id)
+        .map(mapProductVariant),
+    }));
+  if (!store.products.length) store.products = cloneDefaultStore().products;
   store.members = database
     .prepare("SELECT * FROM members ORDER BY joined_at ASC, id ASC")
     .all()
@@ -86,6 +99,12 @@ export function writeStore(database, store) {
     insertMeta(database, "pendingAgencySlug", snapshot.pendingAgencySlug || "");
     insertSettings(database, snapshot.settings);
     snapshot.agencies.forEach((agency) => insertAgency(database, agency));
+    snapshot.products.forEach((product) => {
+      insertProduct(database, product);
+      (product.variants || []).forEach((variant) =>
+        insertProductVariant(database, product.id, variant),
+      );
+    });
     snapshot.members.forEach((member) => insertMember(database, member));
     snapshot.orders.forEach((order) => {
       insertOrder(database, order);
@@ -120,6 +139,7 @@ function normalizeStore(store) {
     ...store,
     settings: { ...defaults.settings, ...store?.settings },
     agencies: store?.agencies || defaults.agencies,
+    products: store?.products || defaults.products,
     members: store?.members || defaults.members,
     orders: store?.orders || defaults.orders,
     pointLedger: store?.pointLedger || defaults.pointLedger,
@@ -138,6 +158,8 @@ function clearTables(database) {
     "order_items",
     "orders",
     "members",
+    "product_variants",
+    "products",
     "agencies",
     "settings",
     "app_meta",
@@ -176,6 +198,74 @@ function insertAgency(database, agency) {
       Number(agency.commissionRate) || 0,
       agency.status || "active",
       agency.isHeadquarters ? 1 : 0,
+    );
+}
+
+function insertProduct(database, product) {
+  database
+    .prepare(
+      `
+      INSERT INTO products
+        (id, sku, name, ko, category, type, badge, price, sale, supply_price,
+         cost, tax_type, status, display_status, stock, safety_stock,
+         shipping_type, shipping_fee, point_rate_override, option_text, image,
+         short, desc, search_keywords, manufacturer, supplier, origin, brand, barcode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .run(
+      product.id,
+      product.sku || "",
+      product.name || "",
+      product.ko || "",
+      product.category || "",
+      product.type || "",
+      product.badge || "",
+      Number(product.price) || 0,
+      Number(product.sale) || 0,
+      Number(product.supplyPrice) || 0,
+      Number(product.cost) || 0,
+      product.taxType || "taxable",
+      product.status || "selling",
+      product.displayStatus || "displayed",
+      Number(product.stock) || 0,
+      Number(product.safetyStock) || 0,
+      product.shippingType || "default",
+      Number(product.shippingFee) || 0,
+      product.pointRateOverride === "" ||
+        product.pointRateOverride === undefined
+        ? null
+        : Number(product.pointRateOverride),
+      product.option || "",
+      product.image || "",
+      product.short || "",
+      product.desc || "",
+      product.searchKeywords || "",
+      product.manufacturer || "",
+      product.supplier || "",
+      product.origin || "",
+      product.brand || "",
+      product.barcode || "",
+    );
+}
+
+function insertProductVariant(database, productId, variant) {
+  database
+    .prepare(
+      `
+      INSERT INTO product_variants
+        (id, product_id, option_name, sku, price_delta, stock, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .run(
+      variant.id,
+      productId,
+      variant.optionName || "",
+      variant.sku || "",
+      Number(variant.priceDelta) || 0,
+      Number(variant.stock) || 0,
+      variant.status || "selling",
     );
 }
 
@@ -335,6 +425,53 @@ function mapAgency(row) {
     commissionRate: row.commission_rate,
     status: row.status,
     isHeadquarters: Boolean(row.is_headquarters),
+  };
+}
+
+function mapProduct(row) {
+  return {
+    id: row.id,
+    sku: row.sku,
+    name: row.name,
+    ko: row.ko,
+    category: row.category,
+    type: row.type,
+    badge: row.badge,
+    price: row.price,
+    sale: row.sale,
+    supplyPrice: row.supply_price,
+    cost: row.cost,
+    taxType: row.tax_type,
+    status: row.status,
+    displayStatus: row.display_status,
+    stock: row.stock,
+    safetyStock: row.safety_stock,
+    shippingType: row.shipping_type,
+    shippingFee: row.shipping_fee,
+    pointRateOverride:
+      row.point_rate_override === null ? "" : row.point_rate_override,
+    option: row.option_text,
+    image: row.image,
+    short: row.short,
+    desc: row.desc,
+    searchKeywords: row.search_keywords,
+    manufacturer: row.manufacturer,
+    supplier: row.supplier,
+    origin: row.origin,
+    brand: row.brand,
+    barcode: row.barcode,
+    variants: [],
+  };
+}
+
+function mapProductVariant(row) {
+  return {
+    id: row.id,
+    optionName: row.option_name,
+    sku: row.sku,
+    priceDelta: row.price_delta,
+    stock: row.stock,
+    status: row.status,
   };
 }
 
