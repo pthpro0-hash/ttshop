@@ -683,8 +683,12 @@ function input(element, value) {
   click(dom.window, document.querySelector('[data-admin-detail="products"]'));
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /상품관리|기본 정보|이미지 등록|가격 \/ 판매 \/ 재고|배송 \/ 정책 \/ 공급|옵션 \/ SKU|Daily Tone Up Sunscreen/,
+    /상품관리|필수 등록 정보|기본 정보|이미지 등록|가격 \/ 판매 \/ 재고|배송 \/ 정책 \/ 공급|옵션 \/ SKU|Daily Tone Up Sunscreen/,
     "admin product card should show grouped product management form and list",
+  );
+  assert.ok(
+    document.querySelector(".product-required-group"),
+    "product management should visually separate the minimum required fields",
   );
   assert.ok(
     document.querySelector("[data-product-image-preview]"),
@@ -766,14 +770,33 @@ function input(element, value) {
   );
   let productForm = document.querySelector("[data-product-form]");
   click(dom.window, productForm.querySelector("[data-product-reset]"));
-  input(productForm.querySelector('[name="name"]'), "New Cosmetic Mist");
+  click(dom.window, productForm.querySelector("[data-product-defaults]"));
+  assert.equal(
+    productForm.querySelector('[name="manufacturer"]').value,
+    "BEAUTY REF.",
+    "product defaults should fill the manufacturer field",
+  );
+  assert.equal(
+    productForm.querySelector('[name="supplier"]').value,
+    "본사 물류",
+    "product defaults should fill the supplier field",
+  );
+  assert.equal(
+    productForm.querySelector('[name="origin"]').value,
+    "Korea",
+    "product defaults should fill the origin field",
+  );
+  assert.equal(
+    productForm.querySelector('[name="shippingFee"]').value,
+    "3000",
+    "product defaults should fill the default shipping fee",
+  );
   click(dom.window, productForm.querySelector("[data-product-submit]"));
   assert.match(
     document.querySelector("[data-product-form-message]").textContent,
     /필수/,
     "product form should show a visible validation message for missing required fields",
   );
-  input(productForm.querySelector('[name="name"]'), "New Cosmetic Mist");
   input(productForm.querySelector('[name="ko"]'), "신규 코스메틱 미스트");
   input(productForm.querySelector('[name="category"]'), "화장품");
   input(productForm.querySelector('[name="type"]'), "Mist");
@@ -794,6 +817,14 @@ function input(element, value) {
     "selling product registration should require positive stock",
   );
   input(productForm.querySelector('[name="stock"]'), "44");
+  input(productForm.querySelector('[name="sku"]'), "COS-SUN");
+  click(dom.window, productForm.querySelector("[data-product-submit]"));
+  assert.match(
+    document.querySelector("[data-product-form-message]").textContent,
+    /이미 사용 중인 SKU/,
+    "product registration should reject an existing product SKU",
+  );
+  input(productForm.querySelector('[name="sku"]'), "COS-MIST-NEW");
   click(dom.window, productForm.querySelector("[data-product-submit]"));
   assert.match(
     document.querySelector("#adminModalContent").textContent,
@@ -804,11 +835,14 @@ function input(element, value) {
     JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.some(
       (product) =>
         product.ko === "신규 코스메틱 미스트" &&
+        product.sku === "COS-MIST-NEW" &&
         product.category === "화장품" &&
-        product.displayStatus === "displayed",
+        product.displayStatus === "displayed" &&
+        product.manufacturer === "BEAUTY REF." &&
+        product.supplier === "본사 물류",
     ),
     true,
-    "new cosmetic product should persist in the store",
+    "new cosmetic product should persist with defaults in the store",
   );
   click(dom.window, document.querySelector('[data-product-edit="cos-sun"]'));
   productForm = document.querySelector("[data-product-form]");
@@ -836,10 +870,17 @@ function input(element, value) {
   input(variantRows[0].querySelector("[data-variant-stock]"), "33");
   input(variantRows[0].querySelector("[data-variant-price-delta]"), "0");
   input(variantRows[1].querySelector("[data-variant-option]"), "100ml 대용량");
-  input(variantRows[1].querySelector("[data-variant-sku]"), "COS-SUN-LARGE");
+  input(variantRows[1].querySelector("[data-variant-sku]"), "COS-SUN-STD");
   input(variantRows[1].querySelector("[data-variant-stock]"), "12");
   input(variantRows[1].querySelector("[data-variant-price-delta]"), "5000");
   input(variantRows[1].querySelector("[data-variant-status]"), "selling");
+  click(dom.window, productForm.querySelector("[data-product-submit]"));
+  assert.match(
+    document.querySelector("[data-product-form-message]").textContent,
+    /SKU가 중복되었습니다/,
+    "product management should reject duplicated option SKU values inside one product",
+  );
+  input(variantRows[1].querySelector("[data-variant-sku]"), "COS-SUN-LARGE");
   click(dom.window, productForm.querySelector("[data-product-submit]"));
   assert.match(
     document.querySelector("#adminModalContent").textContent,

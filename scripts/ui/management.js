@@ -1,5 +1,18 @@
 import { formatMoney } from "../utils/format.js";
 
+const PRODUCT_OPERATION_DEFAULTS = {
+  taxType: "taxable",
+  status: "selling",
+  displayStatus: "displayed",
+  shippingType: "default",
+  shippingFee: "3000",
+  safetyStock: "5",
+  manufacturer: "BEAUTY REF.",
+  supplier: "본사 물류",
+  origin: "Korea",
+  brand: "BEAUTY REF.",
+};
+
 export function createManagementController({
   dom,
   store,
@@ -305,6 +318,12 @@ export function createManagementController({
     formBox
       .querySelector("[data-product-reset]")
       .addEventListener("click", () => resetProductForm(formBox));
+    formBox
+      .querySelector("[data-product-defaults]")
+      .addEventListener("click", () => {
+        applyProductDefaults(formBox);
+        setProductFormMessage(formBox, "운영 기본값을 적용했습니다.", "info");
+      });
     getProductField(formBox, "image").addEventListener("input", () =>
       updateProductImagePreview(formBox),
     );
@@ -493,11 +512,8 @@ export function createManagementController({
   function saveProductFromForm(formBox) {
     const productId = getProductField(formBox, "productId").value;
     const payload = readProductForm(formBox);
-    if (!payload.name || !payload.ko || !payload.category || !payload.sale) {
-      setProductFormMessage(
-        formBox,
-        "상품명 영문, 상품명 한글, 카테고리, 할인판매가는 필수입니다.",
-      );
+    if (!payload.ko || !payload.sale) {
+      setProductFormMessage(formBox, "상품명 한글과 판매가는 필수입니다.");
       return false;
     }
     if (payload.status === "selling" && payload.stock <= 0) {
@@ -505,6 +521,11 @@ export function createManagementController({
         formBox,
         "판매중 상품은 재고를 1개 이상 입력해야 구매 가능합니다.",
       );
+      return false;
+    }
+    const skuError = getSkuValidationError(payload, productId);
+    if (skuError) {
+      setProductFormMessage(formBox, skuError);
       return false;
     }
 
@@ -532,12 +553,14 @@ export function createManagementController({
     const stock = readNumberField(formBox, "stock");
     const option = getProductField(formBox, "option").value.trim();
     const sku =
-      getProductField(formBox, "sku").value.trim() ||
+      normalizeSku(getProductField(formBox, "sku").value) ||
       createProductSku(getProductField(formBox, "name").value);
 
     return {
       sku,
-      name: getProductField(formBox, "name").value.trim(),
+      name:
+        getProductField(formBox, "name").value.trim() ||
+        createProductSku(getProductField(formBox, "ko").value),
       ko: getProductField(formBox, "ko").value.trim(),
       category: getProductField(formBox, "category").value,
       type: getProductField(formBox, "type").value.trim(),
@@ -560,10 +583,10 @@ export function createManagementController({
       short: getProductField(formBox, "short").value.trim(),
       desc: getProductField(formBox, "desc").value.trim(),
       searchKeywords: getProductField(formBox, "searchKeywords").value.trim(),
-      manufacturer: getProductField(formBox, "manufacturer").value.trim(),
-      supplier: getProductField(formBox, "supplier").value.trim(),
-      origin: getProductField(formBox, "origin").value.trim(),
-      brand: getProductField(formBox, "brand").value.trim(),
+      manufacturer: readTextWithDefault(formBox, "manufacturer"),
+      supplier: readTextWithDefault(formBox, "supplier"),
+      origin: readTextWithDefault(formBox, "origin"),
+      brand: readTextWithDefault(formBox, "brand"),
       barcode: getProductField(formBox, "barcode").value.trim(),
       variants: parseVariantRows(
         getProductField(formBox, "variants").value,
@@ -627,8 +650,7 @@ export function createManagementController({
     getProductField(formBox, "status").value = "selling";
     getProductField(formBox, "displayStatus").value = "displayed";
     getProductField(formBox, "shippingType").value = "default";
-    getProductField(formBox, "shippingFee").value = "3000";
-    getProductField(formBox, "safetyStock").value = "5";
+    applyProductDefaults(formBox);
     resetVariantEditor(formBox);
     updateProductImagePreview(formBox);
     updateProductDetailImagePreviews(formBox);
@@ -636,10 +658,71 @@ export function createManagementController({
     setProductFormMessage(formBox, "");
   }
 
-  function setProductFormMessage(formBox, message) {
+  function applyProductDefaults(formBox) {
+    Object.entries(PRODUCT_OPERATION_DEFAULTS).forEach(([field, value]) => {
+      const input = getProductField(formBox, field);
+      if (input) input.value = value;
+    });
+  }
+
+  function readTextWithDefault(formBox, field) {
+    return (
+      getProductField(formBox, field).value.trim() ||
+      PRODUCT_OPERATION_DEFAULTS[field] ||
+      ""
+    );
+  }
+
+  function setProductFormMessage(formBox, message, tone = "error") {
     const messageBox = formBox.querySelector("[data-product-form-message]");
     if (!messageBox) return;
     messageBox.textContent = message;
+    messageBox.dataset.tone = tone;
+  }
+
+  function getSkuValidationError(payload, productId) {
+    const productSku = normalizeSku(payload.sku);
+    const variantSkus = payload.variants
+      .map((variant) => normalizeSku(variant.sku))
+      .filter(Boolean);
+    const submittedSkus = [productSku, ...variantSkus].filter(Boolean);
+    const duplicateInForm = findDuplicateValue(submittedSkus);
+
+    if (duplicateInForm) {
+      return `SKU가 중복되었습니다: ${duplicateInForm}`;
+    }
+
+    const existingSkus = [];
+    (store.products || []).forEach((product) => {
+      if (product.id === productId || product.status === "deleted") return;
+      existingSkus.push(normalizeSku(product.sku));
+      (product.variants || []).forEach((variant) => {
+        existingSkus.push(normalizeSku(variant.sku));
+      });
+    });
+    const existingSkuSet = new Set(existingSkus.filter(Boolean));
+    const duplicatedExisting = submittedSkus.find((sku) =>
+      existingSkuSet.has(sku),
+    );
+
+    return duplicatedExisting
+      ? `이미 사용 중인 SKU입니다: ${duplicatedExisting}`
+      : "";
+  }
+
+  function findDuplicateValue(values) {
+    const seen = new Set();
+    return values.find((value) => {
+      if (seen.has(value)) return true;
+      seen.add(value);
+      return false;
+    });
+  }
+
+  function normalizeSku(value) {
+    return String(value || "")
+      .trim()
+      .toUpperCase();
   }
 
   function updateProductImagePreview(formBox) {
@@ -1656,15 +1739,19 @@ function createProductAdminForm() {
   return `
     <div class="agency-admin-form product-admin-form" data-product-form>
       <input type="hidden" name="productId" />
-      <section class="product-form-group">
+      <section class="product-form-group product-required-group">
         <div class="product-form-group-head">
-          <strong>기본 정보</strong>
-          <span>쇼핑몰 노출명, 분류, 검색 기준</span>
+          <strong>필수 등록 정보</strong>
+          <span>상품 판매를 시작하기 위한 최소 입력값</span>
         </div>
-        <div class="product-form-grid">
-          <label>상품명 영문<input class="quantity-input" name="name" placeholder="Daily Tone Up Sunscreen" required /></label>
-          <label>상품명 한글<input class="quantity-input" name="ko" placeholder="데일리 톤업 선스크린" required /></label>
-          <label>상품코드/SKU<input class="quantity-input" name="sku" placeholder="COS-SUN-001" /></label>
+        <div class="required-form-note">
+          <strong>필수</strong>
+          <span>한글 상품명과 판매가는 반드시 입력해야 합니다. 판매중 상품은 재고가 1개 이상이어야 구매 가능합니다.</span>
+        </div>
+        <div class="product-form-grid product-required-grid">
+          <label>상품명 한글 <em>필수</em><input class="quantity-input" name="ko" placeholder="데일리 톤업 선스크린" required /></label>
+          <label>판매가 <em>필수</em><input class="quantity-input" name="sale" type="number" min="0" required /></label>
+          <label>재고 <em>판매중 필수</em><input class="quantity-input" name="stock" type="number" min="0" /></label>
           <label>카테고리
             <select class="option-select" name="category">
               <option value="미용기구">미용기구</option>
@@ -1672,6 +1759,16 @@ function createProductAdminForm() {
               <option value="화장품" selected>화장품</option>
             </select>
           </label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>기본 정보</strong>
+          <span>자동 생성 가능한 상품 코드와 쇼핑몰 노출 보조 정보</span>
+        </div>
+        <div class="product-form-grid">
+          <label>상품명 영문<input class="quantity-input" name="name" placeholder="Daily Tone Up Sunscreen" /></label>
+          <label>상품코드/SKU<input class="quantity-input" name="sku" placeholder="COS-SUN-001" /></label>
           <label>상품유형<input class="quantity-input" name="type" placeholder="Sun Care SPF" /></label>
           <label>배지<input class="quantity-input" name="badge" placeholder="Best" /></label>
           <label class="profile-wide">검색 키워드<input class="quantity-input" name="searchKeywords" placeholder="상품명, 효능, 카테고리" /></label>
@@ -1722,10 +1819,8 @@ function createProductAdminForm() {
         </div>
         <div class="product-form-grid">
           <label>소비자가<input class="quantity-input" name="price" type="number" min="0" /></label>
-          <label>판매가<input class="quantity-input" name="sale" type="number" min="0" required /></label>
           <label>공급가<input class="quantity-input" name="supplyPrice" type="number" min="0" /></label>
           <label>원가<input class="quantity-input" name="cost" type="number" min="0" /></label>
-          <label>재고<input class="quantity-input" name="stock" type="number" min="0" /></label>
           <label>안전재고<input class="quantity-input" name="safetyStock" type="number" min="0" value="5" /></label>
           <label>판매상태
             <select class="option-select" name="status">
@@ -1746,6 +1841,10 @@ function createProductAdminForm() {
         <div class="product-form-group-head">
           <strong>배송 / 정책 / 공급</strong>
           <span>배송비, 과세, 공급사, 제조 기준</span>
+        </div>
+        <div class="product-defaults-row">
+          <p>반복 입력이 많은 운영 기준값은 상품별로 한 번에 채울 수 있습니다.</p>
+          <button class="cart-button mini-button" type="button" data-product-defaults>운영 기본값 적용</button>
         </div>
         <div class="product-form-grid">
           <label>배송정책

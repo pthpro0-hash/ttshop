@@ -1329,6 +1329,18 @@
   }
 
   // scripts/ui/management.js
+  var PRODUCT_OPERATION_DEFAULTS = {
+    taxType: "taxable",
+    status: "selling",
+    displayStatus: "displayed",
+    shippingType: "default",
+    shippingFee: "3000",
+    safetyStock: "5",
+    manufacturer: "BEAUTY REF.",
+    supplier: "\uBCF8\uC0AC \uBB3C\uB958",
+    origin: "Korea",
+    brand: "BEAUTY REF.",
+  };
   function createManagementController({
     dom,
     store,
@@ -1610,6 +1622,16 @@
       formBox
         .querySelector("[data-product-reset]")
         .addEventListener("click", () => resetProductForm(formBox));
+      formBox
+        .querySelector("[data-product-defaults]")
+        .addEventListener("click", () => {
+          applyProductDefaults(formBox);
+          setProductFormMessage(
+            formBox,
+            "\uC6B4\uC601 \uAE30\uBCF8\uAC12\uC744 \uC801\uC6A9\uD588\uC2B5\uB2C8\uB2E4.",
+            "info",
+          );
+        });
       getProductField(formBox, "image").addEventListener("input", () =>
         updateProductImagePreview(formBox),
       );
@@ -1806,10 +1828,10 @@
     function saveProductFromForm(formBox) {
       const productId = getProductField(formBox, "productId").value;
       const payload = readProductForm(formBox);
-      if (!payload.name || !payload.ko || !payload.category || !payload.sale) {
+      if (!payload.ko || !payload.sale) {
         setProductFormMessage(
           formBox,
-          "\uC0C1\uD488\uBA85 \uC601\uBB38, \uC0C1\uD488\uBA85 \uD55C\uAE00, \uCE74\uD14C\uACE0\uB9AC, \uD560\uC778\uD310\uB9E4\uAC00\uB294 \uD544\uC218\uC785\uB2C8\uB2E4.",
+          "\uC0C1\uD488\uBA85 \uD55C\uAE00\uACFC \uD310\uB9E4\uAC00\uB294 \uD544\uC218\uC785\uB2C8\uB2E4.",
         );
         return false;
       }
@@ -1818,6 +1840,11 @@
           formBox,
           "\uD310\uB9E4\uC911 \uC0C1\uD488\uC740 \uC7AC\uACE0\uB97C 1\uAC1C \uC774\uC0C1 \uC785\uB825\uD574\uC57C \uAD6C\uB9E4 \uAC00\uB2A5\uD569\uB2C8\uB2E4.",
         );
+        return false;
+      }
+      const skuError = getSkuValidationError(payload, productId);
+      if (skuError) {
+        setProductFormMessage(formBox, skuError);
         return false;
       }
       if (productId) {
@@ -1845,11 +1872,13 @@
       const stock = readNumberField(formBox, "stock");
       const option = getProductField(formBox, "option").value.trim();
       const sku =
-        getProductField(formBox, "sku").value.trim() ||
+        normalizeSku(getProductField(formBox, "sku").value) ||
         createProductSku(getProductField(formBox, "name").value);
       return {
         sku,
-        name: getProductField(formBox, "name").value.trim(),
+        name:
+          getProductField(formBox, "name").value.trim() ||
+          createProductSku(getProductField(formBox, "ko").value),
         ko: getProductField(formBox, "ko").value.trim(),
         category: getProductField(formBox, "category").value,
         type: getProductField(formBox, "type").value.trim(),
@@ -1872,10 +1901,10 @@
         short: getProductField(formBox, "short").value.trim(),
         desc: getProductField(formBox, "desc").value.trim(),
         searchKeywords: getProductField(formBox, "searchKeywords").value.trim(),
-        manufacturer: getProductField(formBox, "manufacturer").value.trim(),
-        supplier: getProductField(formBox, "supplier").value.trim(),
-        origin: getProductField(formBox, "origin").value.trim(),
-        brand: getProductField(formBox, "brand").value.trim(),
+        manufacturer: readTextWithDefault(formBox, "manufacturer"),
+        supplier: readTextWithDefault(formBox, "supplier"),
+        origin: readTextWithDefault(formBox, "origin"),
+        brand: readTextWithDefault(formBox, "brand"),
         barcode: getProductField(formBox, "barcode").value.trim(),
         variants: parseVariantRows(
           getProductField(formBox, "variants").value,
@@ -1940,8 +1969,7 @@
       getProductField(formBox, "status").value = "selling";
       getProductField(formBox, "displayStatus").value = "displayed";
       getProductField(formBox, "shippingType").value = "default";
-      getProductField(formBox, "shippingFee").value = "3000";
-      getProductField(formBox, "safetyStock").value = "5";
+      applyProductDefaults(formBox);
       resetVariantEditor(formBox);
       updateProductImagePreview(formBox);
       updateProductDetailImagePreviews(formBox);
@@ -1949,10 +1977,63 @@
         "\uC0C1\uD488 \uB4F1\uB85D";
       setProductFormMessage(formBox, "");
     }
-    function setProductFormMessage(formBox, message) {
+    function applyProductDefaults(formBox) {
+      Object.entries(PRODUCT_OPERATION_DEFAULTS).forEach(([field, value]) => {
+        const input = getProductField(formBox, field);
+        if (input) input.value = value;
+      });
+    }
+    function readTextWithDefault(formBox, field) {
+      return (
+        getProductField(formBox, field).value.trim() ||
+        PRODUCT_OPERATION_DEFAULTS[field] ||
+        ""
+      );
+    }
+    function setProductFormMessage(formBox, message, tone = "error") {
       const messageBox = formBox.querySelector("[data-product-form-message]");
       if (!messageBox) return;
       messageBox.textContent = message;
+      messageBox.dataset.tone = tone;
+    }
+    function getSkuValidationError(payload, productId) {
+      const productSku = normalizeSku(payload.sku);
+      const variantSkus = payload.variants
+        .map((variant) => normalizeSku(variant.sku))
+        .filter(Boolean);
+      const submittedSkus = [productSku, ...variantSkus].filter(Boolean);
+      const duplicateInForm = findDuplicateValue(submittedSkus);
+      if (duplicateInForm) {
+        return `SKU\uAC00 \uC911\uBCF5\uB418\uC5C8\uC2B5\uB2C8\uB2E4: ${duplicateInForm}`;
+      }
+      const existingSkus = [];
+      (store.products || []).forEach((product) => {
+        if (product.id === productId || product.status === "deleted") return;
+        existingSkus.push(normalizeSku(product.sku));
+        (product.variants || []).forEach((variant) => {
+          existingSkus.push(normalizeSku(variant.sku));
+        });
+      });
+      const existingSkuSet = new Set(existingSkus.filter(Boolean));
+      const duplicatedExisting = submittedSkus.find((sku) =>
+        existingSkuSet.has(sku),
+      );
+      return duplicatedExisting
+        ? `\uC774\uBBF8 \uC0AC\uC6A9 \uC911\uC778 SKU\uC785\uB2C8\uB2E4: ${duplicatedExisting}`
+        : "";
+    }
+    function findDuplicateValue(values) {
+      const seen = /* @__PURE__ */ new Set();
+      return values.find((value) => {
+        if (seen.has(value)) return true;
+        seen.add(value);
+        return false;
+      });
+    }
+    function normalizeSku(value) {
+      return String(value || "")
+        .trim()
+        .toUpperCase();
     }
     function updateProductImagePreview(formBox) {
       const preview = formBox.querySelector("[data-product-image-preview]");
@@ -2910,15 +2991,19 @@
     return `
     <div class="agency-admin-form product-admin-form" data-product-form>
       <input type="hidden" name="productId" />
-      <section class="product-form-group">
+      <section class="product-form-group product-required-group">
         <div class="product-form-group-head">
-          <strong>\uAE30\uBCF8 \uC815\uBCF4</strong>
-          <span>\uC1FC\uD551\uBAB0 \uB178\uCD9C\uBA85, \uBD84\uB958, \uAC80\uC0C9 \uAE30\uC900</span>
+          <strong>\uD544\uC218 \uB4F1\uB85D \uC815\uBCF4</strong>
+          <span>\uC0C1\uD488 \uD310\uB9E4\uB97C \uC2DC\uC791\uD558\uAE30 \uC704\uD55C \uCD5C\uC18C \uC785\uB825\uAC12</span>
         </div>
-        <div class="product-form-grid">
-          <label>\uC0C1\uD488\uBA85 \uC601\uBB38<input class="quantity-input" name="name" placeholder="Daily Tone Up Sunscreen" required /></label>
-          <label>\uC0C1\uD488\uBA85 \uD55C\uAE00<input class="quantity-input" name="ko" placeholder="\uB370\uC77C\uB9AC \uD1A4\uC5C5 \uC120\uC2A4\uD06C\uB9B0" required /></label>
-          <label>\uC0C1\uD488\uCF54\uB4DC/SKU<input class="quantity-input" name="sku" placeholder="COS-SUN-001" /></label>
+        <div class="required-form-note">
+          <strong>\uD544\uC218</strong>
+          <span>\uD55C\uAE00 \uC0C1\uD488\uBA85\uACFC \uD310\uB9E4\uAC00\uB294 \uBC18\uB4DC\uC2DC \uC785\uB825\uD574\uC57C \uD569\uB2C8\uB2E4. \uD310\uB9E4\uC911 \uC0C1\uD488\uC740 \uC7AC\uACE0\uAC00 1\uAC1C \uC774\uC0C1\uC774\uC5B4\uC57C \uAD6C\uB9E4 \uAC00\uB2A5\uD569\uB2C8\uB2E4.</span>
+        </div>
+        <div class="product-form-grid product-required-grid">
+          <label>\uC0C1\uD488\uBA85 \uD55C\uAE00 <em>\uD544\uC218</em><input class="quantity-input" name="ko" placeholder="\uB370\uC77C\uB9AC \uD1A4\uC5C5 \uC120\uC2A4\uD06C\uB9B0" required /></label>
+          <label>\uD310\uB9E4\uAC00 <em>\uD544\uC218</em><input class="quantity-input" name="sale" type="number" min="0" required /></label>
+          <label>\uC7AC\uACE0 <em>\uD310\uB9E4\uC911 \uD544\uC218</em><input class="quantity-input" name="stock" type="number" min="0" /></label>
           <label>\uCE74\uD14C\uACE0\uB9AC
             <select class="option-select" name="category">
               <option value="\uBBF8\uC6A9\uAE30\uAD6C">\uBBF8\uC6A9\uAE30\uAD6C</option>
@@ -2926,6 +3011,16 @@
               <option value="\uD654\uC7A5\uD488" selected>\uD654\uC7A5\uD488</option>
             </select>
           </label>
+        </div>
+      </section>
+      <section class="product-form-group">
+        <div class="product-form-group-head">
+          <strong>\uAE30\uBCF8 \uC815\uBCF4</strong>
+          <span>\uC790\uB3D9 \uC0DD\uC131 \uAC00\uB2A5\uD55C \uC0C1\uD488 \uCF54\uB4DC\uC640 \uC1FC\uD551\uBAB0 \uB178\uCD9C \uBCF4\uC870 \uC815\uBCF4</span>
+        </div>
+        <div class="product-form-grid">
+          <label>\uC0C1\uD488\uBA85 \uC601\uBB38<input class="quantity-input" name="name" placeholder="Daily Tone Up Sunscreen" /></label>
+          <label>\uC0C1\uD488\uCF54\uB4DC/SKU<input class="quantity-input" name="sku" placeholder="COS-SUN-001" /></label>
           <label>\uC0C1\uD488\uC720\uD615<input class="quantity-input" name="type" placeholder="Sun Care SPF" /></label>
           <label>\uBC30\uC9C0<input class="quantity-input" name="badge" placeholder="Best" /></label>
           <label class="profile-wide">\uAC80\uC0C9 \uD0A4\uC6CC\uB4DC<input class="quantity-input" name="searchKeywords" placeholder="\uC0C1\uD488\uBA85, \uD6A8\uB2A5, \uCE74\uD14C\uACE0\uB9AC" /></label>
@@ -2976,10 +3071,8 @@
         </div>
         <div class="product-form-grid">
           <label>\uC18C\uBE44\uC790\uAC00<input class="quantity-input" name="price" type="number" min="0" /></label>
-          <label>\uD310\uB9E4\uAC00<input class="quantity-input" name="sale" type="number" min="0" required /></label>
           <label>\uACF5\uAE09\uAC00<input class="quantity-input" name="supplyPrice" type="number" min="0" /></label>
           <label>\uC6D0\uAC00<input class="quantity-input" name="cost" type="number" min="0" /></label>
-          <label>\uC7AC\uACE0<input class="quantity-input" name="stock" type="number" min="0" /></label>
           <label>\uC548\uC804\uC7AC\uACE0<input class="quantity-input" name="safetyStock" type="number" min="0" value="5" /></label>
           <label>\uD310\uB9E4\uC0C1\uD0DC
             <select class="option-select" name="status">
@@ -3000,6 +3093,10 @@
         <div class="product-form-group-head">
           <strong>\uBC30\uC1A1 / \uC815\uCC45 / \uACF5\uAE09</strong>
           <span>\uBC30\uC1A1\uBE44, \uACFC\uC138, \uACF5\uAE09\uC0AC, \uC81C\uC870 \uAE30\uC900</span>
+        </div>
+        <div class="product-defaults-row">
+          <p>\uBC18\uBCF5 \uC785\uB825\uC774 \uB9CE\uC740 \uC6B4\uC601 \uAE30\uC900\uAC12\uC740 \uC0C1\uD488\uBCC4\uB85C \uD55C \uBC88\uC5D0 \uCC44\uC6B8 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>
+          <button class="cart-button mini-button" type="button" data-product-defaults>\uC6B4\uC601 \uAE30\uBCF8\uAC12 \uC801\uC6A9</button>
         </div>
         <div class="product-form-grid">
           <label>\uBC30\uC1A1\uC815\uCC45
