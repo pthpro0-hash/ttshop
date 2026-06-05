@@ -239,8 +239,21 @@ export function createManagementController({
     );
     if (!settlement) return;
 
+    const changedAt = new Date().toISOString().slice(0, 10);
+    const actor = getCurrentMember(store);
     settlement.status = status;
-    settlement.updatedAt = new Date().toISOString().slice(0, 10);
+    settlement.updatedAt = changedAt;
+    settlement.statusUpdatedBy = actor?.userId || actor?.name || "admin";
+    settlement.statusNote = getSettlementStatusLabel(status);
+    settlement.statusHistory = [
+      ...(settlement.statusHistory || []),
+      {
+        status,
+        changedAt,
+        changedBy: settlement.statusUpdatedBy,
+        note: settlement.statusNote,
+      },
+    ];
   }
 
   function bindAgencyAdminForm(modal) {
@@ -295,6 +308,8 @@ export function createManagementController({
           agency.managerPhone || "";
         getAgencyField(formBox, "settlementAccount").value =
           agency.settlementAccount || "";
+        getAgencyField(formBox, "loginUserId").value = agency.loginUserId || "";
+        getAgencyField(formBox, "loginPassword").value = "";
         getAgencyField(formBox, "code").dataset.manual = "true";
         getAgencyField(formBox, "linkSlug").dataset.manual = "true";
         formBox.querySelector("[data-agency-submit]").textContent =
@@ -981,6 +996,8 @@ export function createManagementController({
         formBox,
         "settlementAccount",
       ).value.trim(),
+      loginUserId: getAgencyField(formBox, "loginUserId").value.trim(),
+      loginPassword: getAgencyField(formBox, "loginPassword").value.trim(),
     };
 
     if (!payload.name || !payload.code || !payload.linkSlug) return;
@@ -988,15 +1005,23 @@ export function createManagementController({
     if (agencyId) {
       const agency = store.agencies.find((item) => item.id === agencyId);
       if (!agency || agency.isHeadquarters) return;
-      Object.assign(agency, payload);
+      Object.assign(agency, createAgencySavePayload(payload, agency));
       return;
     }
 
     store.agencies.push({
       id: `agency-${payload.linkSlug.replace(/[^a-z0-9-]/gi, "-").toLowerCase()}-${store.agencies.length + 1}`,
-      ...payload,
+      ...createAgencySavePayload(payload),
       isHeadquarters: false,
     });
+  }
+
+  function createAgencySavePayload(payload, existingAgency = {}) {
+    const { loginPassword, ...agencyPayload } = payload;
+    agencyPayload.loginPasswordHash = loginPassword
+      ? hashManagementPassword(agencyPayload.loginUserId, loginPassword)
+      : existingAgency.loginPasswordHash || "";
+    return agencyPayload;
   }
 
   function deleteAgency(agencyId) {
@@ -1518,6 +1543,7 @@ function createSettlementDetailRow(item, store, options = {}) {
       <div><span>기준 매출</span><strong>${formatMoney(item.baseAmount)}</strong></div>
       <div><span>영업비율</span><strong>${item.commissionRate}%</strong></div>
       <div><span>지급 예정</span><strong>${formatMoney(item.commissionAmount)}</strong></div>
+      <div><span>최근 변경</span><strong>${formatSettlementUpdate(item)}</strong></div>
       ${
         actions
           ? `<div class="settlement-actions"><span>상태 변경</span><strong>${actions}</strong></div>`
@@ -1525,6 +1551,22 @@ function createSettlementDetailRow(item, store, options = {}) {
       }
     </article>
   `;
+}
+
+function formatSettlementUpdate(item) {
+  if (!item.updatedAt && !item.statusUpdatedBy) return "변경 이력 없음";
+  return `${item.updatedAt || "-"} · ${item.statusUpdatedBy || "admin"}`;
+}
+
+function getSettlementStatusLabel(status) {
+  const labels = {
+    pending_next_month_15: "정산 대기",
+    confirmed: "정산 확정",
+    paid: "지급완료",
+    hold: "정산 보류",
+  };
+
+  return labels[status] || status;
 }
 
 function createSimpleDetailRow(title, value, note) {
@@ -1637,6 +1679,11 @@ function createAgencyMonthDetailContent(monthKey, store) {
       order.agencyIdAtOrder === agency.id &&
       order.referralSourceType !== "personal_product",
   );
+  const excludedOrders = store.orders.filter(
+    (order) =>
+      order.agencyIdAtOrder === agency.id &&
+      order.referralSourceType === "personal_product",
+  );
   const settlements = store.agencySettlementLedger.filter(
     (item) => item.agencyId === agency.id,
   );
@@ -1662,14 +1709,31 @@ function createAgencyMonthDetailContent(monthKey, store) {
       ${monthOrders.map((order) => createOrderDetailRow(order, store)).join("") || '<div class="admin-detail-empty">해당 월 주문이 없습니다.</div>'}
       <div class="product-category">월별 정산 장부</div>
       ${monthSettlements.map((item) => createSettlementDetailRow(item, store)).join("") || '<div class="admin-detail-empty">해당 월 정산 장부가 없습니다.</div>'}
+      <div class="product-category">정산 제외 주문</div>
+      ${
+        excludedOrders
+          .filter((order) => isMonthDate(order.paidAt, monthKey))
+          .map(createExcludedSettlementOrderRow)
+          .join("") ||
+        '<div class="admin-detail-empty">해당 월 정산 제외 주문이 없습니다.</div>'
+      }
     </div>
   `;
 }
 
+function createExcludedSettlementOrderRow(order) {
+  return `
+    <article class="process-row">
+      <div><strong>${order.id}</strong><span>${order.paidAt} · ${order.status}</span></div>
+      <div><span>상품 실결제</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+      <div><span>제외 사유</span><strong>개인 추천링크 우선 적용</strong></div>
+      <div><span>대리점 영업비</span><strong>0원</strong></div>
+    </article>
+  `;
+}
+
 function getAgencyContext(store) {
-  const currentMember = store.members.find(
-    (member) => member.id === store.currentMemberId,
-  );
+  const currentMember = getCurrentMember(store);
   const memberAgency = store.agencies.find(
     (agency) => agency.id === currentMember?.agencyId,
   );
@@ -1679,6 +1743,10 @@ function getAgencyContext(store) {
     store.agencies.find((agency) => !agency.isHeadquarters) ||
     store.agencies.find((agency) => agency.isHeadquarters)
   );
+}
+
+function getCurrentMember(store) {
+  return store.members.find((member) => member.id === store.currentMemberId);
 }
 
 function getAgencyLinkPerformance(agency, store) {
@@ -1963,6 +2031,19 @@ function createAgencyAdminForm() {
           <label class="profile-wide">정산 계좌<input class="quantity-input" name="settlementAccount" placeholder="은행 / 계좌번호 / 예금주" /></label>
         </div>
       </section>
+      <section class="agency-form-section">
+        <div class="product-form-group-head">
+          <strong>대리점 로그인 계정</strong>
+          <span>해당 대리점이 Agency 화면에 접속할 아이디와 비밀번호</span>
+        </div>
+        <div class="agency-form-grid">
+          <label>로그인 아이디<input class="quantity-input" name="loginUserId" placeholder="예: gangnam01" /></label>
+          <label>초기/변경 비밀번호<input class="quantity-input" name="loginPassword" type="password" placeholder="입력 시 비밀번호 변경" /></label>
+          <label class="profile-wide">안내
+            <input class="quantity-input" readonly value="비밀번호는 저장 시 해시로 보관되며, 수정 시 비워두면 기존 비밀번호를 유지합니다." />
+          </label>
+        </div>
+      </section>
       <div class="agency-form-actions">
         <button class="buy-button" type="button" data-agency-submit>대리점 등록</button>
         <button class="cart-button" type="button" data-agency-reset>입력 초기화</button>
@@ -1985,7 +2066,7 @@ function createAgencyManageRow(agency) {
       <div>${agency.code}</div>
       <div><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></div>
       <div>${agency.commissionRate}%</div>
-      <div>${agency.status}<span>${agency.managerName || "담당 미등록"} · ${agency.settlementAccount || "정산계좌 미등록"}</span></div>
+      <div>${agency.status}<span>${agency.managerName || "담당 미등록"} · ${agency.loginUserId ? `ID ${agency.loginUserId}` : "로그인 미등록"}</span></div>
       <div class="agency-row-actions">${controls}</div>
     </article>
   `;
@@ -2332,6 +2413,20 @@ function createAgencyIdentifiers(name) {
     code: slug.replace(/-/g, "").toUpperCase(),
     linkSlug: slug.toLowerCase(),
   };
+}
+
+function hashManagementPassword(userId, password) {
+  const source = `${String(userId || "")
+    .trim()
+    .toLowerCase()}:${password}:beauty-ref-demo-v1`;
+  let hash = 2166136261;
+
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function romanizeText(value) {

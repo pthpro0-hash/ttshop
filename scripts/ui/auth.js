@@ -37,6 +37,13 @@ export function createAuthController({
     bindProfileEvents();
   }
 
+  function openManagementLogin(role, onSuccess = () => {}) {
+    closeCart();
+    dom.auth.innerHTML = createManagementLoginView(role);
+    showAuthView();
+    bindManagementLoginEvents(role, onSuccess);
+  }
+
   function createAuthView(mode) {
     const modeLabel = {
       login: "로그인",
@@ -179,6 +186,45 @@ export function createAuthController({
   `;
   }
 
+  function createManagementLoginView(role) {
+    const isAdmin = role === "admin";
+    const title = isAdmin ? "Admin Login" : "Agency Login";
+    const label = isAdmin ? "관리자 로그인" : "대리점 로그인";
+    const note = isAdmin
+      ? "관리자 전용 아이디와 비밀번호로 접속합니다."
+      : "Admin에서 발급한 대리점별 아이디와 비밀번호로 접속합니다.";
+
+    return `
+    <section class="auth-dialog" role="dialog" aria-modal="true" aria-label="${label}">
+      <button class="cart-close auth-close" id="authClose" type="button" aria-label="${label} 닫기">×</button>
+      <section class="auth-card management-login-card">
+        <div class="profile-head">
+          <div>
+            <div class="product-category">${title}</div>
+            <h2>${label}</h2>
+          </div>
+          <p>${note}</p>
+        </div>
+        <form class="auth-form login-form" data-management-login="${role}">
+          <div class="login-box">
+            <div class="login-visual" aria-hidden="true"><span></span></div>
+            <div class="login-fields">
+              <label class="sr-only" for="managementUserId">아이디</label>
+              <input class="quantity-input" id="managementUserId" name="userId" placeholder="아이디를 입력하세요." />
+              <label class="sr-only" for="managementPassword">비밀번호</label>
+              <input class="quantity-input" id="managementPassword" name="password" type="password" placeholder="비밀번호를 입력하세요." />
+            </div>
+            <button class="buy-button login-submit" type="submit">${label}</button>
+          </div>
+          <p class="auth-error" data-auth-error aria-live="polite"></p>
+          <p class="auth-note">${note}</p>
+        </form>
+        ${createManagementAccess()}
+      </section>
+    </section>
+  `;
+  }
+
   function createSocialButton(provider, label, mark) {
     return `
     <button class="social-button social-${provider}" type="button" data-auth-complete="${label}">
@@ -209,71 +255,256 @@ export function createAuthController({
     const links = store.personalReferralLinks.filter(
       (link) => link.ownerMemberId === member.id,
     );
+    const stats = createProfileStats({ member, orders, points, links });
+    const extraAddress =
+      (member.shippingAddresses || []).find((address) => !address.isDefault) ||
+      {};
 
     return `
     <section class="auth-dialog profile-dialog" role="dialog" aria-modal="true" aria-label="내정보">
       <button class="cart-close auth-close" id="profileClose" type="button" aria-label="내정보 닫기">×</button>
       <section class="auth-card profile-card">
-        <div class="profile-head">
-          <div>
-            <div class="product-category">Member / My information</div>
-            <h2>내정보</h2>
+        <div class="profile-service-head">
+          <div class="profile-identity">
+            <div class="product-category">Member / My page</div>
+            <h2>${escapeHtml(member.name || member.userId || "회원")}님</h2>
+            <p>
+              ${escapeHtml(stats.agencyName)} 고객 · ${member.joinedAt || "가입일 없음"} 가입 ·
+              ${createMemberStatusLabel(member.status)}
+            </p>
           </div>
-          <p>아이디는 변경할 수 없습니다. 배송지, 연락처, 수신 설정은 쇼핑몰 주문 기준 정보로 저장됩니다.</p>
+          <div class="profile-quick-actions">
+            <button class="cart-button" type="button" data-profile-tab="account">정보 수정</button>
+            <button class="cart-button" type="button" data-profile-tab="security">비밀번호</button>
+            <button class="buy-button" type="button" data-profile-close>닫기</button>
+          </div>
         </div>
-        <form class="profile-form" data-profile-form>
-          <div class="profile-form-grid">
-            <label>아이디<input class="quantity-input" name="userId" value="${escapeAttribute(member.userId || member.id)}" readonly /></label>
-            <label>이름<input class="quantity-input" name="name" value="${escapeAttribute(member.name)}" /></label>
-            <label>휴대폰<input class="quantity-input" name="phone" value="${escapeAttribute(member.phone)}" /></label>
-            <label>이메일<input class="quantity-input" name="email" value="${escapeAttribute(member.email)}" /></label>
-            <label>우편번호<input class="quantity-input" name="postcode" value="${escapeAttribute(member.address?.postcode)}" /></label>
-            <label class="profile-wide">배송지<input class="quantity-input" name="address" value="${escapeAttribute(member.address?.address)}" /></label>
-            <label class="profile-wide">상세주소<input class="quantity-input" name="addressDetail" value="${escapeAttribute(member.address?.addressDetail)}" /></label>
-            <label>기본 결제수단
-              <select class="option-select" name="paymentMethod">
-                ${createOption("신용카드", member.paymentMethod)}
-                ${createOption("카카오페이", member.paymentMethod)}
-                ${createOption("네이버페이", member.paymentMethod)}
-                ${createOption("무통장입금", member.paymentMethod)}
-              </select>
-            </label>
-            <label>관심 카테고리
-              <select class="option-select" name="favoriteCategory">
-                ${createOption("미용기구", member.favoriteCategory)}
-                ${createOption("미용재료", member.favoriteCategory)}
-                ${createOption("화장품", member.favoriteCategory)}
-              </select>
-            </label>
-            <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> 쇼핑 혜택 및 배송 알림 수신</label>
-          </div>
-          <div class="buy-actions profile-actions">
-            <button class="buy-button" type="submit">내정보 저장</button>
-            <button class="cart-button" type="button" data-profile-close>닫기</button>
-          </div>
-        </form>
-        <form class="profile-form password-form" data-password-form>
-          <div class="product-category">Password</div>
-          <div class="profile-form-grid password-grid">
-            <label>기존 비밀번호<input class="quantity-input" name="currentPassword" type="password" /></label>
-            <label>새 비밀번호<input class="quantity-input" name="newPassword" type="password" placeholder="영문+숫자 8자 이상" /></label>
-            <label>새 비밀번호 확인<input class="quantity-input" name="confirmPassword" type="password" /></label>
-            <button class="buy-button" type="submit">비밀번호 변경</button>
-          </div>
-          <p class="auth-error" data-password-error aria-live="polite"></p>
-        </form>
         <div class="profile-summary-grid">
-          <button type="button" data-profile-section="points"><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong></button>
-          <button type="button" data-profile-section="orders"><span>구매이력</span><strong>${orders.length}건</strong></button>
-          <button type="button" data-profile-section="links"><span>추천 링크</span><strong>${links.length}개</strong></button>
+          <button type="button" data-profile-section="points" data-profile-tab="points"><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>이번달 적립 ${stats.monthEarned.toLocaleString("ko-KR")}P</em></button>
+          <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>구매이력</span><strong>${orders.length}건</strong><em>누적 ${formatMoney(stats.totalPaid)}</em></button>
+          <button type="button" data-profile-section="links" data-profile-tab="links"><span>추천 링크</span><strong>${links.length}개</strong><em>활성 ${stats.activeLinks}개</em></button>
+          <div class="profile-status-card"><span>이번달 구매</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}건 결제</em></div>
         </div>
-        <div class="profile-history-stack">
-          ${createExpandableProfileSection("points", "포인트 이력", sortPointHistory(points), createProfilePointRow, "포인트 이력이 없습니다.")}
-          ${createExpandableProfileSection("orders", "구매이력", sortOrderHistory(orders), createProfileOrderRow, "구매이력이 없습니다.")}
-          ${createExpandableProfileSection("links", "추천 링크", links, createProfileLinkRow, "추천 링크가 없습니다.")}
+        <div class="profile-service-layout">
+          <nav class="profile-side-nav" aria-label="내정보 메뉴">
+            ${createProfileTabButton("account", "계정/배송지", true)}
+            ${createProfileTabButton("orders", "구매 내역", false)}
+            ${createProfileTabButton("points", "포인트 관리", false)}
+            ${createProfileTabButton("links", "추천 링크", false)}
+            ${createProfileTabButton("security", "보안", false)}
+          </nav>
+          <div class="profile-tab-panels">
+            <section class="profile-tab-panel" data-profile-panel="account">
+              <div class="profile-section-head">
+                <div>
+                  <div class="product-category">Account</div>
+                  <h3>계정과 배송지</h3>
+                </div>
+                <p>아이디는 변경할 수 없습니다. 주문과 배송에 필요한 기본 정보를 관리합니다.</p>
+              </div>
+              <form class="profile-form" data-profile-form>
+                <div class="profile-form-grid">
+                  <label>아이디<input class="quantity-input" name="userId" value="${escapeAttribute(member.userId || member.id)}" readonly /></label>
+                  <label>이름<input class="quantity-input" name="name" value="${escapeAttribute(member.name)}" /></label>
+                  <label>휴대폰<input class="quantity-input" name="phone" value="${escapeAttribute(member.phone)}" /></label>
+                  <label>이메일<input class="quantity-input" name="email" value="${escapeAttribute(member.email)}" /></label>
+                  <label>우편번호<input class="quantity-input" name="postcode" value="${escapeAttribute(member.address?.postcode)}" /></label>
+                  <label class="profile-wide">배송지<input class="quantity-input" name="address" value="${escapeAttribute(member.address?.address)}" /></label>
+                  <label class="profile-wide">상세주소<input class="quantity-input" name="addressDetail" value="${escapeAttribute(member.address?.addressDetail)}" /></label>
+                  <div class="profile-wide profile-address-overview">
+                    <div class="product-category">배송지 목록</div>
+                    ${createShippingAddressList(member)}
+                  </div>
+                  <div class="profile-wide profile-extra-address">
+                    <div class="product-category">추가 배송지</div>
+                    <div class="profile-form-grid nested">
+                      <label>배송지명<input class="quantity-input" name="extraAddressLabel" value="${escapeAttribute(extraAddress.label)}" placeholder="자택 / 매장 / 회사" /></label>
+                      <label>수령인<input class="quantity-input" name="extraAddressRecipient" value="${escapeAttribute(extraAddress.recipient)}" /></label>
+                      <label>연락처<input class="quantity-input" name="extraAddressPhone" value="${escapeAttribute(extraAddress.phone)}" /></label>
+                      <label>우편번호<input class="quantity-input" name="extraAddressPostcode" value="${escapeAttribute(extraAddress.postcode)}" /></label>
+                      <label class="profile-wide">배송지<input class="quantity-input" name="extraAddressAddress" value="${escapeAttribute(extraAddress.address)}" /></label>
+                      <label class="profile-wide">상세주소<input class="quantity-input" name="extraAddressDetail" value="${escapeAttribute(extraAddress.addressDetail)}" /></label>
+                    </div>
+                  </div>
+                  <label>기본 결제수단
+                    <select class="option-select" name="paymentMethod">
+                      ${createOption("신용카드", member.paymentMethod)}
+                      ${createOption("카카오페이", member.paymentMethod)}
+                      ${createOption("네이버페이", member.paymentMethod)}
+                      ${createOption("무통장입금", member.paymentMethod)}
+                    </select>
+                  </label>
+                  <label>관심 카테고리
+                    <select class="option-select" name="favoriteCategory">
+                      ${createOption("미용기구", member.favoriteCategory)}
+                      ${createOption("미용재료", member.favoriteCategory)}
+                      ${createOption("화장품", member.favoriteCategory)}
+                    </select>
+                  </label>
+                  <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> 쇼핑 혜택 및 배송 알림 수신</label>
+                </div>
+                <div class="buy-actions profile-actions">
+                  <button class="buy-button" type="submit">변경사항 저장</button>
+                </div>
+              </form>
+            </section>
+            <section class="profile-tab-panel is-hidden" data-profile-panel="orders">
+              ${createProfileOrderDashboard(sortOrderHistory(orders), stats)}
+              ${createExpandableProfileSection("orders", "구매 내역", sortOrderHistory(orders), createProfileOrderRow, "구매이력이 없습니다.")}
+              <section class="profile-order-detail is-hidden" id="profileOrderDetail" aria-live="polite"></section>
+            </section>
+            <section class="profile-tab-panel is-hidden" data-profile-panel="points">
+              ${createProfilePointDashboard(points, stats)}
+              ${createExpandableProfileSection("points", "포인트 적립/사용 이력", sortPointHistory(points), createProfilePointRow, "포인트 이력이 없습니다.")}
+            </section>
+            <section class="profile-tab-panel is-hidden" data-profile-panel="links">
+              ${createProfileReferralDashboard(links)}
+              ${createExpandableProfileSection("links", "추천 링크", links, createProfileLinkRow, "추천 링크가 없습니다.")}
+            </section>
+            <section class="profile-tab-panel is-hidden" data-profile-panel="security">
+              <div class="profile-section-head">
+                <div>
+                  <div class="product-category">Security</div>
+                  <h3>비밀번호 변경</h3>
+                </div>
+                <p>기존 비밀번호 검증 후 새 비밀번호를 저장합니다.</p>
+              </div>
+              <form class="profile-form password-form" data-password-form>
+                <div class="profile-form-grid password-grid">
+                  <label>기존 비밀번호<input class="quantity-input" name="currentPassword" type="password" /></label>
+                  <label>새 비밀번호<input class="quantity-input" name="newPassword" type="password" placeholder="영문+숫자 8자 이상" /></label>
+                  <label>새 비밀번호 확인<input class="quantity-input" name="confirmPassword" type="password" /></label>
+                  <button class="buy-button" type="submit">비밀번호 변경</button>
+                </div>
+                <p class="auth-error" data-password-error aria-live="polite"></p>
+              </form>
+            </section>
+          </div>
         </div>
       </section>
     </section>
+  `;
+  }
+
+  function createProfileStats({ member, orders, points, links }) {
+    const monthPrefix = new Date().toISOString().slice(0, 7);
+    const monthOrders = orders.filter((order) =>
+      String(order.paidAt || "").startsWith(monthPrefix),
+    );
+    const earnedPoints = points
+      .filter((point) => Number(point.amount) > 0)
+      .reduce((sum, point) => sum + Number(point.amount || 0), 0);
+    const usedPoints = points
+      .filter((point) => Number(point.amount) < 0)
+      .reduce((sum, point) => sum + Math.abs(Number(point.amount || 0)), 0);
+    const monthEarned = points
+      .filter(
+        (point) =>
+          Number(point.amount) > 0 &&
+          String(point.createdAt || "").startsWith(monthPrefix),
+      )
+      .reduce((sum, point) => sum + Number(point.amount || 0), 0);
+    const monthUsed = points
+      .filter(
+        (point) =>
+          Number(point.amount) < 0 &&
+          String(point.createdAt || "").startsWith(monthPrefix),
+      )
+      .reduce((sum, point) => sum + Math.abs(Number(point.amount || 0)), 0);
+    const latestOrder = sortOrderHistory(orders)[0];
+    const agency = store.agencies.find((item) => item.id === member.agencyId);
+
+    return {
+      activeLinks: links.filter((link) => link.status === "active").length,
+      agencyName: agency?.name || "본사",
+      earnedPoints,
+      latestOrder,
+      monthEarned,
+      monthOrderCount: monthOrders.length,
+      monthPaid: monthOrders.reduce(
+        (sum, order) => sum + Number(order.paidAmount || 0),
+        0,
+      ),
+      monthUsed,
+      totalPaid: orders.reduce(
+        (sum, order) => sum + Number(order.paidAmount || 0),
+        0,
+      ),
+      usedPoints,
+    };
+  }
+
+  function createProfileTabButton(tab, label, isActive) {
+    return `
+    <button class="${isActive ? "is-active" : ""}" type="button" data-profile-tab="${tab}">
+      ${label}
+    </button>
+  `;
+  }
+
+  function createProfileOrderDashboard(orders, stats) {
+    return `
+    <div class="profile-section-head">
+      <div>
+        <div class="product-category">Orders</div>
+        <h3>구매 내역</h3>
+      </div>
+      <p>최근 주문 상태와 결제 금액을 확인하고, 주문별 상세 내역을 열어볼 수 있습니다.</p>
+    </div>
+    <div class="profile-insight-grid">
+      <article><span>최근 주문</span><strong>${stats.latestOrder?.id || "-"}</strong><em>${stats.latestOrder?.paidAt || "주문 없음"}</em></article>
+      <article><span>누적 결제</span><strong>${formatMoney(stats.totalPaid)}</strong><em>배송비 포함 결제금액</em></article>
+      <article><span>이번달 주문</span><strong>${stats.monthOrderCount}건</strong><em>${formatMoney(stats.monthPaid)}</em></article>
+    </div>
+    <div class="profile-order-status-strip">
+      ${createOrderStatusCount(orders, "paid", "결제완료")}
+      ${createOrderStatusCount(orders, "shipping", "배송중")}
+      ${createOrderStatusCount(orders, "completed", "구매확정")}
+      ${createOrderStatusCount(orders, "cancelled", "취소/환불")}
+    </div>
+  `;
+  }
+
+  function createOrderStatusCount(orders, status, label) {
+    const count = orders.filter((order) => order.status === status).length;
+
+    return `<div><span>${label}</span><strong>${count}</strong></div>`;
+  }
+
+  function createProfilePointDashboard(points, stats) {
+    return `
+    <div class="profile-section-head">
+      <div>
+        <div class="product-category">Points</div>
+        <h3>포인트 관리</h3>
+      </div>
+      <p>구매 적립, 결제 사용, 월별 누적을 분리해 확인합니다. 포인트 적립/사용 이력은 최근 10개부터 표시됩니다.</p>
+    </div>
+    <div class="profile-point-ledger-summary">
+      <article><span>총 적립</span><strong>${stats.earnedPoints.toLocaleString("ko-KR")}P</strong><em>이번달 ${stats.monthEarned.toLocaleString("ko-KR")}P</em></article>
+      <article><span>총 사용</span><strong>${stats.usedPoints.toLocaleString("ko-KR")}P</strong><em>이번달 ${stats.monthUsed.toLocaleString("ko-KR")}P</em></article>
+      <article><span>최근 변동</span><strong>${points[0] ? `${Number(points[0].amount).toLocaleString("ko-KR")}P` : "0P"}</strong><em>${points[0]?.createdAt || "이력 없음"}</em></article>
+    </div>
+  `;
+  }
+
+  function createProfileReferralDashboard(links) {
+    const activeLinks = links.filter((link) => link.status === "active");
+    const productCount = new Set(links.map((link) => link.productId)).size;
+
+    return `
+    <div class="profile-section-head">
+      <div>
+        <div class="product-category">Referral</div>
+        <h3>추천 링크</h3>
+      </div>
+      <p>구매한 상품별로 발급된 개인 추천 링크를 복사해 공유할 수 있습니다.</p>
+    </div>
+    <div class="profile-insight-grid">
+      <article><span>활성 링크</span><strong>${activeLinks.length}개</strong><em>복사 가능</em></article>
+      <article><span>상품 수</span><strong>${productCount}개</strong><em>상품별 1개 링크</em></article>
+      <article><span>최근 링크</span><strong>${links[0]?.code || "-"}</strong><em>${links[0]?.productId || "링크 없음"}</em></article>
+    </div>
   `;
   }
 
@@ -281,24 +512,106 @@ export function createAuthController({
     return `<option value="${value}" ${value === selectedValue ? "selected" : ""}>${value}</option>`;
   }
 
-  function createProfileOrderRow(order) {
-    const firstItem = order.items?.[0];
+  function createShippingAddressList(member) {
+    const addresses = normalizeMemberShippingAddresses(member);
+    if (!addresses.length) {
+      return `<div class="admin-detail-empty compact">저장된 배송지가 없습니다.</div>`;
+    }
 
     return `
-    <article class="profile-row">
-      <div><strong>${order.id}</strong><span>${order.paidAt} · ${order.status}</span></div>
-      <div><span>${firstItem?.productKo || "상품"}</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+    <div class="profile-address-list">
+      ${addresses
+        .map(
+          (address) => `
+          <article>
+            <strong>${escapeHtml(address.label)}${address.isDefault ? " · 기본" : ""}</strong>
+            <span>${escapeHtml(address.recipient || member.name || "")} / ${escapeHtml(address.phone || member.phone || "")}</span>
+            <span>${escapeHtml(address.postcode)} ${escapeHtml(address.address)} ${escapeHtml(address.addressDetail)}</span>
+          </article>
+        `,
+        )
+        .join("")}
+    </div>
+  `;
+  }
+
+  function createProfileOrderRow(order) {
+    const firstItem = order.items?.[0];
+    const itemCount = (order.items || []).reduce(
+      (sum, item) => sum + Number(item.qty || 0),
+      0,
+    );
+
+    return `
+    <article class="profile-row profile-order-row">
+      <div>
+        <strong>${order.id}</strong>
+        <span>${order.paidAt} · ${createOrderStatusLabel(order.status)}</span>
+      </div>
+      <div>
+        <strong>${firstItem?.productKo || "상품"}</strong>
+        <span>${itemCount}개 · 상품금액 ${formatMoney(order.paidProductAmount)}</span>
+      </div>
+      <div>
+        <strong>${formatMoney(order.paidAmount || order.paidProductAmount)}</strong>
+        <span>사용 ${Math.abs(order.pointUsed || 0).toLocaleString("ko-KR")}P · 적립 ${(order.pointEarned || 0).toLocaleString("ko-KR")}P</span>
+      </div>
+      <div class="profile-row-actions">
+        <button class="buy-button mini-button" type="button" data-profile-order-detail="${order.id}">주문 상세</button>
+        <button class="cart-button mini-button" type="button" data-profile-tab="orders">문의 준비</button>
+      </div>
     </article>
+  `;
+  }
+
+  function createProfileOrderDetail(order) {
+    const agency = store.agencies.find(
+      (item) => item.id === order.agencyIdAtOrder,
+    );
+
+    return `
+    <div class="profile-history-head">
+      <div>
+        <div class="product-category">Order detail</div>
+        <h3>${order.id}</h3>
+      </div>
+      <button class="cart-button mini-button" type="button" data-profile-order-detail-close>닫기</button>
+    </div>
+    <div class="profile-order-summary-grid">
+      <div><span>주문일</span><strong>${order.paidAt}</strong></div>
+      <div><span>상태</span><strong>${order.status}</strong></div>
+      <div><span>상품금액</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
+      <div><span>배송비</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "무료"}</strong></div>
+      <div><span>포인트 사용</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
+      <div><span>적립 포인트</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>결제금액</span><strong>${formatMoney(order.paidAmount)}</strong></div>
+      <div><span>대리점</span><strong>${agency?.name || "본사"}</strong></div>
+    </div>
+    <div class="profile-list">
+      ${(order.items || [])
+        .map(
+          (item) => `
+          <article class="profile-row">
+            <div><strong>${escapeHtml(item.productKo || item.productName)}</strong><span>${escapeHtml(item.option || "기본 옵션")}</span></div>
+            <div><span>수량 ${item.qty}개</span><strong>${formatMoney((item.sale || 0) * (item.qty || 1))}</strong></div>
+          </article>
+        `,
+        )
+        .join("")}
+    </div>
   `;
   }
 
   function createProfilePointRow(point) {
     const typeLabel = point.amount >= 0 ? "적립" : "사용";
+    const sign = point.amount >= 0 ? "+" : "-";
 
     return `
-    <article class="profile-row">
-      <div><strong>${typeLabel} ${Math.abs(point.amount).toLocaleString("ko-KR")}P</strong><span>${point.note}</span></div>
+    <article class="profile-row profile-point-row ${point.amount >= 0 ? "is-earned" : "is-used"}">
+      <div><strong>${typeLabel}</strong><span>${point.createdAt || "-"}</span></div>
+      <div><strong>${sign}${Math.abs(point.amount).toLocaleString("ko-KR")}P</strong><span>${point.note}</span></div>
       <div><span>기준 금액</span><strong>${formatMoney(point.baseAmount)}</strong></div>
+      <div><span>주문번호</span><strong>${point.orderId || "-"}</strong></div>
     </article>
   `;
   }
@@ -308,7 +621,7 @@ export function createAuthController({
 
     return `
     <article class="profile-row referral-row">
-      <div><strong>${link.code}</strong><span>${link.status}</span></div>
+      <div><strong>${link.code}</strong><span>${createReferralStatusLabel(link.status)} · ${link.productId}</span></div>
       <div>
         <span>${url}</span>
         <button class="cart-button mini-button" type="button" data-copy-referral="${url}">링크 복사</button>
@@ -352,6 +665,25 @@ export function createAuthController({
     );
   }
 
+  function createOrderStatusLabel(status) {
+    const labels = {
+      paid: "결제완료",
+      shipping: "배송중",
+      completed: "구매확정",
+      cancelled: "취소/환불",
+    };
+    return labels[status] || status || "상태 없음";
+  }
+
+  function createReferralStatusLabel(status) {
+    const labels = {
+      active: "활성",
+      used: "사용됨",
+      paused: "중지",
+    };
+    return labels[status] || status || "상태 없음";
+  }
+
   function bindProfileEvents() {
     document
       .querySelector("#profileClose")
@@ -378,17 +710,15 @@ export function createAuthController({
         event.preventDefault();
         changePassword(event.currentTarget);
       });
+    document.querySelectorAll("[data-profile-tab]").forEach((button) => {
+      button.addEventListener("click", () =>
+        activateProfileTab(button.dataset.profileTab),
+      );
+    });
     document.querySelectorAll("[data-profile-section]").forEach((button) => {
-      button.addEventListener("click", () => {
-        document
-          .querySelectorAll("[data-profile-history]")
-          .forEach((section) => {
-            section.classList.toggle(
-              "is-hidden",
-              section.dataset.profileHistory !== button.dataset.profileSection,
-            );
-          });
-      });
+      button.addEventListener("click", () =>
+        activateProfileTab(button.dataset.profileSection),
+      );
     });
     document
       .querySelectorAll("[data-profile-more-button]")
@@ -407,6 +737,40 @@ export function createAuthController({
         await copyText(button.dataset.copyReferral);
         showToast("추천 링크가 복사되었습니다.");
       });
+    });
+    document
+      .querySelectorAll("[data-profile-order-detail]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const order = store.orders.find(
+            (item) => item.id === button.dataset.profileOrderDetail,
+          );
+          const detail = document.querySelector("#profileOrderDetail");
+          if (!order || !detail) return;
+
+          detail.innerHTML = createProfileOrderDetail(order);
+          detail.classList.remove("is-hidden");
+          detail
+            .querySelector("[data-profile-order-detail-close]")
+            ?.addEventListener("click", () =>
+              detail.classList.add("is-hidden"),
+            );
+        });
+      });
+  }
+
+  function activateProfileTab(tab) {
+    document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
+      panel.classList.toggle("is-hidden", panel.dataset.profilePanel !== tab);
+    });
+    document.querySelectorAll("[data-profile-tab]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.profileTab === tab);
+    });
+    document.querySelectorAll("[data-profile-history]").forEach((section) => {
+      section.classList.toggle(
+        "is-hidden",
+        section.dataset.profileHistory !== tab,
+      );
     });
   }
 
@@ -427,6 +791,36 @@ export function createAuthController({
       address: getFormValue(form, "address"),
       addressDetail: getFormValue(form, "addressDetail"),
     };
+    member.shippingAddresses = buildProfileShippingAddresses(form, member);
+  }
+
+  function buildProfileShippingAddresses(form, member) {
+    const defaultAddress = {
+      id: "addr-default",
+      label: "기본 배송지",
+      recipient: member.name,
+      phone: member.phone,
+      postcode: member.address.postcode,
+      address: member.address.address,
+      addressDetail: member.address.addressDetail,
+      isDefault: true,
+    };
+    const extraAddress = {
+      id:
+        member.shippingAddresses?.find((address) => !address.isDefault)?.id ||
+        `addr-${Date.now()}`,
+      label: getFormValue(form, "extraAddressLabel") || "추가 배송지",
+      recipient: getFormValue(form, "extraAddressRecipient") || member.name,
+      phone: getFormValue(form, "extraAddressPhone") || member.phone,
+      postcode: getFormValue(form, "extraAddressPostcode"),
+      address: getFormValue(form, "extraAddressAddress"),
+      addressDetail: getFormValue(form, "extraAddressDetail"),
+      isDefault: false,
+    };
+
+    return [defaultAddress, extraAddress].filter(
+      (address) => address.postcode || address.address || address.addressDetail,
+    );
   }
 
   function changePassword(form) {
@@ -503,6 +897,37 @@ export function createAuthController({
     });
   }
 
+  function bindManagementLoginEvents(role, onSuccess) {
+    document.querySelector("#authClose")?.addEventListener("click", closeAuth);
+    dom.auth.addEventListener("click", (event) => {
+      if (event.target === dom.auth) closeAuth();
+    });
+    document.querySelectorAll("[data-management-link]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const targetRole = link.dataset.managementLink;
+        if (targetRole === "member") {
+          openAuth("login");
+          return;
+        }
+        openManagementLogin(targetRole, onSuccess);
+      });
+    });
+    const form = document.querySelector("[data-management-login]");
+    form?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const result =
+        role === "admin" ? loginAdminManager(form) : loginAgencyManager(form);
+      if (!result) return;
+
+      showToast(
+        `${role === "admin" ? "관리자" : "대리점"} 로그인이 완료되었습니다.`,
+      );
+      closeAuth();
+      onSuccess(role);
+    });
+  }
+
   function registerMember(form) {
     clearFormError(form);
     const userId = normalizeUserId(getFormValue(form, "userId"));
@@ -542,6 +967,7 @@ export function createAuthController({
       phone: getFormValue(form, "phone"),
       email: getFormValue(form, "email"),
       agencyId: agency.id,
+      role: "member",
       points: 0,
       status: "active",
       joinedAt: new Date().toISOString().slice(0, 10),
@@ -550,6 +976,21 @@ export function createAuthController({
         address: getFormValue(form, "address"),
         addressDetail: getFormValue(form, "addressDetail"),
       },
+      shippingAddresses: [
+        {
+          id: "addr-default",
+          label: "기본 배송지",
+          recipient: getFormValue(form, "name") || userId || "신규회원",
+          phone: getFormValue(form, "phone"),
+          postcode: getFormValue(form, "postcode"),
+          address: getFormValue(form, "address"),
+          addressDetail: getFormValue(form, "addressDetail"),
+          isDefault: true,
+        },
+      ].filter(
+        (address) =>
+          address.postcode || address.address || address.addressDetail,
+      ),
     });
     store.currentMemberId = memberId;
     store.pendingAgencySlug = "";
@@ -582,6 +1023,107 @@ export function createAuthController({
     persistStore(store);
     updateSessionUi();
     return true;
+  }
+
+  function loginAdminManager(form) {
+    clearFormError(form);
+    const userId = getFormValue(form, "userId");
+    const password = getFormValue(form, "password");
+    if (userId !== "adminChang" || password !== "Chang$0909") {
+      setFormError(form, "관리자 아이디 또는 비밀번호가 일치하지 않습니다.");
+      return false;
+    }
+
+    const admin = ensureManagementMember({
+      id: "member-admin",
+      userId: "adminChang",
+      name: "관리자",
+      role: "admin",
+      agencyId: getHeadquartersAgency()?.id,
+      passwordHash: hashPassword(userId, password),
+    });
+    store.currentMemberId = admin.id;
+    persistStore(store);
+    updateSessionUi();
+    return true;
+  }
+
+  function loginAgencyManager(form) {
+    clearFormError(form);
+    const userId = normalizeUserId(getFormValue(form, "userId"));
+    const password = getFormValue(form, "password");
+    const agency = store.agencies.find(
+      (item) =>
+        normalizeUserId(item.loginUserId) === userId &&
+        item.status === "active",
+    );
+
+    if (
+      !agency ||
+      !agency.loginPasswordHash ||
+      agency.loginPasswordHash !== hashPassword(userId, password)
+    ) {
+      setFormError(form, "대리점 아이디 또는 비밀번호가 일치하지 않습니다.");
+      return false;
+    }
+
+    const member = ensureManagementMember({
+      id: `member-agency-${agency.id}`,
+      userId,
+      name: agency.name,
+      role: "agency_manager",
+      agencyId: agency.id,
+      passwordHash: agency.loginPasswordHash,
+    });
+    store.currentMemberId = member.id;
+    persistStore(store);
+    updateSessionUi();
+    return true;
+  }
+
+  function ensureManagementMember({
+    id,
+    userId,
+    name,
+    role,
+    agencyId,
+    passwordHash,
+  }) {
+    let member =
+      store.members.find((item) => item.id === id) ||
+      store.members.find(
+        (item) => normalizeUserId(item.userId) === normalizeUserId(userId),
+      );
+    if (!member) {
+      member = {
+        id,
+        userId,
+        passwordHash,
+        authProvider: "password",
+        name,
+        phone: "",
+        email: "",
+        agencyId,
+        role,
+        points: 0,
+        status: "active",
+        joinedAt: new Date().toISOString().slice(0, 10),
+        address: {},
+        shippingAddresses: [],
+      };
+      store.members.push(member);
+    }
+
+    Object.assign(member, {
+      userId,
+      passwordHash,
+      authProvider: "password",
+      name,
+      agencyId,
+      role,
+      status: "active",
+    });
+    return member;
   }
 
   function getFormValue(form, name) {
@@ -689,11 +1231,13 @@ export function createAuthController({
       phone: "",
       email: "",
       agencyId: agency.id,
+      role: "member",
       points: 0,
       status: "active",
       authProvider: "social",
       joinedAt: new Date().toISOString().slice(0, 10),
       address: {},
+      shippingAddresses: [],
     });
     store.currentMemberId = memberId;
     persistStore(store);
@@ -730,10 +1274,62 @@ export function createAuthController({
     return store.agencies.find((agency) => agency.isHeadquarters);
   }
 
+  function normalizeMemberShippingAddresses(member) {
+    const addresses = Array.isArray(member.shippingAddresses)
+      ? member.shippingAddresses
+      : [];
+    if (addresses.length) return addresses;
+    if (
+      member.address?.postcode ||
+      member.address?.address ||
+      member.address?.addressDetail
+    ) {
+      return [
+        {
+          id: "addr-default",
+          label: "기본 배송지",
+          recipient: member.name,
+          phone: member.phone,
+          postcode: member.address.postcode || "",
+          address: member.address.address || "",
+          addressDetail: member.address.addressDetail || "",
+          isDefault: true,
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  function createMemberStatusLabel(status) {
+    const labels = {
+      active: "정상",
+      paused: "중지",
+      dormant: "휴면",
+      blocked: "차단",
+    };
+    return labels[status] || status || "정상";
+  }
+
   function showAuthView() {
     dom.auth.classList.remove("is-hidden");
     document.body.classList.add("modal-open");
   }
 
-  return { openAuth, openProfile, closeAuth, showAuthView };
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  return {
+    openAuth,
+    openProfile,
+    openManagementLogin,
+    closeAuth,
+    showAuthView,
+  };
 }

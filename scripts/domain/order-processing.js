@@ -10,7 +10,13 @@ export function completeBypassPayment({ cart, store, payment }) {
   );
   const shippingAmount =
     paidProductAmount > 0 && paidProductAmount < 50000 ? 3000 : 0;
-  const paidAmount = paidProductAmount + shippingAmount;
+  const pointUseLimit = calculatePointUseLimit({
+    paidProductAmount,
+    memberPoints: member.points,
+    maxPointUseRate: store.settings.maxPointUseRate,
+  });
+  const pointUsed = normalizePointUsed(payment.pointUsed, pointUseLimit);
+  const paidAmount = paidProductAmount + shippingAmount - pointUsed;
   const pointRate = store.settings.purchasePointRate;
   const earnedPoints = calculatePurchasePoints(paidProductAmount, pointRate);
   const orderId = createId("order", store.orders.length + 1);
@@ -26,6 +32,8 @@ export function completeBypassPayment({ cart, store, payment }) {
     paidProductAmount,
     shippingAmount,
     paidAmount,
+    pointUsed,
+    pointUseLimit,
     pointEarned: earnedPoints,
     status: "paid",
     paidAt,
@@ -42,6 +50,20 @@ export function completeBypassPayment({ cart, store, payment }) {
 
   store.orders.unshift(order);
   decrementProductStock(store, cart);
+  member.points = Math.max(0, Number(member.points || 0) - pointUsed);
+  if (pointUsed > 0) {
+    store.pointLedger.unshift({
+      id: createId("point", store.pointLedger.length + 1),
+      memberId: member.id,
+      orderId,
+      type: "purchase_use",
+      amount: -pointUsed,
+      baseAmount: paidProductAmount,
+      rate: store.settings.maxPointUseRate,
+      note: "결제 시 보유 포인트 사용",
+      createdAt: paidAt,
+    });
+  }
   member.points += earnedPoints;
   store.pointLedger.unshift({
     id: createId("point", store.pointLedger.length + 1),
@@ -78,6 +100,8 @@ export function completeBypassPayment({ cart, store, payment }) {
       paidProductAmount,
       shippingAmount,
       paidAmount,
+      pointUsed,
+      pointUseLimit,
     },
   };
 }
@@ -154,6 +178,10 @@ function createAgencyProcessing({ order, store }) {
     commissionRate: agency.commissionRate,
     commissionAmount,
     status: "pending_next_month_15",
+    updatedAt: "",
+    statusUpdatedBy: "",
+    statusNote: "",
+    statusHistory: [],
     note: "개인 추천링크 구매가 아니므로 대리점 전월 매출 정산 대상",
     createdAt: order.paidAt,
   };
@@ -166,6 +194,27 @@ function getHeadquartersAgency(store) {
 export function calculatePurchasePoints(amount, rate) {
   return Math.floor(
     (Math.max(0, Number(amount) || 0) * getPercent(rate)) / 100,
+  );
+}
+
+export function calculatePointUseLimit({
+  paidProductAmount,
+  memberPoints,
+  maxPointUseRate,
+}) {
+  const productLimit = Math.floor(
+    (Math.max(0, Number(paidProductAmount) || 0) *
+      getPercent(maxPointUseRate)) /
+      100,
+  );
+
+  return Math.min(productLimit, Math.max(0, Number(memberPoints) || 0));
+}
+
+function normalizePointUsed(pointUsed, pointUseLimit) {
+  return Math.min(
+    Math.max(0, Math.floor(Number(pointUsed) || 0)),
+    Math.max(0, Number(pointUseLimit) || 0),
   );
 }
 

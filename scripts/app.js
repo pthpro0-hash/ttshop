@@ -31,6 +31,7 @@ async function initializeApp() {
 
   let shop;
   let auth;
+  let activeManagementRole = "";
 
   function updateSessionUi() {
     const member = getCurrentMember();
@@ -41,7 +42,16 @@ async function initializeApp() {
   }
 
   function requireLogin() {
-    if (getCurrentMember()) return true;
+    const member = getCurrentMember();
+    if (member?.status === "active") return true;
+    if (member) {
+      store.currentMemberId = "";
+      saveStore(store);
+      updateSessionUi();
+      shop.showToast("구매 가능한 회원 상태가 아닙니다. 다시 로그인해주세요.");
+      auth.openAuth("login");
+      return false;
+    }
 
     shop.showToast("로그인 후 구매할 수 있습니다.");
     auth.openAuth("login");
@@ -83,10 +93,20 @@ async function initializeApp() {
     auth.openProfile();
   });
   dom.logoutButton.addEventListener("click", () => {
+    const member = getCurrentMember();
+    const shouldReturnHome = ["admin", "agency_manager"].includes(member?.role);
     store.currentMemberId = "";
     saveStore(store);
     updateSessionUi();
     auth.closeAuth();
+    if (shouldReturnHome || !dom.management.classList.contains("is-hidden")) {
+      activeManagementRole = "";
+      shop.showHome();
+      dom.management.classList.add("is-hidden");
+      dom.detail.classList.add("is-hidden");
+      dom.home.classList.remove("is-hidden");
+      window.location.hash = "";
+    }
     shop.showToast("로그아웃되었습니다.");
   });
 
@@ -104,8 +124,18 @@ async function initializeApp() {
     if (!link) return;
 
     event.preventDefault();
+    const role = link.dataset.managementLink;
+    if (role === "admin" || role === "agency") {
+      auth.openManagementLogin(role, (managementRole) => {
+        activeManagementRole = managementRole;
+        management.openManagement(managementRole);
+      });
+      return;
+    }
+
     auth.closeAuth();
-    management.openManagement(link.dataset.managementLink);
+    activeManagementRole = role;
+    management.openManagement(role);
   });
 
   initializeAgencyJoinContext();

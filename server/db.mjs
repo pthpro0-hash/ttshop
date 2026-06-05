@@ -26,6 +26,31 @@ export function openShopDatabase(dbPath = defaultDbPath) {
 
 function migrateDatabase(database) {
   ensureColumn(database, "products", "detail_images", "TEXT");
+  ensureColumn(database, "agencies", "contract_start", "TEXT");
+  ensureColumn(database, "agencies", "contract_end", "TEXT");
+  ensureColumn(database, "agencies", "manager_name", "TEXT");
+  ensureColumn(database, "agencies", "manager_phone", "TEXT");
+  ensureColumn(database, "agencies", "settlement_account", "TEXT");
+  ensureColumn(database, "agencies", "login_user_id", "TEXT");
+  ensureColumn(database, "agencies", "login_password_hash", "TEXT");
+  ensureColumn(database, "members", "role", "TEXT NOT NULL DEFAULT 'member'");
+  ensureColumn(database, "members", "shipping_addresses", "TEXT");
+  ensureColumn(database, "orders", "point_used", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(
+    database,
+    "orders",
+    "point_use_limit",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+  ensureColumn(database, "agency_settlement_ledger", "updated_at", "TEXT");
+  ensureColumn(
+    database,
+    "agency_settlement_ledger",
+    "status_updated_by",
+    "TEXT",
+  );
+  ensureColumn(database, "agency_settlement_ledger", "status_note", "TEXT");
+  ensureColumn(database, "agency_settlement_ledger", "status_history", "TEXT");
 }
 
 function ensureColumn(database, table, column, definition) {
@@ -197,8 +222,10 @@ function insertAgency(database, agency) {
     .prepare(
       `
       INSERT INTO agencies
-        (id, name, code, link_slug, commission_rate, status, is_headquarters)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (id, name, code, link_slug, commission_rate, status, is_headquarters,
+         contract_start, contract_end, manager_name, manager_phone, settlement_account,
+         login_user_id, login_password_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -209,6 +236,13 @@ function insertAgency(database, agency) {
       Number(agency.commissionRate) || 0,
       agency.status || "active",
       agency.isHeadquarters ? 1 : 0,
+      agency.contractStart || "",
+      agency.contractEnd || "",
+      agency.managerName || "",
+      agency.managerPhone || "",
+      agency.settlementAccount || "",
+      agency.loginUserId || "",
+      agency.loginPasswordHash || "",
     );
 }
 
@@ -287,9 +321,9 @@ function insertMember(database, member) {
       `
       INSERT INTO members
         (id, user_id, password_hash, auth_provider, name, phone, email, agency_id,
-         points, status, joined_at, postcode, address, address_detail,
-         payment_method, favorite_category, marketing_opt_in, internal_memo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         role, points, status, joined_at, postcode, address, address_detail,
+         shipping_addresses, payment_method, favorite_category, marketing_opt_in, internal_memo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -301,12 +335,14 @@ function insertMember(database, member) {
       member.phone || "",
       member.email || "",
       member.agencyId || null,
+      member.role || "member",
       Number(member.points) || 0,
       member.status || "active",
       member.joinedAt || "",
       member.address?.postcode || "",
       member.address?.address || "",
       member.address?.addressDetail || "",
+      JSON.stringify(normalizeShippingAddresses(member)),
       member.paymentMethod || "",
       member.favoriteCategory || "",
       member.marketingOptIn === undefined
@@ -324,9 +360,10 @@ function insertOrder(database, order) {
       `
       INSERT INTO orders
         (id, member_id, agency_id_at_order, referral_source_type,
-         paid_product_amount, shipping_amount, paid_amount, point_earned,
+         paid_product_amount, shipping_amount, paid_amount, point_used,
+         point_use_limit, point_earned,
          status, paid_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -337,6 +374,8 @@ function insertOrder(database, order) {
       Number(order.paidProductAmount) || 0,
       Number(order.shippingAmount) || 0,
       Number(order.paidAmount) || 0,
+      Number(order.pointUsed) || 0,
+      Number(order.pointUseLimit) || 0,
       Number(order.pointEarned) || 0,
       order.status || "paid",
       order.paidAt || "",
@@ -391,8 +430,9 @@ function insertAgencySettlement(database, settlement) {
       `
       INSERT INTO agency_settlement_ledger
         (id, agency_id, order_id, base_amount, commission_rate,
-         commission_amount, status, note, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         commission_amount, status, updated_at, status_updated_by,
+         status_note, status_history, note, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -403,6 +443,10 @@ function insertAgencySettlement(database, settlement) {
       Number(settlement.commissionRate) || 0,
       Number(settlement.commissionAmount) || 0,
       settlement.status || "",
+      settlement.updatedAt || "",
+      settlement.statusUpdatedBy || "",
+      settlement.statusNote || "",
+      JSON.stringify(settlement.statusHistory || []),
       settlement.note || "",
       settlement.createdAt || "",
     );
@@ -437,6 +481,13 @@ function mapAgency(row) {
     commissionRate: row.commission_rate,
     status: row.status,
     isHeadquarters: Boolean(row.is_headquarters),
+    contractStart: row.contract_start || "",
+    contractEnd: row.contract_end || "",
+    managerName: row.manager_name || "",
+    managerPhone: row.manager_phone || "",
+    settlementAccount: row.settlement_account || "",
+    loginUserId: row.login_user_id || "",
+    loginPasswordHash: row.login_password_hash || "",
   };
 }
 
@@ -499,6 +550,74 @@ function parseDetailImages(value, fallbackImage = "") {
   }
 }
 
+function normalizeShippingAddresses(member) {
+  const source = Array.isArray(member.shippingAddresses)
+    ? member.shippingAddresses
+    : [];
+  const addresses = source
+    .map((address, index) => ({
+      id: address.id || `addr-${index + 1}`,
+      label:
+        address.label || (index === 0 ? "기본 배송지" : `배송지 ${index + 1}`),
+      recipient: address.recipient || member.name || "",
+      phone: address.phone || member.phone || "",
+      postcode: address.postcode || "",
+      address: address.address || "",
+      addressDetail: address.addressDetail || "",
+      isDefault: Boolean(address.isDefault || index === 0),
+    }))
+    .filter(
+      (address) => address.postcode || address.address || address.addressDetail,
+    );
+
+  if (!addresses.length && member.address) {
+    addresses.push({
+      id: "addr-default",
+      label: "기본 배송지",
+      recipient: member.name || "",
+      phone: member.phone || "",
+      postcode: member.address.postcode || "",
+      address: member.address.address || "",
+      addressDetail: member.address.addressDetail || "",
+      isDefault: true,
+    });
+  }
+
+  if (addresses.length && !addresses.some((address) => address.isDefault)) {
+    addresses[0].isDefault = true;
+  }
+
+  return addresses.slice(0, 5);
+}
+
+function parseShippingAddresses(value, fallbackAddress = {}) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch {}
+
+  if (
+    fallbackAddress.postcode ||
+    fallbackAddress.address ||
+    fallbackAddress.addressDetail
+  ) {
+    return [
+      {
+        id: "addr-default",
+        label: "기본 배송지",
+        recipient: "",
+        phone: "",
+        postcode: fallbackAddress.postcode || "",
+        address: fallbackAddress.address || "",
+        addressDetail: fallbackAddress.addressDetail || "",
+        isDefault: true,
+      },
+    ];
+  }
+
+  return [];
+}
+
 function mapProductVariant(row) {
   return {
     id: row.id,
@@ -511,6 +630,11 @@ function mapProductVariant(row) {
 }
 
 function mapMember(row) {
+  const address = {
+    postcode: row.postcode,
+    address: row.address,
+    addressDetail: row.address_detail,
+  };
   const member = {
     id: row.id,
     userId: row.user_id,
@@ -520,14 +644,12 @@ function mapMember(row) {
     phone: row.phone,
     email: row.email,
     agencyId: row.agency_id,
+    role: row.role || "member",
     points: row.points,
     status: row.status,
     joinedAt: row.joined_at,
-    address: {
-      postcode: row.postcode,
-      address: row.address,
-      addressDetail: row.address_detail,
-    },
+    address,
+    shippingAddresses: parseShippingAddresses(row.shipping_addresses, address),
     paymentMethod: row.payment_method,
     favoriteCategory: row.favorite_category,
     internalMemo: row.internal_memo,
@@ -549,6 +671,8 @@ function mapOrder(row) {
     paidProductAmount: row.paid_product_amount,
     shippingAmount: row.shipping_amount,
     paidAmount: row.paid_amount,
+    pointUsed: row.point_used || 0,
+    pointUseLimit: row.point_use_limit || 0,
     pointEarned: row.point_earned,
     status: row.status,
     paidAt: row.paid_at,
@@ -590,9 +714,23 @@ function mapAgencySettlement(row) {
     commissionRate: row.commission_rate,
     commissionAmount: row.commission_amount,
     status: row.status,
+    updatedAt: row.updated_at || "",
+    statusUpdatedBy: row.status_updated_by || "",
+    statusNote: row.status_note || "",
+    statusHistory: parseJsonArray(row.status_history),
     note: row.note,
     createdAt: row.created_at,
   };
+}
+
+function parseJsonArray(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function mapReferralLink(row) {

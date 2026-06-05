@@ -1,5 +1,6 @@
 import { CATEGORIES, categoryCopy } from "../data/catalog.js";
 import {
+  calculatePointUseLimit,
   calculatePurchasePoints,
   completeBypassPayment,
 } from "../domain/order-processing.js";
@@ -14,6 +15,7 @@ export function createShopController({
   const state = {
     activeCategory: "all",
     cart: [],
+    pointToUse: 0,
   };
 
   const getQuantity = () =>
@@ -43,14 +45,32 @@ export function createShopController({
       0,
     );
     const shipping = subtotal > 0 && subtotal < 50000 ? 3000 : 0;
+    const member = getCurrentMember();
+    const pointUseLimit = calculatePointUseLimit({
+      paidProductAmount: subtotal,
+      memberPoints: member?.points || 0,
+      maxPointUseRate: store.settings.maxPointUseRate,
+    });
+    const pointUsed = Math.min(
+      Math.max(0, Math.floor(Number(state.pointToUse) || 0)),
+      pointUseLimit,
+    );
+    state.pointToUse = pointUsed;
 
     return {
       subtotal,
       shipping,
       reward: getPurchasePoints(subtotal),
-      total: subtotal + shipping,
+      pointBalance: member?.points || 0,
+      pointUseLimit,
+      pointUsed,
+      total: subtotal + shipping - pointUsed,
       count: state.cart.reduce((sum, item) => sum + item.qty, 0),
     };
+  }
+
+  function getCurrentMember() {
+    return store.members.find((member) => member.id === store.currentMemberId);
   }
 
   function renderProducts(category = "all") {
@@ -393,10 +413,24 @@ export function createShopController({
     return '<div class="cart-empty">장바구니가 비어 있습니다.<br />Shop에서 상품을 선택해보세요.</div>';
   }
 
-  function createCartSummary({ subtotal, shipping, reward, total }) {
+  function createCartSummary({
+    subtotal,
+    shipping,
+    reward,
+    pointBalance,
+    pointUseLimit,
+    pointUsed,
+    total,
+  }) {
     return `
     <div class="summary-row"><span>상품금액</span><strong>${formatMoney(subtotal)}</strong></div>
     <div class="summary-row"><span>배송비</span><strong>${shipping ? formatMoney(shipping) : "무료"}</strong></div>
+    <div class="summary-row"><span>보유 포인트</span><strong>${formatPoints(pointBalance)}</strong></div>
+    <label class="point-use-control">
+      <span>사용 포인트 · 최대 ${formatPoints(pointUseLimit)}</span>
+      <input class="quantity-input" id="cartPointUse" type="number" min="0" step="100" max="${pointUseLimit}" value="${pointUsed}" ${pointUseLimit ? "" : "disabled"} />
+    </label>
+    <div class="summary-row"><span>포인트 사용</span><strong>${pointUsed ? `-${formatPoints(pointUsed)}` : "0P"}</strong></div>
     <div class="summary-row"><span>적립 예정</span><strong>${formatPoints(reward)}</strong></div>
     <div class="summary-row total"><span>결제예정금액</span><strong>${formatMoney(total)}</strong></div>
     <button class="checkout-button" id="checkoutButton">Checkout</button>
@@ -468,6 +502,12 @@ export function createShopController({
     document
       .querySelector("#finalPay")
       .addEventListener("click", completeCheckoutBypass);
+    document
+      .querySelector("#checkoutPointUse")
+      ?.addEventListener("input", (event) => {
+        state.pointToUse = event.currentTarget.value;
+        openCheckout();
+      });
   }
 
   function completeCheckoutBypass() {
@@ -484,9 +524,11 @@ export function createShopController({
       payment: {
         memberId: store.currentMemberId,
         referralSourceType: "none",
+        pointUsed: getTotals().pointUsed,
       },
     });
     state.cart = [];
+    state.pointToUse = 0;
     persistStore(store);
     updateCart();
     openPaymentResult(result);
@@ -516,6 +558,7 @@ export function createShopController({
         <article><span>주문번호</span><strong>${result.order.id}</strong></article>
         <article><span>실결제 상품금액</span><strong>${formatMoney(result.totals.paidProductAmount)}</strong></article>
         <article><span>배송비</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "무료"}</strong></article>
+        <article><span>포인트 사용</span><strong>${result.totals.pointUsed ? `-${result.totals.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></article>
         <article><span>적립 포인트</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
         <article><span>대리점 정산 기준</span><strong>${formatMoney(result.agencyProcessing?.baseAmount || 0)}</strong></article>
         <article><span>영업비 예정</span><strong>${formatMoney(result.agencyProcessing?.commissionAmount || 0)}</strong></article>
@@ -704,11 +747,25 @@ export function createShopController({
   `;
   }
 
-  function createCheckoutTotals({ subtotal, shipping, reward, total }) {
+  function createCheckoutTotals({
+    subtotal,
+    shipping,
+    reward,
+    pointBalance,
+    pointUseLimit,
+    pointUsed,
+    total,
+  }) {
     return `
     <div class="detail-price-box">
       <div class="detail-price-item"><span>상품금액</span><strong>${formatMoney(subtotal)}</strong></div>
       <div class="detail-price-item"><span>배송비</span><strong>${shipping ? formatMoney(shipping) : "무료"}</strong></div>
+      <div class="detail-price-item"><span>보유 포인트</span><strong>${formatPoints(pointBalance)}</strong></div>
+      <div class="detail-price-item"><span>사용 가능</span><strong>${formatPoints(pointUseLimit)}</strong></div>
+      <div class="detail-price-item point-input-item">
+        <span>포인트 사용</span>
+        <input class="quantity-input" id="checkoutPointUse" type="number" min="0" step="100" max="${pointUseLimit}" value="${pointUsed}" ${pointUseLimit ? "" : "disabled"} />
+      </div>
       <div class="detail-price-item"><span>적립 예정</span><strong>${formatPoints(reward)}</strong></div>
       <div class="detail-price-item"><span>결제예정금액</span><strong>${formatMoney(total)}</strong></div>
     </div>
@@ -793,6 +850,13 @@ export function createShopController({
       }
       item.qty = nextQuantity;
       state.cart = state.cart.filter((cartItem) => cartItem.qty > 0);
+      if (!state.cart.length) state.pointToUse = 0;
+      updateCart();
+    });
+
+    dom.cartSummary.addEventListener("input", (event) => {
+      if (event.target?.id !== "cartPointUse") return;
+      state.pointToUse = event.target.value;
       updateCart();
     });
 

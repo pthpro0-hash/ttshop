@@ -180,6 +180,19 @@ function input(element, value) {
   );
 }
 
+function submitManagementLogin(window, role, userId, password) {
+  let link = document.querySelector(`[data-management-link="${role}"]`);
+  if (!link) {
+    click(window, document.querySelector("#loginLink"));
+    link = document.querySelector(`[data-management-link="${role}"]`);
+  }
+  click(window, link);
+  const form = document.querySelector(`[data-management-login="${role}"]`);
+  input(form.querySelector('[name="userId"]'), userId);
+  input(form.querySelector('[name="password"]'), password);
+  click(window, form.querySelector('[type="submit"]'));
+}
+
 (async () => {
   const root = path.resolve(__dirname, "..");
   const expectedFiles = [
@@ -559,7 +572,7 @@ function input(element, value) {
     "payment result should expose referral link copy buttons",
   );
 
-  click(dom.window, document.querySelector('[data-management-link="admin"]'));
+  submitManagementLogin(dom.window, "admin", "adminChang", "Chang$0909");
   assert.doesNotMatch(
     document.querySelector("#managementView").textContent,
     /상세 리스트 보기/,
@@ -988,10 +1001,12 @@ function input(element, value) {
     agencyForm.querySelector('[name="settlementAccount"]'),
     "테스트은행 123",
   );
+  input(agencyForm.querySelector('[name="loginUserId"]'), "busan01");
+  input(agencyForm.querySelector('[name="loginPassword"]'), "agency123");
   click(dom.window, agencyForm.querySelector("[data-agency-submit]"));
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /부산 뷰티 대리점|BUSANBEAUTY|15%|김담당|테스트은행 123/,
+    /부산 뷰티 대리점|BUSANBEAUTY|15%|김담당|ID busan01/,
     "admin should create a new agency with operating fields",
   );
   assert.ok(
@@ -1050,16 +1065,13 @@ function input(element, value) {
     /order-001|confirmed/,
     "admin should be able to confirm an agency settlement item",
   );
-  let agencyManagementLink = document.querySelector(
-    '[data-management-link="agency"]',
+  click(dom.window, document.querySelector("#logoutButton"));
+  assert.equal(
+    document.querySelector("#homeView").classList.contains("is-hidden"),
+    false,
+    "admin logout should return to the main shop view",
   );
-  if (!agencyManagementLink) {
-    click(dom.window, document.querySelector("#loginLink"));
-    agencyManagementLink = document.querySelector(
-      '[data-management-link="agency"]',
-    );
-  }
-  click(dom.window, agencyManagementLink);
+  submitManagementLogin(dom.window, "agency", "gangnam01", "agency123");
   assert.match(
     document.querySelector("#managementView").textContent,
     /정산매출 \/ 영업비|Settlement queue|링크 성과|18,240원/,
@@ -1187,16 +1199,7 @@ function input(element, value) {
     /3,800P|Point history/,
     "member should show updated points after payment",
   );
-  agencyManagementLink = document.querySelector(
-    '[data-management-link="agency"]',
-  );
-  if (!agencyManagementLink) {
-    click(dom.window, document.querySelector("#loginLink"));
-    agencyManagementLink = document.querySelector(
-      '[data-management-link="agency"]',
-    );
-  }
-  click(dom.window, agencyManagementLink);
+  submitManagementLogin(dom.window, "agency", "gangnam01", "agency123");
   click(dom.window, document.querySelector('[data-agency-detail="link"]'));
   assert.ok(
     document.querySelector("#agencyModalContent [data-copy-agency-link]"),
@@ -1217,6 +1220,13 @@ function input(element, value) {
       .value,
     "GNBEAUTY",
     "agency join link should open signup with agency code prefilled",
+  );
+  click(dom.window, document.querySelector("#authClose"));
+  click(dom.window, document.querySelector("#logoutButton"));
+  assert.equal(
+    document.querySelector("#homeView").classList.contains("is-hidden"),
+    false,
+    "agency logout should return to the main shop view",
   );
 
   assert.deepEqual(errors, []);
