@@ -1376,6 +1376,15 @@ h1 {
   font-size: 24px;
   line-height: 1.25;
 }
+.settlement-metric-card em {
+  display: block;
+  margin-top: 10px;
+  color: inherit;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.4;
+}
 .management-panel {
   margin-top: 28px;
 }
@@ -1581,19 +1590,45 @@ body.modal-open {
 }
 .agency-admin-form {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  padding: 18px;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.agency-form-section {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
   border: 1px solid var(--line);
   background: #f7f5ef;
 }
-.agency-admin-form label {
+.agency-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.agency-admin-form label,
+.agency-form-grid label {
   display: grid;
   gap: 8px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
+}
+.agency-form-grid label em {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  vertical-align: middle;
 }
 .product-admin-form {
   grid-template-columns: 1fr;
@@ -2099,6 +2134,49 @@ body.modal-open {
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+.settlement-actions strong {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.settlement-actions .mini-button {
+  min-width: 64px;
+}
+.agency-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.agency-month-card {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.agency-month-card:hover,
+.agency-month-card:focus-visible {
+  background: #111;
+  color: #fff;
+  outline: none;
+}
+.agency-month-card span,
+.agency-month-card em {
+  color: inherit;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.45;
+}
+.agency-month-card strong {
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
 .member-detail-button {
   display: inline;
   padding: 0;
@@ -2513,10 +2591,12 @@ footer {
   .member-detail-grid,
   .member-detail-columns,
   .member-history-row,
+  .agency-month-grid,
   .admin-settings-form,
   .agency-manage-row,
   .agency-table-row,
   .agency-admin-form,
+  .agency-form-grid,
   .product-form-grid,
   .product-image-fields,
   .product-detail-image-row,
@@ -2643,10 +2723,12 @@ footer {
   .member-detail-grid,
   .member-detail-columns,
   .member-history-row,
+  .agency-month-grid,
   .admin-settings-form,
   .agency-manage-row,
   .agency-table-row,
   .agency-admin-form,
+  .agency-form-grid,
   .product-form-grid,
   .product-image-editor,
   .product-image-fields,

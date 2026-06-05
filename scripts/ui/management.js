@@ -121,6 +121,44 @@ export function createManagementController({
     });
 
     modal.addEventListener("click", (event) => {
+      const copyButton = event.target.closest("[data-copy-agency-link]");
+      if (copyButton) {
+        copyText(copyButton.dataset.copyAgencyLink);
+        copyButton.textContent = "복사 완료";
+        return;
+      }
+
+      const settlementButton = event.target.closest("[data-settlement-status]");
+      if (settlementButton) {
+        updateSettlementStatus(
+          settlementButton.dataset.settlementStatus,
+          settlementButton.dataset.statusValue,
+        );
+        persistStore(store);
+        openDetailModal(
+          modal,
+          createContent(modal.dataset.currentDetail || "settlements"),
+        );
+        return;
+      }
+
+      const agencyMonthButton = event.target.closest("[data-agency-month]");
+      if (agencyMonthButton) {
+        const monthType = `month:${agencyMonthButton.dataset.agencyMonth}`;
+        modal.dataset.monthBackDetail = modal.dataset.currentDetail || "sales";
+        modal.dataset.currentDetail = monthType;
+        openDetailModal(modal, createContent(monthType));
+        return;
+      }
+
+      const agencyMonthBack = event.target.closest("[data-agency-month-back]");
+      if (agencyMonthBack) {
+        const backType = modal.dataset.monthBackDetail || "sales";
+        modal.dataset.currentDetail = backType;
+        openDetailModal(modal, createContent(backType));
+        return;
+      }
+
       const memberButton = event.target.closest("[data-member-detail]");
       if (memberButton) {
         openDetailModal(
@@ -180,6 +218,31 @@ export function createManagementController({
     });
   }
 
+  function copyText(value) {
+    const text = String(value || "");
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.value = text;
+    document.body.append(input);
+    input.select();
+    document.execCommand?.("copy");
+    input.remove();
+  }
+
+  function updateSettlementStatus(settlementId, status) {
+    const settlement = store.agencySettlementLedger.find(
+      (item) => item.id === settlementId,
+    );
+    if (!settlement) return;
+
+    settlement.status = status;
+    settlement.updatedAt = new Date().toISOString().slice(0, 10);
+  }
+
   function bindAgencyAdminForm(modal) {
     const formBox = modal.querySelector("[data-agency-form]");
     if (!formBox) return;
@@ -224,6 +287,14 @@ export function createManagementController({
         getAgencyField(formBox, "linkSlug").value = agency.linkSlug;
         getAgencyField(formBox, "commissionRate").value = agency.commissionRate;
         getAgencyField(formBox, "status").value = agency.status;
+        getAgencyField(formBox, "contractStart").value =
+          agency.contractStart || "";
+        getAgencyField(formBox, "contractEnd").value = agency.contractEnd || "";
+        getAgencyField(formBox, "managerName").value = agency.managerName || "";
+        getAgencyField(formBox, "managerPhone").value =
+          agency.managerPhone || "";
+        getAgencyField(formBox, "settlementAccount").value =
+          agency.settlementAccount || "";
         getAgencyField(formBox, "code").dataset.manual = "true";
         getAgencyField(formBox, "linkSlug").dataset.manual = "true";
         formBox.querySelector("[data-agency-submit]").textContent =
@@ -242,7 +313,7 @@ export function createManagementController({
     formBox
       .querySelector("[data-agency-reset]")
       .addEventListener("click", () => {
-        formBox.querySelectorAll("input").forEach((input) => {
+        formBox.querySelectorAll("input, textarea").forEach((input) => {
           input.value = input.name === "commissionRate" ? "10" : "";
           delete input.dataset.manual;
         });
@@ -902,6 +973,14 @@ export function createManagementController({
         Number(getAgencyField(formBox, "commissionRate").value || 0),
       ),
       status: getAgencyField(formBox, "status").value || "active",
+      contractStart: getAgencyField(formBox, "contractStart").value.trim(),
+      contractEnd: getAgencyField(formBox, "contractEnd").value.trim(),
+      managerName: getAgencyField(formBox, "managerName").value.trim(),
+      managerPhone: getAgencyField(formBox, "managerPhone").value.trim(),
+      settlementAccount: getAgencyField(
+        formBox,
+        "settlementAccount",
+      ).value.trim(),
     };
 
     if (!payload.name || !payload.code || !payload.linkSlug) return;
@@ -1002,6 +1081,16 @@ function createMetricCard(scope, type, label, value) {
     <article class="management-card-action" tabindex="0" role="button" ${attribute}="${type}" aria-label="${label} 상세 보기">
       <span>${label}</span>
       <strong>${value}</strong>
+    </article>
+  `;
+}
+
+function createAgencySettlementMetric(sales, commission) {
+  return `
+    <article class="management-card-action settlement-metric-card" tabindex="0" role="button" data-agency-detail="settlement" aria-label="정산매출과 영업비 상세 보기">
+      <span>정산매출 / 영업비</span>
+      <strong>${formatMoney(sales)}</strong>
+      <em>영업비 ${formatMoney(commission)}</em>
     </article>
   `;
 }
@@ -1131,7 +1220,7 @@ function getAdminDetail(type, store) {
       description:
         "개인 추천링크 구매를 제외하고 대리점 영업비 지급 대상으로 잡힌 장부입니다.",
       rows: store.agencySettlementLedger.map((item) =>
-        createSettlementDetailRow(item, store),
+        createSettlementDetailRow(item, store, { allowStatusActions: true }),
       ),
     },
   };
@@ -1140,12 +1229,18 @@ function getAdminDetail(type, store) {
 }
 
 function createAgencyDetailRow(agency) {
+  const link = createAgencyPublicLink(agency);
+
   return `
     <article class="process-row">
       <div><strong>${agency.name}</strong><span>${agency.isHeadquarters ? "본사 대리점" : "계약 대리점"}</span></div>
       <div><span>전용 코드</span><strong>${agency.code}</strong></div>
       <div><span>전용 링크</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></div>
       <div><span>영업비율 / 상태</span><strong>${agency.commissionRate}% · ${agency.status}</strong></div>
+      <div><span>계약 기간</span><strong>${formatAgencyContractPeriod(agency)}</strong></div>
+      <div><span>담당자</span><strong>${agency.managerName || "미등록"}</strong></div>
+      <div><span>정산 계좌</span><strong>${agency.settlementAccount || "미등록"}</strong></div>
+      <div><span>링크 복사</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">복사</button></div>
     </article>
   `;
 }
@@ -1286,8 +1381,22 @@ function getCurrentMonthKey() {
   return new Date().toISOString().slice(0, 7);
 }
 
+function getRecentMonthKeys(count = 6) {
+  const start = new Date(`${getCurrentMonthKey()}-01T00:00:00`);
+
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(start);
+    date.setMonth(start.getMonth() - index);
+    return date.toISOString().slice(0, 7);
+  });
+}
+
 function isCurrentMonthDate(value) {
   return String(value || "").startsWith(getCurrentMonthKey());
+}
+
+function isMonthDate(value, monthKey) {
+  return String(value || "").startsWith(monthKey);
 }
 
 function getCurrentMonthOrders(store) {
@@ -1385,10 +1494,23 @@ function createMonthlyPointSummary(store) {
   `;
 }
 
-function createSettlementDetailRow(item, store) {
+function createSettlementDetailRow(item, store, options = {}) {
   const agency = store.agencies.find(
     (agencyItem) => agencyItem.id === item.agencyId,
   );
+  const actions = options.allowStatusActions
+    ? [
+        ["pending_next_month_15", "대기"],
+        ["confirmed", "확정"],
+        ["paid", "지급완료"],
+        ["hold", "보류"],
+      ]
+        .map(
+          ([status, label]) =>
+            `<button class="cart-button mini-button" type="button" data-settlement-status="${item.id}" data-status-value="${status}">${label}</button>`,
+        )
+        .join("")
+    : "";
 
   return `
     <article class="process-row">
@@ -1396,6 +1518,11 @@ function createSettlementDetailRow(item, store) {
       <div><span>기준 매출</span><strong>${formatMoney(item.baseAmount)}</strong></div>
       <div><span>영업비율</span><strong>${item.commissionRate}%</strong></div>
       <div><span>지급 예정</span><strong>${formatMoney(item.commissionAmount)}</strong></div>
+      ${
+        actions
+          ? `<div class="settlement-actions"><span>상태 변경</span><strong>${actions}</strong></div>`
+          : ""
+      }
     </article>
   `;
 }
@@ -1412,18 +1539,221 @@ function createSimpleDetailRow(title, value, note) {
 }
 
 function createAgencyLinkDetailRow(agency) {
+  const link = createAgencyPublicLink(agency);
+
   return `
     <article class="process-row">
       <div><strong>대리점 가입 링크</strong><span>회원가입 시 대리점 코드 자동 등록</span></div>
       <div><span>링크</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></div>
       <div><span>대리점 코드</span><strong>${agency.code}</strong></div>
       <div><span>상태</span><strong>${agency.status}</strong></div>
+      <div><span>복사</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">링크 복사</button></div>
     </article>
   `;
 }
 
+function createAgencyPerformanceRow(performance) {
+  return `
+    <article class="process-row">
+      <div><strong>${performance.members}명</strong><span>대리점 코드 귀속 회원</span></div>
+      <div><span>구매 전환 회원</span><strong>${performance.buyers}명</strong></div>
+      <div><span>정산 대상 주문</span><strong>${performance.orders}건</strong></div>
+      <div><span>전환율</span><strong>${performance.conversionRate}%</strong></div>
+    </article>
+  `;
+}
+
+function createAgencyMonthSummary(agency, orders, settlements, monthKey) {
+  const monthOrders = orders.filter((order) =>
+    isMonthDate(order.paidAt, monthKey),
+  );
+  const monthSettlements = settlements.filter((item) =>
+    isMonthDate(item.createdAt, monthKey),
+  );
+  const amount = monthOrders.reduce(
+    (sum, order) => sum + order.paidProductAmount,
+    0,
+  );
+  const commission = monthSettlements.reduce(
+    (sum, item) => sum + item.commissionAmount,
+    0,
+  );
+
+  return `
+    <div class="management-grid compact monthly-point-summary">
+      <article><span>대상 월</span><strong>${monthKey}</strong></article>
+      <article><span>대리점</span><strong>${agency.name}</strong></article>
+      <article><span>정산매출</span><strong>${formatMoney(amount)}</strong></article>
+      <article><span>예상 영업비</span><strong>${formatMoney(commission)}</strong></article>
+    </div>
+  `;
+}
+
+function createAgencySixMonthSummary(agency, orders, settlements) {
+  return `
+    <div class="agency-month-grid" aria-label="최근 6개월 정산 요약">
+      ${getRecentMonthKeys(6)
+        .map((monthKey) =>
+          createAgencyMonthCard(agency, orders, settlements, monthKey),
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function createAgencyMonthCard(agency, orders, settlements, monthKey) {
+  const monthOrders = orders.filter((order) =>
+    isMonthDate(order.paidAt, monthKey),
+  );
+  const monthSettlements = settlements.filter((item) =>
+    isMonthDate(item.createdAt, monthKey),
+  );
+  const amount = monthOrders.reduce(
+    (sum, order) => sum + order.paidProductAmount,
+    0,
+  );
+  const commission = monthSettlements.reduce(
+    (sum, item) => sum + item.commissionAmount,
+    0,
+  );
+  const status = getSettlementStatusSummary(monthSettlements);
+
+  return `
+    <button class="agency-month-card" type="button" data-agency-month="${monthKey}">
+      <span>${agency.code} / ${monthKey}</span>
+      <strong>${formatMoney(amount)}</strong>
+      <em>영업비 ${formatMoney(commission)} · ${monthOrders.length}건 · ${status}</em>
+    </button>
+  `;
+}
+
+function createAgencyMonthDetailContent(monthKey, store) {
+  const agency = getAgencyContext(store);
+  if (!agency)
+    return '<div class="admin-detail-empty">대리점 정보를 찾을 수 없습니다.</div>';
+
+  const orders = store.orders.filter(
+    (order) =>
+      order.agencyIdAtOrder === agency.id &&
+      order.referralSourceType !== "personal_product",
+  );
+  const settlements = store.agencySettlementLedger.filter(
+    (item) => item.agencyId === agency.id,
+  );
+  const monthOrders = orders.filter((order) =>
+    isMonthDate(order.paidAt, monthKey),
+  );
+  const monthSettlements = settlements.filter((item) =>
+    isMonthDate(item.createdAt, monthKey),
+  );
+
+  return `
+    <div class="detail-panel-head">
+      <div>
+        <button class="back-button member-detail-back" type="button" data-agency-month-back>← 최근 6개월</button>
+        <div class="product-category">Agency settlement / ${monthKey}</div>
+        <h2 id="adminModalTitle">${monthKey} 정산 상세</h2>
+      </div>
+      <p>해당 월의 배송비 제외 실결제 상품금액과 영업비 예정 장부입니다.</p>
+    </div>
+    <div class="process-list">
+      ${createAgencyMonthSummary(agency, orders, settlements, monthKey)}
+      <div class="product-category">월별 주문</div>
+      ${monthOrders.map((order) => createOrderDetailRow(order, store)).join("") || '<div class="admin-detail-empty">해당 월 주문이 없습니다.</div>'}
+      <div class="product-category">월별 정산 장부</div>
+      ${monthSettlements.map((item) => createSettlementDetailRow(item, store)).join("") || '<div class="admin-detail-empty">해당 월 정산 장부가 없습니다.</div>'}
+    </div>
+  `;
+}
+
+function getAgencyContext(store) {
+  const currentMember = store.members.find(
+    (member) => member.id === store.currentMemberId,
+  );
+  const memberAgency = store.agencies.find(
+    (agency) => agency.id === currentMember?.agencyId,
+  );
+  if (memberAgency && !memberAgency.isHeadquarters) return memberAgency;
+
+  return (
+    store.agencies.find((agency) => !agency.isHeadquarters) ||
+    store.agencies.find((agency) => agency.isHeadquarters)
+  );
+}
+
+function getAgencyLinkPerformance(agency, store) {
+  const members = store.members.filter(
+    (member) => member.agencyId === agency.id,
+  );
+  const memberIds = new Set(members.map((member) => member.id));
+  const orders = store.orders.filter(
+    (order) =>
+      order.agencyIdAtOrder === agency.id &&
+      order.referralSourceType !== "personal_product",
+  );
+  const buyerIds = new Set(
+    orders
+      .map((order) => order.memberId)
+      .filter((memberId) => memberIds.has(memberId)),
+  );
+  const conversionRate = members.length
+    ? Math.round((buyerIds.size / members.length) * 100)
+    : 0;
+
+  return {
+    members: members.length,
+    buyers: buyerIds.size,
+    orders: orders.length,
+    conversionRate,
+  };
+}
+
+function getSettlementStatusSummary(settlements) {
+  if (!settlements.length) return "대기 없음";
+  const paid = settlements.filter((item) => item.status === "paid").length;
+  const hold = settlements.filter((item) => item.status === "hold").length;
+  const confirmed = settlements.filter(
+    (item) => item.status === "confirmed",
+  ).length;
+  const pending = settlements.length - paid - hold - confirmed;
+
+  if (hold) return `보류 ${hold}건`;
+  if (pending) return `대기 ${pending}건`;
+  if (confirmed) return `확정 ${confirmed}건`;
+  return `지급완료 ${paid}건`;
+}
+
+function createAgencyPublicLink(agency) {
+  const location = window.location || {};
+  const isHttp = /^https?:\/\//.test(location.origin || "");
+  const origin = isHttp ? location.origin : "http://localhost:8000";
+  const path = isHttp ? location.pathname || "/" : "/";
+  return `${origin}${path}?agency=${encodeURIComponent(agency.linkSlug)}#signup`;
+}
+
+function formatAgencyContractPeriod(agency) {
+  if (!agency.contractStart && !agency.contractEnd) return "미등록";
+  return `${agency.contractStart || "시작일 미등록"} ~ ${agency.contractEnd || "종료일 미등록"}`;
+}
+
+function createEmptyAgencyDashboard() {
+  return `
+    <section class="management-dashboard">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Agency</div>
+          <h1 class="detail-title">Agency Desk.</h1>
+        </div>
+        <p>표시할 대리점 정보가 없습니다.</p>
+      </div>
+    </section>
+  `;
+}
+
 function createAgencyDashboard(store) {
-  const agency = store.agencies.find((item) => !item.isHeadquarters);
+  const agency = getAgencyContext(store);
+  if (!agency) return createEmptyAgencyDashboard();
+
   const members = store.members.filter(
     (member) => member.agencyId === agency.id,
   );
@@ -1441,6 +1771,17 @@ function createAgencyDashboard(store) {
     (sum, item) => sum + item.commissionAmount,
     0,
   );
+  const monthlyOrders = getCurrentMonthOrders(store).filter(
+    (order) =>
+      order.agencyIdAtOrder === agency.id &&
+      order.referralSourceType !== "personal_product",
+  );
+  const monthlySales = monthlyOrders.reduce(
+    (sum, order) => sum + order.paidProductAmount,
+    0,
+  );
+  const linkPerformance = getAgencyLinkPerformance(agency, store);
+  const statusSummary = getSettlementStatusSummary(settlements);
 
   return `
     <section class="management-dashboard">
@@ -1456,9 +1797,9 @@ function createAgencyDashboard(store) {
         ${createMetricCard("agency", "link", "전용 링크", `/join/${agency.linkSlug}`)}
         ${createMetricCard("agency", "members", "소속 고객", `${members.length}명`)}
         ${createMetricCard("agency", "rate", "영업비율", `${agency.commissionRate}%`)}
-        ${createMetricCard("agency", "sales", "정산 대상 매출", formatMoney(sales))}
-        ${createMetricCard("agency", "commission", "영업비 예정", formatMoney(commission))}
-        ${createMetricCard("agency", "status", "정산 상태", "정산 준비중")}
+        ${createAgencySettlementMetric(monthlySales || sales, commission)}
+        ${createMetricCard("agency", "performance", "링크 성과", `${linkPerformance.members}명 / ${linkPerformance.orders}건`)}
+        ${createMetricCard("agency", "status", "정산 상태", statusSummary)}
       </div>
       <section class="management-panel">
         <div class="product-category">Settlement queue</div>
@@ -1484,7 +1825,17 @@ function createAgencyDashboard(store) {
 }
 
 function createAgencyDetailContent(type, store) {
-  const agency = store.agencies.find((item) => !item.isHeadquarters);
+  if (String(type || "").startsWith("month:")) {
+    return createAgencyMonthDetailContent(
+      String(type).replace("month:", ""),
+      store,
+    );
+  }
+
+  const agency = getAgencyContext(store);
+  if (!agency)
+    return '<div class="admin-detail-empty">대리점 정보를 찾을 수 없습니다.</div>';
+
   const members = store.members.filter(
     (member) => member.agencyId === agency.id,
   );
@@ -1496,6 +1847,7 @@ function createAgencyDetailContent(type, store) {
   const settlements = store.agencySettlementLedger.filter(
     (item) => item.agencyId === agency.id,
   );
+  const linkPerformance = getAgencyLinkPerformance(agency, store);
   const details = {
     code: {
       label: "Code",
@@ -1509,6 +1861,13 @@ function createAgencyDetailContent(type, store) {
       description:
         "이 링크로 가입한 회원은 계속 해당 대리점 고객으로 처리됩니다.",
       rows: [createAgencyLinkDetailRow(agency)],
+    },
+    performance: {
+      label: "Performance",
+      title: "대리점 링크 성과",
+      description:
+        "대리점 코드로 귀속된 회원 수와 구매 전환 현황을 확인합니다.",
+      rows: [createAgencyPerformanceRow(linkPerformance)],
     },
     members: {
       label: "Customers",
@@ -1529,20 +1888,16 @@ function createAgencyDetailContent(type, store) {
         ),
       ],
     },
-    sales: {
-      label: "Sales",
-      title: "정산 대상 매출 상세",
+    settlement: {
+      label: "Settlement",
+      title: "최근 6개월 정산매출 / 영업비",
       description:
-        "개인 추천링크 구매를 제외한 대리점 회원의 실결제 상품금액입니다.",
-      rows: orders.map((order) => createOrderDetailRow(order, store)),
+        "최근 6개월의 배송비 제외 실결제 상품금액과 영업비 예정 금액입니다. 월을 클릭하면 세부 주문과 정산 장부를 확인합니다.",
+      extra: createAgencySixMonthSummary(agency, orders, settlements),
+      rows: [],
     },
-    commission: {
-      label: "Commission",
-      title: "영업비 예정 상세",
-      description:
-        "정산 대상 매출에 대리점 영업비율을 적용한 지급 예정 장부입니다.",
-      rows: settlements.map((item) => createSettlementDetailRow(item, store)),
-    },
+    sales: null,
+    commission: null,
     status: {
       label: "Status",
       title: "정산 상태 상세",
@@ -1550,7 +1905,8 @@ function createAgencyDetailContent(type, store) {
       rows: settlements.map((item) => createSettlementDetailRow(item, store)),
     },
   };
-  const detail = details[type] || details.sales;
+  const detail = details[type] || details.settlement;
+  const rows = detail.rows.join("");
 
   return `
     <div class="detail-panel-head">
@@ -1562,7 +1918,7 @@ function createAgencyDetailContent(type, store) {
     </div>
     <div class="process-list">
       ${detail.extra || ""}
-      ${detail.rows.join("") || '<div class="admin-detail-empty">표시할 데이터가 없습니다.</div>'}
+      ${rows || (detail.extra ? "" : '<div class="admin-detail-empty">표시할 데이터가 없습니다.</div>')}
     </div>
   `;
 }
@@ -1571,17 +1927,42 @@ function createAgencyAdminForm() {
   return `
     <div class="agency-admin-form" data-agency-form>
       <input type="hidden" name="agencyId" />
-      <label>대리점명<input class="quantity-input" name="name" placeholder="예: 부산 뷰티 대리점" required /></label>
-      <label>대리점 코드<input class="quantity-input" name="code" placeholder="예: BUSANBEAUTY" required /></label>
-      <label>전용 링크<input class="quantity-input" name="linkSlug" placeholder="예: busan-beauty" required /></label>
-      <label>영업비율<input class="quantity-input" name="commissionRate" type="number" min="0" max="100" value="10" required /></label>
-      <label>상태
-        <select class="option-select" name="status">
-          <option value="active">active</option>
-          <option value="paused">paused</option>
-          <option value="terminated">terminated</option>
-        </select>
-      </label>
+      <section class="agency-form-section product-required-group">
+        <div class="product-form-group-head">
+          <strong>필수 계약 정보</strong>
+          <span>대리점 등록과 정산 계산에 필요한 최소 입력값</span>
+        </div>
+        <div class="required-form-note">
+          <strong>필수</strong>
+          <span>대리점명, 대리점 코드, 전용 링크, 영업비율은 반드시 입력해야 합니다.</span>
+        </div>
+        <div class="agency-form-grid">
+          <label>대리점명 <em>필수</em><input class="quantity-input" name="name" placeholder="예: 부산 뷰티 대리점" required /></label>
+          <label>대리점 코드 <em>필수</em><input class="quantity-input" name="code" placeholder="예: BUSANBEAUTY" required /></label>
+          <label>전용 링크 <em>필수</em><input class="quantity-input" name="linkSlug" placeholder="예: busan-beauty" required /></label>
+          <label>영업비율 <em>필수</em><input class="quantity-input" name="commissionRate" type="number" min="0" max="100" value="10" required /></label>
+        </div>
+      </section>
+      <section class="agency-form-section">
+        <div class="product-form-group-head">
+          <strong>운영 정보</strong>
+          <span>계약 기간, 담당자, 정산 계좌는 내부 관리용입니다.</span>
+        </div>
+        <div class="agency-form-grid">
+          <label>상태
+            <select class="option-select" name="status">
+              <option value="active">active</option>
+              <option value="paused">paused</option>
+              <option value="terminated">terminated</option>
+            </select>
+          </label>
+          <label>계약 시작일<input class="quantity-input" name="contractStart" type="date" /></label>
+          <label>계약 종료일<input class="quantity-input" name="contractEnd" type="date" /></label>
+          <label>담당자<input class="quantity-input" name="managerName" placeholder="본사 담당자" /></label>
+          <label>담당 연락처<input class="quantity-input" name="managerPhone" placeholder="010-0000-0000" /></label>
+          <label class="profile-wide">정산 계좌<input class="quantity-input" name="settlementAccount" placeholder="은행 / 계좌번호 / 예금주" /></label>
+        </div>
+      </section>
       <div class="agency-form-actions">
         <button class="buy-button" type="button" data-agency-submit>대리점 등록</button>
         <button class="cart-button" type="button" data-agency-reset>입력 초기화</button>
@@ -1604,7 +1985,7 @@ function createAgencyManageRow(agency) {
       <div>${agency.code}</div>
       <div><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></div>
       <div>${agency.commissionRate}%</div>
-      <div>${agency.status}</div>
+      <div>${agency.status}<span>${agency.managerName || "담당 미등록"} · ${agency.settlementAccount || "정산계좌 미등록"}</span></div>
       <div class="agency-row-actions">${controls}</div>
     </article>
   `;

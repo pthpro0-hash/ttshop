@@ -963,6 +963,11 @@ function input(element, value) {
   click(dom.window, document.querySelector("#cartClose"));
   click(dom.window, document.querySelector('[data-admin-detail="agencies"]'));
   const agencyForm = document.querySelector("[data-agency-form]");
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /필수 계약 정보|운영 정보|대리점명, 대리점 코드, 전용 링크, 영업비율/,
+    "agency admin form should separate required and optional operating fields",
+  );
   input(agencyForm.querySelector('[name="name"]'), "부산 뷰티 대리점");
   assert.equal(
     agencyForm.querySelector('[name="code"]').value,
@@ -977,11 +982,17 @@ function input(element, value) {
   input(agencyForm.querySelector('[name="code"]'), "BUSANBEAUTY");
   input(agencyForm.querySelector('[name="linkSlug"]'), "busan-beauty");
   input(agencyForm.querySelector('[name="commissionRate"]'), "15");
+  input(agencyForm.querySelector('[name="contractStart"]'), "2026-06-01");
+  input(agencyForm.querySelector('[name="managerName"]'), "김담당");
+  input(
+    agencyForm.querySelector('[name="settlementAccount"]'),
+    "테스트은행 123",
+  );
   click(dom.window, agencyForm.querySelector("[data-agency-submit]"));
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /부산 뷰티 대리점|BUSANBEAUTY|15%/,
-    "admin should create a new agency",
+    /부산 뷰티 대리점|BUSANBEAUTY|15%|김담당|테스트은행 123/,
+    "admin should create a new agency with operating fields",
   );
   assert.ok(
     document.querySelector(".agency-table-row"),
@@ -1025,8 +1036,19 @@ function input(element, value) {
   );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /대리점 정산 대기 상세 리스트|지급 예정/,
-    "admin settlement card should show settlement detail list",
+    /대리점 정산 대기 상세 리스트|지급 예정|상태 변경|확정|지급완료/,
+    "admin settlement card should show settlement status controls",
+  );
+  click(
+    dom.window,
+    document.querySelector(
+      '#adminModalContent [data-settlement-status="agency-settlement-001"][data-status-value="confirmed"]',
+    ),
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /order-001|confirmed/,
+    "admin should be able to confirm an agency settlement item",
   );
   let agencyManagementLink = document.querySelector(
     '[data-management-link="agency"]',
@@ -1040,13 +1062,52 @@ function input(element, value) {
   click(dom.window, agencyManagementLink);
   assert.match(
     document.querySelector("#managementView").textContent,
-    /영업비 예정|Settlement queue|18,240원/,
+    /정산매출 \/ 영업비|Settlement queue|링크 성과|18,240원/,
     "agency should show settlement queue after bypass payment",
   );
   assert.equal(
     document.querySelectorAll("[data-agency-detail]").length,
     7,
     "agency dashboard cards should be clickable",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-agency-detail="settlement"]'),
+  );
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    /최근 6개월 정산매출 \/ 영업비|영업비|정산매출/,
+    "agency settlement card should show recent six month sales and commission together",
+  );
+  assert.equal(
+    document.querySelectorAll("#agencyModalContent [data-agency-month]").length,
+    6,
+    "agency sales summary should expose six clickable months",
+  );
+  const agencyMonthButton = document.querySelector(
+    "#agencyModalContent [data-agency-month]",
+  );
+  const selectedAgencyMonth = agencyMonthButton.dataset.agencyMonth;
+  click(dom.window, agencyMonthButton);
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    new RegExp(`${selectedAgencyMonth} 정산 상세|월별 주문|월별 정산 장부`),
+    "agency month card should open month-specific settlement detail",
+  );
+  click(dom.window, document.querySelector("[data-agency-month-back]"));
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    /최근 6개월 정산매출 \/ 영업비/,
+    "agency month detail back should return to the six month summary",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-agency-detail="performance"]'),
+  );
+  assert.match(
+    document.querySelector("#agencyModalContent").textContent,
+    /대리점 링크 성과|대리점 코드 귀속 회원|구매 전환 회원|정산 대상 주문/,
+    "agency performance card should show link attribution metrics",
   );
   click(dom.window, document.querySelector('[data-agency-detail="members"]'));
   assert.equal(
@@ -1106,14 +1167,10 @@ function input(element, value) {
     true,
     "agency detail modal should close",
   );
-  click(
-    dom.window,
-    document.querySelector('[data-agency-detail="commission"]'),
-  );
-  assert.match(
+  assert.doesNotMatch(
     document.querySelector("#agencyModalContent").textContent,
-    /영업비 예정 상세|지급 예정/,
-    "agency commission card should show settlement detail modal",
+    /상태 변경/,
+    "agency settlement summary should not expose admin settlement controls",
   );
   let memberManagementLink = document.querySelector(
     '[data-management-link="member"]',
@@ -1141,6 +1198,16 @@ function input(element, value) {
   }
   click(dom.window, agencyManagementLink);
   click(dom.window, document.querySelector('[data-agency-detail="link"]'));
+  assert.ok(
+    document.querySelector("#agencyModalContent [data-copy-agency-link]"),
+    "agency link detail should expose a copy button",
+  );
+  assert.match(
+    document.querySelector("#agencyModalContent [data-copy-agency-link]")
+      .dataset.copyAgencyLink,
+    /^http:\/\/127\.0\.0\.1:8000\/\?agency=gangnam-beauty#signup$/,
+    "agency copy button should keep a full http URL",
+  );
   click(
     dom.window,
     document.querySelector("#agencyModalContent [data-agency-join-link]"),

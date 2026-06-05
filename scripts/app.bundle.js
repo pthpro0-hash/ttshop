@@ -1445,6 +1445,45 @@
         });
       });
       modal.addEventListener("click", (event) => {
+        const copyButton = event.target.closest("[data-copy-agency-link]");
+        if (copyButton) {
+          copyText(copyButton.dataset.copyAgencyLink);
+          copyButton.textContent = "\uBCF5\uC0AC \uC644\uB8CC";
+          return;
+        }
+        const settlementButton = event.target.closest(
+          "[data-settlement-status]",
+        );
+        if (settlementButton) {
+          updateSettlementStatus(
+            settlementButton.dataset.settlementStatus,
+            settlementButton.dataset.statusValue,
+          );
+          persistStore(store);
+          openDetailModal(
+            modal,
+            createContent(modal.dataset.currentDetail || "settlements"),
+          );
+          return;
+        }
+        const agencyMonthButton = event.target.closest("[data-agency-month]");
+        if (agencyMonthButton) {
+          const monthType = `month:${agencyMonthButton.dataset.agencyMonth}`;
+          modal.dataset.monthBackDetail =
+            modal.dataset.currentDetail || "sales";
+          modal.dataset.currentDetail = monthType;
+          openDetailModal(modal, createContent(monthType));
+          return;
+        }
+        const agencyMonthBack = event.target.closest(
+          "[data-agency-month-back]",
+        );
+        if (agencyMonthBack) {
+          const backType = modal.dataset.monthBackDetail || "sales";
+          modal.dataset.currentDetail = backType;
+          openDetailModal(modal, createContent(backType));
+          return;
+        }
         const memberButton = event.target.closest("[data-member-detail]");
         if (memberButton) {
           openDetailModal(
@@ -1497,6 +1536,30 @@
         );
       });
     }
+    function copyText(value) {
+      var _a, _b;
+      const text = String(value || "");
+      if ((_a = navigator.clipboard) == null ? void 0 : _a.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        return;
+      }
+      const input = document.createElement("input");
+      input.value = text;
+      document.body.append(input);
+      input.select();
+      (_b = document.execCommand) == null ? void 0 : _b.call(document, "copy");
+      input.remove();
+    }
+    function updateSettlementStatus(settlementId, status) {
+      const settlement = store.agencySettlementLedger.find(
+        (item) => item.id === settlementId,
+      );
+      if (!settlement) return;
+      settlement.status = status;
+      settlement.updatedAt = /* @__PURE__ */ new Date()
+        .toISOString()
+        .slice(0, 10);
+    }
     function bindAgencyAdminForm(modal) {
       const formBox = modal.querySelector("[data-agency-form]");
       if (!formBox) return;
@@ -1538,6 +1601,16 @@
           getAgencyField(formBox, "commissionRate").value =
             agency.commissionRate;
           getAgencyField(formBox, "status").value = agency.status;
+          getAgencyField(formBox, "contractStart").value =
+            agency.contractStart || "";
+          getAgencyField(formBox, "contractEnd").value =
+            agency.contractEnd || "";
+          getAgencyField(formBox, "managerName").value =
+            agency.managerName || "";
+          getAgencyField(formBox, "managerPhone").value =
+            agency.managerPhone || "";
+          getAgencyField(formBox, "settlementAccount").value =
+            agency.settlementAccount || "";
           getAgencyField(formBox, "code").dataset.manual = "true";
           getAgencyField(formBox, "linkSlug").dataset.manual = "true";
           formBox.querySelector("[data-agency-submit]").textContent =
@@ -1554,7 +1627,7 @@
       formBox
         .querySelector("[data-agency-reset]")
         .addEventListener("click", () => {
-          formBox.querySelectorAll("input").forEach((input) => {
+          formBox.querySelectorAll("input, textarea").forEach((input) => {
             input.value = input.name === "commissionRate" ? "10" : "";
             delete input.dataset.manual;
           });
@@ -2207,6 +2280,14 @@
           Number(getAgencyField(formBox, "commissionRate").value || 0),
         ),
         status: getAgencyField(formBox, "status").value || "active",
+        contractStart: getAgencyField(formBox, "contractStart").value.trim(),
+        contractEnd: getAgencyField(formBox, "contractEnd").value.trim(),
+        managerName: getAgencyField(formBox, "managerName").value.trim(),
+        managerPhone: getAgencyField(formBox, "managerPhone").value.trim(),
+        settlementAccount: getAgencyField(
+          formBox,
+          "settlementAccount",
+        ).value.trim(),
       };
       if (!payload.name || !payload.code || !payload.linkSlug) return;
       if (agencyId) {
@@ -2294,6 +2375,15 @@
     <article class="management-card-action" tabindex="0" role="button" ${attribute}="${type}" aria-label="${label} \uC0C1\uC138 \uBCF4\uAE30">
       <span>${label}</span>
       <strong>${value}</strong>
+    </article>
+  `;
+  }
+  function createAgencySettlementMetric(sales, commission) {
+    return `
+    <article class="management-card-action settlement-metric-card" tabindex="0" role="button" data-agency-detail="settlement" aria-label="\uC815\uC0B0\uB9E4\uCD9C\uACFC \uC601\uC5C5\uBE44 \uC0C1\uC138 \uBCF4\uAE30">
+      <span>\uC815\uC0B0\uB9E4\uCD9C / \uC601\uC5C5\uBE44</span>
+      <strong>${formatMoney(sales)}</strong>
+      <em>\uC601\uC5C5\uBE44 ${formatMoney(commission)}</em>
     </article>
   `;
   }
@@ -2417,19 +2507,24 @@
         description:
           "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uB97C \uC81C\uC678\uD558\uACE0 \uB300\uB9AC\uC810 \uC601\uC5C5\uBE44 \uC9C0\uAE09 \uB300\uC0C1\uC73C\uB85C \uC7A1\uD78C \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
         rows: store.agencySettlementLedger.map((item) =>
-          createSettlementDetailRow(item, store),
+          createSettlementDetailRow(item, store, { allowStatusActions: true }),
         ),
       },
     };
     return detailMap[type] || detailMap.orders;
   }
   function createAgencyDetailRow(agency) {
+    const link = createAgencyPublicLink(agency);
     return `
     <article class="process-row">
       <div><strong>${agency.name}</strong><span>${agency.isHeadquarters ? "\uBCF8\uC0AC \uB300\uB9AC\uC810" : "\uACC4\uC57D \uB300\uB9AC\uC810"}</span></div>
       <div><span>\uC804\uC6A9 \uCF54\uB4DC</span><strong>${agency.code}</strong></div>
       <div><span>\uC804\uC6A9 \uB9C1\uD06C</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></div>
       <div><span>\uC601\uC5C5\uBE44\uC728 / \uC0C1\uD0DC</span><strong>${agency.commissionRate}% \xB7 ${agency.status}</strong></div>
+      <div><span>\uACC4\uC57D \uAE30\uAC04</span><strong>${formatAgencyContractPeriod(agency)}</strong></div>
+      <div><span>\uB2F4\uB2F9\uC790</span><strong>${agency.managerName || "\uBBF8\uB4F1\uB85D"}</strong></div>
+      <div><span>\uC815\uC0B0 \uACC4\uC88C</span><strong>${agency.settlementAccount || "\uBBF8\uB4F1\uB85D"}</strong></div>
+      <div><span>\uB9C1\uD06C \uBCF5\uC0AC</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">\uBCF5\uC0AC</button></div>
     </article>
   `;
   }
@@ -2558,8 +2653,21 @@
   function getCurrentMonthKey() {
     return /* @__PURE__ */ new Date().toISOString().slice(0, 7);
   }
+  function getRecentMonthKeys(count = 6) {
+    const start = /* @__PURE__ */ new Date(
+      `${getCurrentMonthKey()}-01T00:00:00`,
+    );
+    return Array.from({ length: count }, (_, index) => {
+      const date = new Date(start);
+      date.setMonth(start.getMonth() - index);
+      return date.toISOString().slice(0, 7);
+    });
+  }
   function isCurrentMonthDate(value) {
     return String(value || "").startsWith(getCurrentMonthKey());
+  }
+  function isMonthDate(value, monthKey) {
+    return String(value || "").startsWith(monthKey);
   }
   function getCurrentMonthOrders(store) {
     return store.orders.filter(
@@ -2644,16 +2752,30 @@
     </div>
   `;
   }
-  function createSettlementDetailRow(item, store) {
+  function createSettlementDetailRow(item, store, options = {}) {
     const agency = store.agencies.find(
       (agencyItem) => agencyItem.id === item.agencyId,
     );
+    const actions = options.allowStatusActions
+      ? [
+          ["pending_next_month_15", "\uB300\uAE30"],
+          ["confirmed", "\uD655\uC815"],
+          ["paid", "\uC9C0\uAE09\uC644\uB8CC"],
+          ["hold", "\uBCF4\uB958"],
+        ]
+          .map(
+            ([status, label]) =>
+              `<button class="cart-button mini-button" type="button" data-settlement-status="${item.id}" data-status-value="${status}">${label}</button>`,
+          )
+          .join("")
+      : "";
     return `
     <article class="process-row">
       <div><strong>${item.orderId}</strong><span>${(agency == null ? void 0 : agency.name) || "\uB300\uB9AC\uC810"} \xB7 ${item.status}</span></div>
       <div><span>\uAE30\uC900 \uB9E4\uCD9C</span><strong>${formatMoney(item.baseAmount)}</strong></div>
       <div><span>\uC601\uC5C5\uBE44\uC728</span><strong>${item.commissionRate}%</strong></div>
       <div><span>\uC9C0\uAE09 \uC608\uC815</span><strong>${formatMoney(item.commissionAmount)}</strong></div>
+      ${actions ? `<div class="settlement-actions"><span>\uC0C1\uD0DC \uBCC0\uACBD</span><strong>${actions}</strong></div>` : ""}
     </article>
   `;
   }
@@ -2668,17 +2790,202 @@
   `;
   }
   function createAgencyLinkDetailRow(agency) {
+    const link = createAgencyPublicLink(agency);
     return `
     <article class="process-row">
       <div><strong>\uB300\uB9AC\uC810 \uAC00\uC785 \uB9C1\uD06C</strong><span>\uD68C\uC6D0\uAC00\uC785 \uC2DC \uB300\uB9AC\uC810 \uCF54\uB4DC \uC790\uB3D9 \uB4F1\uB85D</span></div>
       <div><span>\uB9C1\uD06C</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></div>
       <div><span>\uB300\uB9AC\uC810 \uCF54\uB4DC</span><strong>${agency.code}</strong></div>
       <div><span>\uC0C1\uD0DC</span><strong>${agency.status}</strong></div>
+      <div><span>\uBCF5\uC0AC</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">\uB9C1\uD06C \uBCF5\uC0AC</button></div>
     </article>
   `;
   }
+  function createAgencyPerformanceRow(performance) {
+    return `
+    <article class="process-row">
+      <div><strong>${performance.members}\uBA85</strong><span>\uB300\uB9AC\uC810 \uCF54\uB4DC \uADC0\uC18D \uD68C\uC6D0</span></div>
+      <div><span>\uAD6C\uB9E4 \uC804\uD658 \uD68C\uC6D0</span><strong>${performance.buyers}\uBA85</strong></div>
+      <div><span>\uC815\uC0B0 \uB300\uC0C1 \uC8FC\uBB38</span><strong>${performance.orders}\uAC74</strong></div>
+      <div><span>\uC804\uD658\uC728</span><strong>${performance.conversionRate}%</strong></div>
+    </article>
+  `;
+  }
+  function createAgencyMonthSummary(agency, orders, settlements, monthKey) {
+    const monthOrders = orders.filter((order) =>
+      isMonthDate(order.paidAt, monthKey),
+    );
+    const monthSettlements = settlements.filter((item) =>
+      isMonthDate(item.createdAt, monthKey),
+    );
+    const amount = monthOrders.reduce(
+      (sum, order) => sum + order.paidProductAmount,
+      0,
+    );
+    const commission = monthSettlements.reduce(
+      (sum, item) => sum + item.commissionAmount,
+      0,
+    );
+    return `
+    <div class="management-grid compact monthly-point-summary">
+      <article><span>\uB300\uC0C1 \uC6D4</span><strong>${monthKey}</strong></article>
+      <article><span>\uB300\uB9AC\uC810</span><strong>${agency.name}</strong></article>
+      <article><span>\uC815\uC0B0\uB9E4\uCD9C</span><strong>${formatMoney(amount)}</strong></article>
+      <article><span>\uC608\uC0C1 \uC601\uC5C5\uBE44</span><strong>${formatMoney(commission)}</strong></article>
+    </div>
+  `;
+  }
+  function createAgencySixMonthSummary(agency, orders, settlements) {
+    return `
+    <div class="agency-month-grid" aria-label="\uCD5C\uADFC 6\uAC1C\uC6D4 \uC815\uC0B0 \uC694\uC57D">
+      ${getRecentMonthKeys(6)
+        .map((monthKey) =>
+          createAgencyMonthCard(agency, orders, settlements, monthKey),
+        )
+        .join("")}
+    </div>
+  `;
+  }
+  function createAgencyMonthCard(agency, orders, settlements, monthKey) {
+    const monthOrders = orders.filter((order) =>
+      isMonthDate(order.paidAt, monthKey),
+    );
+    const monthSettlements = settlements.filter((item) =>
+      isMonthDate(item.createdAt, monthKey),
+    );
+    const amount = monthOrders.reduce(
+      (sum, order) => sum + order.paidProductAmount,
+      0,
+    );
+    const commission = monthSettlements.reduce(
+      (sum, item) => sum + item.commissionAmount,
+      0,
+    );
+    const status = getSettlementStatusSummary(monthSettlements);
+    return `
+    <button class="agency-month-card" type="button" data-agency-month="${monthKey}">
+      <span>${agency.code} / ${monthKey}</span>
+      <strong>${formatMoney(amount)}</strong>
+      <em>\uC601\uC5C5\uBE44 ${formatMoney(commission)} \xB7 ${monthOrders.length}\uAC74 \xB7 ${status}</em>
+    </button>
+  `;
+  }
+  function createAgencyMonthDetailContent(monthKey, store) {
+    const agency = getAgencyContext(store);
+    if (!agency)
+      return '<div class="admin-detail-empty">\uB300\uB9AC\uC810 \uC815\uBCF4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+    const orders = store.orders.filter(
+      (order) =>
+        order.agencyIdAtOrder === agency.id &&
+        order.referralSourceType !== "personal_product",
+    );
+    const settlements = store.agencySettlementLedger.filter(
+      (item) => item.agencyId === agency.id,
+    );
+    const monthOrders = orders.filter((order) =>
+      isMonthDate(order.paidAt, monthKey),
+    );
+    const monthSettlements = settlements.filter((item) =>
+      isMonthDate(item.createdAt, monthKey),
+    );
+    return `
+    <div class="detail-panel-head">
+      <div>
+        <button class="back-button member-detail-back" type="button" data-agency-month-back>\u2190 \uCD5C\uADFC 6\uAC1C\uC6D4</button>
+        <div class="product-category">Agency settlement / ${monthKey}</div>
+        <h2 id="adminModalTitle">${monthKey} \uC815\uC0B0 \uC0C1\uC138</h2>
+      </div>
+      <p>\uD574\uB2F9 \uC6D4\uC758 \uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uACFC \uC601\uC5C5\uBE44 \uC608\uC815 \uC7A5\uBD80\uC785\uB2C8\uB2E4.</p>
+    </div>
+    <div class="process-list">
+      ${createAgencyMonthSummary(agency, orders, settlements, monthKey)}
+      <div class="product-category">\uC6D4\uBCC4 \uC8FC\uBB38</div>
+      ${monthOrders.map((order) => createOrderDetailRow(order, store)).join("") || '<div class="admin-detail-empty">\uD574\uB2F9 \uC6D4 \uC8FC\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+      <div class="product-category">\uC6D4\uBCC4 \uC815\uC0B0 \uC7A5\uBD80</div>
+      ${monthSettlements.map((item) => createSettlementDetailRow(item, store)).join("") || '<div class="admin-detail-empty">\uD574\uB2F9 \uC6D4 \uC815\uC0B0 \uC7A5\uBD80\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+    </div>
+  `;
+  }
+  function getAgencyContext(store) {
+    const currentMember = store.members.find(
+      (member) => member.id === store.currentMemberId,
+    );
+    const memberAgency = store.agencies.find(
+      (agency) =>
+        agency.id === (currentMember == null ? void 0 : currentMember.agencyId),
+    );
+    if (memberAgency && !memberAgency.isHeadquarters) return memberAgency;
+    return (
+      store.agencies.find((agency) => !agency.isHeadquarters) ||
+      store.agencies.find((agency) => agency.isHeadquarters)
+    );
+  }
+  function getAgencyLinkPerformance(agency, store) {
+    const members = store.members.filter(
+      (member) => member.agencyId === agency.id,
+    );
+    const memberIds = new Set(members.map((member) => member.id));
+    const orders = store.orders.filter(
+      (order) =>
+        order.agencyIdAtOrder === agency.id &&
+        order.referralSourceType !== "personal_product",
+    );
+    const buyerIds = new Set(
+      orders
+        .map((order) => order.memberId)
+        .filter((memberId) => memberIds.has(memberId)),
+    );
+    const conversionRate = members.length
+      ? Math.round((buyerIds.size / members.length) * 100)
+      : 0;
+    return {
+      members: members.length,
+      buyers: buyerIds.size,
+      orders: orders.length,
+      conversionRate,
+    };
+  }
+  function getSettlementStatusSummary(settlements) {
+    if (!settlements.length) return "\uB300\uAE30 \uC5C6\uC74C";
+    const paid = settlements.filter((item) => item.status === "paid").length;
+    const hold = settlements.filter((item) => item.status === "hold").length;
+    const confirmed = settlements.filter(
+      (item) => item.status === "confirmed",
+    ).length;
+    const pending = settlements.length - paid - hold - confirmed;
+    if (hold) return `\uBCF4\uB958 ${hold}\uAC74`;
+    if (pending) return `\uB300\uAE30 ${pending}\uAC74`;
+    if (confirmed) return `\uD655\uC815 ${confirmed}\uAC74`;
+    return `\uC9C0\uAE09\uC644\uB8CC ${paid}\uAC74`;
+  }
+  function createAgencyPublicLink(agency) {
+    const location = window.location || {};
+    const isHttp = /^https?:\/\//.test(location.origin || "");
+    const origin = isHttp ? location.origin : "http://localhost:8000";
+    const path = isHttp ? location.pathname || "/" : "/";
+    return `${origin}${path}?agency=${encodeURIComponent(agency.linkSlug)}#signup`;
+  }
+  function formatAgencyContractPeriod(agency) {
+    if (!agency.contractStart && !agency.contractEnd)
+      return "\uBBF8\uB4F1\uB85D";
+    return `${agency.contractStart || "\uC2DC\uC791\uC77C \uBBF8\uB4F1\uB85D"} ~ ${agency.contractEnd || "\uC885\uB8CC\uC77C \uBBF8\uB4F1\uB85D"}`;
+  }
+  function createEmptyAgencyDashboard() {
+    return `
+    <section class="management-dashboard">
+      <div class="management-head">
+        <div>
+          <div class="product-category">Agency</div>
+          <h1 class="detail-title">Agency Desk.</h1>
+        </div>
+        <p>\uD45C\uC2DC\uD560 \uB300\uB9AC\uC810 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</p>
+      </div>
+    </section>
+  `;
+  }
   function createAgencyDashboard(store) {
-    const agency = store.agencies.find((item) => !item.isHeadquarters);
+    const agency = getAgencyContext(store);
+    if (!agency) return createEmptyAgencyDashboard();
     const members = store.members.filter(
       (member) => member.agencyId === agency.id,
     );
@@ -2696,6 +3003,17 @@
       (sum, item) => sum + item.commissionAmount,
       0,
     );
+    const monthlyOrders = getCurrentMonthOrders(store).filter(
+      (order) =>
+        order.agencyIdAtOrder === agency.id &&
+        order.referralSourceType !== "personal_product",
+    );
+    const monthlySales = monthlyOrders.reduce(
+      (sum, order) => sum + order.paidProductAmount,
+      0,
+    );
+    const linkPerformance = getAgencyLinkPerformance(agency, store);
+    const statusSummary = getSettlementStatusSummary(settlements);
     return `
     <section class="management-dashboard">
       <div class="management-head">
@@ -2710,9 +3028,9 @@
         ${createMetricCard("agency", "link", "\uC804\uC6A9 \uB9C1\uD06C", `/join/${agency.linkSlug}`)}
         ${createMetricCard("agency", "members", "\uC18C\uC18D \uACE0\uAC1D", `${members.length}\uBA85`)}
         ${createMetricCard("agency", "rate", "\uC601\uC5C5\uBE44\uC728", `${agency.commissionRate}%`)}
-        ${createMetricCard("agency", "sales", "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C", formatMoney(sales))}
-        ${createMetricCard("agency", "commission", "\uC601\uC5C5\uBE44 \uC608\uC815", formatMoney(commission))}
-        ${createMetricCard("agency", "status", "\uC815\uC0B0 \uC0C1\uD0DC", "\uC815\uC0B0 \uC900\uBE44\uC911")}
+        ${createAgencySettlementMetric(monthlySales || sales, commission)}
+        ${createMetricCard("agency", "performance", "\uB9C1\uD06C \uC131\uACFC", `${linkPerformance.members}\uBA85 / ${linkPerformance.orders}\uAC74`)}
+        ${createMetricCard("agency", "status", "\uC815\uC0B0 \uC0C1\uD0DC", statusSummary)}
       </div>
       <section class="management-panel">
         <div class="product-category">Settlement queue</div>
@@ -2737,7 +3055,15 @@
   `;
   }
   function createAgencyDetailContent(type, store) {
-    const agency = store.agencies.find((item) => !item.isHeadquarters);
+    if (String(type || "").startsWith("month:")) {
+      return createAgencyMonthDetailContent(
+        String(type).replace("month:", ""),
+        store,
+      );
+    }
+    const agency = getAgencyContext(store);
+    if (!agency)
+      return '<div class="admin-detail-empty">\uB300\uB9AC\uC810 \uC815\uBCF4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
     const members = store.members.filter(
       (member) => member.agencyId === agency.id,
     );
@@ -2749,6 +3075,7 @@
     const settlements = store.agencySettlementLedger.filter(
       (item) => item.agencyId === agency.id,
     );
+    const linkPerformance = getAgencyLinkPerformance(agency, store);
     const details = {
       code: {
         label: "Code",
@@ -2763,6 +3090,13 @@
         description:
           "\uC774 \uB9C1\uD06C\uB85C \uAC00\uC785\uD55C \uD68C\uC6D0\uC740 \uACC4\uC18D \uD574\uB2F9 \uB300\uB9AC\uC810 \uACE0\uAC1D\uC73C\uB85C \uCC98\uB9AC\uB429\uB2C8\uB2E4.",
         rows: [createAgencyLinkDetailRow(agency)],
+      },
+      performance: {
+        label: "Performance",
+        title: "\uB300\uB9AC\uC810 \uB9C1\uD06C \uC131\uACFC",
+        description:
+          "\uB300\uB9AC\uC810 \uCF54\uB4DC\uB85C \uADC0\uC18D\uB41C \uD68C\uC6D0 \uC218\uC640 \uAD6C\uB9E4 \uC804\uD658 \uD604\uD669\uC744 \uD655\uC778\uD569\uB2C8\uB2E4.",
+        rows: [createAgencyPerformanceRow(linkPerformance)],
       },
       members: {
         label: "Customers",
@@ -2784,20 +3118,17 @@
           ),
         ],
       },
-      sales: {
-        label: "Sales",
-        title: "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C \uC0C1\uC138",
+      settlement: {
+        label: "Settlement",
+        title:
+          "\uCD5C\uADFC 6\uAC1C\uC6D4 \uC815\uC0B0\uB9E4\uCD9C / \uC601\uC5C5\uBE44",
         description:
-          "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uB97C \uC81C\uC678\uD55C \uB300\uB9AC\uC810 \uD68C\uC6D0\uC758 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC785\uB2C8\uB2E4.",
-        rows: orders.map((order) => createOrderDetailRow(order, store)),
+          "\uCD5C\uADFC 6\uAC1C\uC6D4\uC758 \uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uACFC \uC601\uC5C5\uBE44 \uC608\uC815 \uAE08\uC561\uC785\uB2C8\uB2E4. \uC6D4\uC744 \uD074\uB9AD\uD558\uBA74 \uC138\uBD80 \uC8FC\uBB38\uACFC \uC815\uC0B0 \uC7A5\uBD80\uB97C \uD655\uC778\uD569\uB2C8\uB2E4.",
+        extra: createAgencySixMonthSummary(agency, orders, settlements),
+        rows: [],
       },
-      commission: {
-        label: "Commission",
-        title: "\uC601\uC5C5\uBE44 \uC608\uC815 \uC0C1\uC138",
-        description:
-          "\uC815\uC0B0 \uB300\uC0C1 \uB9E4\uCD9C\uC5D0 \uB300\uB9AC\uC810 \uC601\uC5C5\uBE44\uC728\uC744 \uC801\uC6A9\uD55C \uC9C0\uAE09 \uC608\uC815 \uC7A5\uBD80\uC785\uB2C8\uB2E4.",
-        rows: settlements.map((item) => createSettlementDetailRow(item, store)),
-      },
+      sales: null,
+      commission: null,
       status: {
         label: "Status",
         title: "\uC815\uC0B0 \uC0C1\uD0DC \uC0C1\uC138",
@@ -2806,7 +3137,8 @@
         rows: settlements.map((item) => createSettlementDetailRow(item, store)),
       },
     };
-    const detail = details[type] || details.sales;
+    const detail = details[type] || details.settlement;
+    const rows = detail.rows.join("");
     return `
     <div class="detail-panel-head">
       <div>
@@ -2817,7 +3149,7 @@
     </div>
     <div class="process-list">
       ${detail.extra || ""}
-      ${detail.rows.join("") || '<div class="admin-detail-empty">\uD45C\uC2DC\uD560 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+      ${rows || (detail.extra ? "" : '<div class="admin-detail-empty">\uD45C\uC2DC\uD560 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>')}
     </div>
   `;
   }
@@ -2825,17 +3157,42 @@
     return `
     <div class="agency-admin-form" data-agency-form>
       <input type="hidden" name="agencyId" />
-      <label>\uB300\uB9AC\uC810\uBA85<input class="quantity-input" name="name" placeholder="\uC608: \uBD80\uC0B0 \uBDF0\uD2F0 \uB300\uB9AC\uC810" required /></label>
-      <label>\uB300\uB9AC\uC810 \uCF54\uB4DC<input class="quantity-input" name="code" placeholder="\uC608: BUSANBEAUTY" required /></label>
-      <label>\uC804\uC6A9 \uB9C1\uD06C<input class="quantity-input" name="linkSlug" placeholder="\uC608: busan-beauty" required /></label>
-      <label>\uC601\uC5C5\uBE44\uC728<input class="quantity-input" name="commissionRate" type="number" min="0" max="100" value="10" required /></label>
-      <label>\uC0C1\uD0DC
-        <select class="option-select" name="status">
-          <option value="active">active</option>
-          <option value="paused">paused</option>
-          <option value="terminated">terminated</option>
-        </select>
-      </label>
+      <section class="agency-form-section product-required-group">
+        <div class="product-form-group-head">
+          <strong>\uD544\uC218 \uACC4\uC57D \uC815\uBCF4</strong>
+          <span>\uB300\uB9AC\uC810 \uB4F1\uB85D\uACFC \uC815\uC0B0 \uACC4\uC0B0\uC5D0 \uD544\uC694\uD55C \uCD5C\uC18C \uC785\uB825\uAC12</span>
+        </div>
+        <div class="required-form-note">
+          <strong>\uD544\uC218</strong>
+          <span>\uB300\uB9AC\uC810\uBA85, \uB300\uB9AC\uC810 \uCF54\uB4DC, \uC804\uC6A9 \uB9C1\uD06C, \uC601\uC5C5\uBE44\uC728\uC740 \uBC18\uB4DC\uC2DC \uC785\uB825\uD574\uC57C \uD569\uB2C8\uB2E4.</span>
+        </div>
+        <div class="agency-form-grid">
+          <label>\uB300\uB9AC\uC810\uBA85 <em>\uD544\uC218</em><input class="quantity-input" name="name" placeholder="\uC608: \uBD80\uC0B0 \uBDF0\uD2F0 \uB300\uB9AC\uC810" required /></label>
+          <label>\uB300\uB9AC\uC810 \uCF54\uB4DC <em>\uD544\uC218</em><input class="quantity-input" name="code" placeholder="\uC608: BUSANBEAUTY" required /></label>
+          <label>\uC804\uC6A9 \uB9C1\uD06C <em>\uD544\uC218</em><input class="quantity-input" name="linkSlug" placeholder="\uC608: busan-beauty" required /></label>
+          <label>\uC601\uC5C5\uBE44\uC728 <em>\uD544\uC218</em><input class="quantity-input" name="commissionRate" type="number" min="0" max="100" value="10" required /></label>
+        </div>
+      </section>
+      <section class="agency-form-section">
+        <div class="product-form-group-head">
+          <strong>\uC6B4\uC601 \uC815\uBCF4</strong>
+          <span>\uACC4\uC57D \uAE30\uAC04, \uB2F4\uB2F9\uC790, \uC815\uC0B0 \uACC4\uC88C\uB294 \uB0B4\uBD80 \uAD00\uB9AC\uC6A9\uC785\uB2C8\uB2E4.</span>
+        </div>
+        <div class="agency-form-grid">
+          <label>\uC0C1\uD0DC
+            <select class="option-select" name="status">
+              <option value="active">active</option>
+              <option value="paused">paused</option>
+              <option value="terminated">terminated</option>
+            </select>
+          </label>
+          <label>\uACC4\uC57D \uC2DC\uC791\uC77C<input class="quantity-input" name="contractStart" type="date" /></label>
+          <label>\uACC4\uC57D \uC885\uB8CC\uC77C<input class="quantity-input" name="contractEnd" type="date" /></label>
+          <label>\uB2F4\uB2F9\uC790<input class="quantity-input" name="managerName" placeholder="\uBCF8\uC0AC \uB2F4\uB2F9\uC790" /></label>
+          <label>\uB2F4\uB2F9 \uC5F0\uB77D\uCC98<input class="quantity-input" name="managerPhone" placeholder="010-0000-0000" /></label>
+          <label class="profile-wide">\uC815\uC0B0 \uACC4\uC88C<input class="quantity-input" name="settlementAccount" placeholder="\uC740\uD589 / \uACC4\uC88C\uBC88\uD638 / \uC608\uAE08\uC8FC" /></label>
+        </div>
+      </section>
       <div class="agency-form-actions">
         <button class="buy-button" type="button" data-agency-submit>\uB300\uB9AC\uC810 \uB4F1\uB85D</button>
         <button class="cart-button" type="button" data-agency-reset>\uC785\uB825 \uCD08\uAE30\uD654</button>
@@ -2856,7 +3213,7 @@
       <div>${agency.code}</div>
       <div><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></div>
       <div>${agency.commissionRate}%</div>
-      <div>${agency.status}</div>
+      <div>${agency.status}<span>${agency.managerName || "\uB2F4\uB2F9 \uBBF8\uB4F1\uB85D"} \xB7 ${agency.settlementAccount || "\uC815\uC0B0\uACC4\uC88C \uBBF8\uB4F1\uB85D"}</span></div>
       <div class="agency-row-actions">${controls}</div>
     </article>
   `;
