@@ -36,6 +36,7 @@ export function completeBypassPayment({ cart, store, payment }) {
       sale: item.sale,
       qty: item.qty,
       option: item.option,
+      variantSku: item.variantSku || "",
     })),
   };
 
@@ -91,7 +92,9 @@ function decrementProductStock(store, cart) {
     product.stock = Math.max(0, Number(product.stock || 0) - item.qty);
     const variant =
       (product.variants || []).find(
-        (variantItem) => variantItem.optionName === item.option,
+        (variantItem) =>
+          variantItem.sku === item.variantSku ||
+          variantItem.optionName === item.option,
       ) || product.variants?.[0];
 
     if (variant) {

@@ -1587,22 +1587,25 @@
         .querySelectorAll("[data-product-category-filter]")
         .forEach((button) => {
           button.addEventListener("click", () => {
-            const category = button.dataset.productCategoryFilter;
             modal
               .querySelectorAll("[data-product-category-filter]")
               .forEach((item) => {
                 item.classList.toggle("is-active", item === button);
               });
-            modal
-              .querySelectorAll("[data-product-category-card]")
-              .forEach((card) => {
-                card.classList.toggle(
-                  "is-filtered-out",
-                  category !== "all" &&
-                    card.dataset.productCategoryCard !== category,
-                );
-              });
+            applyProductListControls(modal);
           });
+        });
+      modal
+        .querySelectorAll(
+          "[data-product-list-search], [data-product-status-filter], [data-product-sort]",
+        )
+        .forEach((control) => {
+          control.addEventListener("input", () =>
+            applyProductListControls(modal),
+          );
+          control.addEventListener("change", () =>
+            applyProductListControls(modal),
+          );
         });
       formBox
         .querySelector("[data-product-reset]")
@@ -1610,6 +1613,12 @@
       getProductField(formBox, "image").addEventListener("input", () =>
         updateProductImagePreview(formBox),
       );
+      formBox
+        .querySelector("[data-product-image-clear]")
+        .addEventListener("click", () => {
+          getProductField(formBox, "image").value = "";
+          updateProductImagePreview(formBox);
+        });
       formBox
         .querySelector("[data-product-image-sample]")
         .addEventListener("click", () => {
@@ -1648,17 +1657,151 @@
           });
         });
       formBox
+        .querySelectorAll("[data-product-detail-image-clear]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            const index = Number(button.dataset.productDetailImageClear);
+            getProductField(formBox, `detailImage${index}`).value = "";
+            updateProductDetailImagePreviews(formBox);
+          });
+        });
+      formBox
         .querySelectorAll("[data-product-detail-image-input]")
         .forEach((input) => {
           input.addEventListener("input", () =>
             updateProductDetailImagePreviews(formBox),
           );
         });
+      formBox
+        .querySelector("[data-variant-add]")
+        .addEventListener("click", () => {
+          addVariantEditorRow(formBox, {
+            optionName: getProductField(formBox, "option").value.trim(),
+            sku: createProductSku(getProductField(formBox, "name").value),
+            stock: readNumberField(formBox, "stock"),
+            priceDelta: 0,
+            status: "selling",
+          });
+          syncVariantEditorToTextarea(formBox);
+        });
+      formBox
+        .querySelector("[data-variant-editor]")
+        .addEventListener("input", () => syncVariantEditorToTextarea(formBox));
+      formBox
+        .querySelector("[data-variant-editor]")
+        .addEventListener("change", () => syncVariantEditorToTextarea(formBox));
+      formBox
+        .querySelector("[data-variant-editor]")
+        .addEventListener("click", (event) => {
+          var _a;
+          const removeButton = event.target.closest("[data-variant-remove]");
+          if (!removeButton) return;
+          const rows = formBox.querySelectorAll("[data-variant-row]");
+          if (rows.length <= 1) {
+            resetVariantEditor(formBox);
+            return;
+          }
+          (_a = removeButton.closest("[data-variant-row]")) == null
+            ? void 0
+            : _a.remove();
+          syncVariantEditorToTextarea(formBox);
+        });
       updateProductImagePreview(formBox);
       updateProductDetailImagePreviews(formBox);
+      resetVariantEditor(formBox);
     }
     function getProductField(formBox, name) {
       return formBox.querySelector(`[name="${name}"]`);
+    }
+    function applyProductListControls(modal) {
+      var _a, _b, _c, _d;
+      const activeCategory =
+        ((_a = modal.querySelector(
+          "[data-product-category-filter].is-active",
+        )) == null
+          ? void 0
+          : _a.dataset.productCategoryFilter) || "all";
+      const search = (
+        ((_b = modal.querySelector("[data-product-list-search]")) == null
+          ? void 0
+          : _b.value) || ""
+      )
+        .trim()
+        .toLowerCase();
+      const status =
+        ((_c = modal.querySelector("[data-product-status-filter]")) == null
+          ? void 0
+          : _c.value) || "all";
+      const sort =
+        ((_d = modal.querySelector("[data-product-sort]")) == null
+          ? void 0
+          : _d.value) || "default";
+      const list = modal.querySelector("[data-product-card-list]");
+      const cards = Array.from(
+        modal.querySelectorAll("[data-product-category-card]"),
+      );
+      cards.forEach((card) => {
+        var _a2;
+        const stock = Number(card.dataset.productStock || 0);
+        const safetyStock = Number(card.dataset.productSafetyStock || 0);
+        const matchesCategory =
+          activeCategory === "all" ||
+          card.dataset.productCategoryCard === activeCategory;
+        const matchesSearch =
+          !search ||
+          ((_a2 = card.dataset.productSearch) == null
+            ? void 0
+            : _a2.includes(search));
+        const matchesStatus =
+          status === "all" ||
+          (status === "hidden"
+            ? card.dataset.productDisplay === "hidden"
+            : status === "low-stock"
+              ? stock <= safetyStock
+              : card.dataset.productStatus === status);
+        card.classList.toggle(
+          "is-filtered-out",
+          !matchesCategory || !matchesSearch || !matchesStatus,
+        );
+      });
+      sortProductCards(list, cards, sort);
+    }
+    function sortProductCards(list, cards, sort) {
+      if (!list) return;
+      const sorted = [...cards].sort((a, b) => {
+        if (sort === "name") {
+          return (a.dataset.productName || "").localeCompare(
+            b.dataset.productName || "",
+            "ko-KR",
+          );
+        }
+        if (sort === "sale-desc") {
+          return (
+            Number(b.dataset.productSale || 0) -
+            Number(a.dataset.productSale || 0)
+          );
+        }
+        if (sort === "sale-asc") {
+          return (
+            Number(a.dataset.productSale || 0) -
+            Number(b.dataset.productSale || 0)
+          );
+        }
+        if (sort === "stock-asc") {
+          return (
+            Number(a.dataset.productStock || 0) -
+            Number(b.dataset.productStock || 0)
+          );
+        }
+        if (sort === "hidden-first") {
+          return (
+            Number(b.dataset.productDisplay === "hidden") -
+            Number(a.dataset.productDisplay === "hidden")
+          );
+        }
+        return 0;
+      });
+      sorted.forEach((card) => list.append(card));
     }
     function saveProductFromForm(formBox) {
       const productId = getProductField(formBox, "productId").value;
@@ -1696,6 +1839,7 @@
       return true;
     }
     function readProductForm(formBox) {
+      syncVariantEditorToTextarea(formBox);
       const price = readNumberField(formBox, "price");
       const sale = readNumberField(formBox, "sale");
       const stock = readNumberField(formBox, "stock");
@@ -1780,6 +1924,7 @@
       });
       fillProductDetailImages(formBox, product.detailImages);
       getProductField(formBox, "variants").value = formatVariantRows(product);
+      fillVariantEditor(formBox, product.variants);
       updateProductImagePreview(formBox);
       updateProductDetailImagePreviews(formBox);
       formBox.querySelector("[data-product-submit]").textContent =
@@ -1797,6 +1942,7 @@
       getProductField(formBox, "shippingType").value = "default";
       getProductField(formBox, "shippingFee").value = "3000";
       getProductField(formBox, "safetyStock").value = "5";
+      resetVariantEditor(formBox);
       updateProductImagePreview(formBox);
       updateProductDetailImagePreviews(formBox);
       formBox.querySelector("[data-product-submit]").textContent =
@@ -1839,6 +1985,68 @@
             ? `<img src="${escapeAttribute(image)}" alt="\uC0C1\uC138 \uC774\uBBF8\uC9C0 ${index} \uBBF8\uB9AC\uBCF4\uAE30" />`
             : `<span>${index}</span>`;
         });
+    }
+    function addVariantEditorRow(formBox, variant = {}) {
+      const editor = formBox.querySelector("[data-variant-editor]");
+      const row = document.createElement("article");
+      row.className = "variant-editor-row";
+      row.dataset.variantRow = "true";
+      row.innerHTML = createVariantEditorRow(variant);
+      editor.append(row);
+    }
+    function fillVariantEditor(formBox, variants = []) {
+      const editor = formBox.querySelector("[data-variant-editor]");
+      editor.innerHTML = "";
+      const rows = variants.length ? variants : parseVariantRows("", "", "", 0);
+      rows.forEach((variant) => addVariantEditorRow(formBox, variant));
+      syncVariantEditorToTextarea(formBox);
+    }
+    function resetVariantEditor(formBox) {
+      fillVariantEditor(formBox, [
+        {
+          optionName:
+            getProductField(formBox, "option").value.trim() ||
+            "\uAE30\uBCF8 \uC635\uC158",
+          sku: "",
+          stock: readNumberField(formBox, "stock"),
+          priceDelta: 0,
+          status: "selling",
+        },
+      ]);
+    }
+    function syncVariantEditorToTextarea(formBox) {
+      const rows = Array.from(formBox.querySelectorAll("[data-variant-row]"));
+      getProductField(formBox, "variants").value = rows
+        .map((row, index) => {
+          var _a, _b, _c, _d, _e;
+          const optionName =
+            ((_a = row.querySelector("[data-variant-option]")) == null
+              ? void 0
+              : _a.value.trim()) || `\uC635\uC158 ${index + 1}`;
+          const sku =
+            ((_b = row.querySelector("[data-variant-sku]")) == null
+              ? void 0
+              : _b.value.trim()) || "";
+          const stock = Math.max(
+            0,
+            Number(
+              ((_c = row.querySelector("[data-variant-stock]")) == null
+                ? void 0
+                : _c.value) || 0,
+            ),
+          );
+          const priceDelta = Number(
+            ((_d = row.querySelector("[data-variant-price-delta]")) == null
+              ? void 0
+              : _d.value) || 0,
+          );
+          const status =
+            ((_e = row.querySelector("[data-variant-status]")) == null
+              ? void 0
+              : _e.value) || "selling";
+          return `${optionName} | ${sku} | ${stock} | ${priceDelta} | ${status}`;
+        })
+        .join("\n");
     }
     function readNumberField(formBox, name) {
       return Math.max(0, Number(getProductField(formBox, name).value || 0));
@@ -2607,13 +2815,38 @@
             <span>\uC0C1\uD488\uBA85\uC744 \uC120\uD0DD\uD558\uBA74 \uC624\uB978\uCABD \uD3B8\uC9D1 \uD328\uB110\uC5D0 \uBD88\uB7EC\uC635\uB2C8\uB2E4.</span>
           </div>
         </div>
+        <div class="product-list-controls" aria-label="\uC0C1\uD488 \uBAA9\uB85D \uAC80\uC0C9\uACFC \uC815\uB82C">
+          <label>\uAC80\uC0C9
+            <input class="quantity-input" type="search" placeholder="\uC0C1\uD488\uBA85, SKU, \uD0A4\uC6CC\uB4DC" data-product-list-search />
+          </label>
+          <label>\uC0C1\uD0DC
+            <select class="option-select" data-product-status-filter>
+              <option value="all">\uC804\uCCB4 \uC0C1\uD0DC</option>
+              <option value="selling">\uD310\uB9E4\uC911</option>
+              <option value="soldout">\uD488\uC808</option>
+              <option value="stopped">\uD310\uB9E4\uC911\uC9C0</option>
+              <option value="hidden">\uC228\uAE40</option>
+              <option value="low-stock">\uC7AC\uACE0\uC8FC\uC758</option>
+            </select>
+          </label>
+          <label>\uC815\uB82C
+            <select class="option-select" data-product-sort>
+              <option value="default">\uAE30\uBCF8\uC21C</option>
+              <option value="name">\uC0C1\uD488\uBA85\uC21C</option>
+              <option value="sale-desc">\uD310\uB9E4\uAC00 \uB192\uC740\uC21C</option>
+              <option value="sale-asc">\uD310\uB9E4\uAC00 \uB0AE\uC740\uC21C</option>
+              <option value="stock-asc">\uC7AC\uACE0 \uC801\uC740\uC21C</option>
+              <option value="hidden-first">\uC228\uAE40 \uBA3C\uC800</option>
+            </select>
+          </label>
+        </div>
         <div class="product-category-filters" aria-label="\uC0C1\uD488 \uCE74\uD14C\uACE0\uB9AC \uD544\uD130">
           ${createProductCategoryFilter("all", "\uC804\uCCB4", products2.length, true)}
           ${createProductCategoryFilter("\uBBF8\uC6A9\uAE30\uAD6C", "\uBBF8\uC6A9\uAE30\uAD6C", categoryCounts["\uBBF8\uC6A9\uAE30\uAD6C"] || 0)}
           ${createProductCategoryFilter("\uBBF8\uC6A9\uC7AC\uB8CC", "\uBBF8\uC6A9\uC7AC\uB8CC", categoryCounts["\uBBF8\uC6A9\uC7AC\uB8CC"] || 0)}
           ${createProductCategoryFilter("\uD654\uC7A5\uD488", "\uD654\uC7A5\uD488", categoryCounts["\uD654\uC7A5\uD488"] || 0)}
         </div>
-        <div class="product-card-list">
+        <div class="product-card-list" data-product-card-list>
           ${products2.map(createProductManageRow).join("")}
         </div>
       </aside>
@@ -2647,6 +2880,30 @@
       <span>${label}</span>
       <strong>${count}</strong>
     </button>
+  `;
+  }
+  function createVariantEditorRow(variant = {}) {
+    return `
+    <label>\uC635\uC158\uBA85
+      <input class="quantity-input" data-variant-option value="${escapeAttribute(variant.optionName || "")}" placeholder="50ml / Rose" />
+    </label>
+    <label>SKU
+      <input class="quantity-input" data-variant-sku value="${escapeAttribute(variant.sku || "")}" placeholder="COS-SUN-STD" />
+    </label>
+    <label>\uC7AC\uACE0
+      <input class="quantity-input" data-variant-stock type="number" min="0" value="${Number(variant.stock || 0)}" />
+    </label>
+    <label>\uCD94\uAC00\uAE08\uC561
+      <input class="quantity-input" data-variant-price-delta type="number" value="${Number(variant.priceDelta || 0)}" />
+    </label>
+    <label>\uC0C1\uD0DC
+      <select class="option-select" data-variant-status>
+        <option value="selling" ${variant.status === "selling" ? "selected" : ""}>\uD310\uB9E4\uC911</option>
+        <option value="soldout" ${variant.status === "soldout" ? "selected" : ""}>\uD488\uC808</option>
+        <option value="stopped" ${variant.status === "stopped" ? "selected" : ""}>\uD310\uB9E4\uC911\uC9C0</option>
+      </select>
+    </label>
+    <button class="cart-button mini-button" type="button" data-variant-remove>\uC0AD\uC81C</button>
   `;
   }
   function createProductAdminForm() {
@@ -2687,6 +2944,7 @@
             <label>\uB300\uD45C \uC774\uBBF8\uC9C0 URL<input class="quantity-input" name="image" placeholder="https://..." /></label>
             <label>\uB85C\uCEEC \uC774\uBBF8\uC9C0 \uC120\uD0DD<input class="quantity-input" type="file" accept="image/*" data-product-image-file /></label>
             <button class="cart-button mini-button" type="button" data-product-image-sample>\uC0D8\uD50C \uC774\uBBF8\uC9C0 \uC801\uC6A9</button>
+            <button class="cart-button mini-button" type="button" data-product-image-clear>\uB300\uD45C \uC774\uBBF8\uC9C0 \uC0AD\uC81C</button>
           </div>
         </div>
         <div class="product-detail-image-manager">
@@ -2705,6 +2963,7 @@
               <label>\uD30C\uC77C \uC120\uD0DD
                 <input class="quantity-input" type="file" accept="image/*" data-product-detail-image-file="${index + 1}" />
               </label>
+              <button class="cart-button mini-button" type="button" data-product-detail-image-clear="${index + 1}">\uC0AD\uC81C</button>
             </article>
           `,
           ).join("")}
@@ -2772,12 +3031,20 @@
           <strong>\uC635\uC158 / SKU</strong>
           <span>\uC0C9\uC0C1, \uC6A9\uB7C9, \uBC1D\uAE30 \uAC19\uC740 \uD558\uC704 \uC0C1\uD488\uAD70 \uAD00\uB9AC</span>
         </div>
-        <div class="product-form-grid">
+        <div class="product-form-grid variant-main-grid">
           <label>\uB300\uD45C \uC635\uC158<input class="quantity-input" name="option" placeholder="50ml / SPF50+ PA++++" /></label>
-          <label class="profile-wide">\uC635\uC158 SKU
-            <textarea class="quantity-input" name="variants" rows="4" placeholder="\uC635\uC158\uBA85 | SKU | \uC7AC\uACE0 | \uCD94\uAC00\uAE08\uC561 | \uC0C1\uD0DC"></textarea>
-          </label>
         </div>
+        <div class="variant-editor-toolbar">
+          <div>
+            <strong>\uC635\uC158 SKU \uBAA9\uB85D</strong>
+            <span>\uC635\uC158\uBCC4 \uC7AC\uACE0, \uCD94\uAC00\uAE08\uC561, \uD310\uB9E4\uC0C1\uD0DC\uB97C \uAC1C\uBCC4 \uAD00\uB9AC\uD569\uB2C8\uB2E4.</span>
+          </div>
+          <button class="cart-button mini-button variant-add-button" type="button" data-variant-add>\uC635\uC158 \uCD94\uAC00</button>
+        </div>
+        <div class="variant-editor" data-variant-editor aria-label="\uC635\uC158 SKU \uBAA9\uB85D"></div>
+        <label class="profile-wide variant-raw-field" hidden>\uC635\uC158 SKU \uC6D0\uBCF8
+          <textarea class="quantity-input" name="variants" rows="4" placeholder="\uC635\uC158\uBA85 | SKU | \uC7AC\uACE0 | \uCD94\uAC00\uAE08\uC561 | \uC0C1\uD0DC" hidden></textarea>
+        </label>
       </section>
       <div class="agency-form-actions">
         <button class="buy-button" type="button" data-product-submit>\uC0C1\uD488 \uB4F1\uB85D</button>
@@ -2799,7 +3066,7 @@
     const isHidden = product.displayStatus === "hidden";
     const visibilityLabel = isHidden ? "\uB178\uCD9C" : "\uC228\uAE40";
     return `
-    <article class="product-list-card ${isHidden ? "is-hidden-product" : ""}" data-product-category-card="${product.category}">
+    <article class="product-list-card ${isHidden ? "is-hidden-product" : ""}" data-product-category-card="${product.category}" data-product-search="${escapeAttribute(`${product.name} ${product.ko} ${product.sku || ""} ${product.id} ${product.searchKeywords || ""}`.toLowerCase())}" data-product-status="${product.status}" data-product-display="${product.displayStatus}" data-product-stock="${Number(product.stock || 0)}" data-product-safety-stock="${Number(product.safetyStock || 0)}" data-product-sale="${Number(product.sale || 0)}" data-product-name="${escapeAttribute(product.ko || product.name)}">
       <div class="product-list-thumb">${image}</div>
       <div class="product-list-main">
         <div class="product-list-title">
@@ -3023,6 +3290,7 @@
         sale: item.sale,
         qty: item.qty,
         option: item.option,
+        variantSku: item.variantSku || "",
       })),
     };
     store.orders.unshift(order);
@@ -3073,7 +3341,9 @@
       product.stock = Math.max(0, Number(product.stock || 0) - item.qty);
       const variant =
         (product.variants || []).find(
-          (variantItem) => variantItem.optionName === item.option,
+          (variantItem) =>
+            variantItem.sku === item.variantSku ||
+            variantItem.optionName === item.option,
         ) || ((_a = product.variants) == null ? void 0 : _a[0]);
       if (variant) {
         variant.stock = Math.max(0, Number(variant.stock || 0) - item.qty);
@@ -3255,10 +3525,7 @@
         ${createPriceBox(product)}
         <div class="option-box">
           <label class="option-label" for="optionSelect">Option</label>
-          <select class="option-select" id="optionSelect">
-            <option>${product.option}</option>
-            <option>Gift wrap \uCD94\uAC00 +3,000\uC6D0</option>
-          </select>
+          ${createOptionSelect(product)}
           <div class="quantity-row">
             <div>
               <label class="option-label" for="quantity">Quantity</label>
@@ -3287,6 +3554,14 @@
       document
         .querySelector("#addCart")
         .addEventListener("click", () => addToCart(product));
+      ["input", "change"].forEach((eventName) => {
+        var _a;
+        (_a = document.querySelector("#optionSelect")) == null
+          ? void 0
+          : _a.addEventListener(eventName, () => {
+              updateSelectedOptionStock(product);
+            });
+      });
       document.querySelector("#buyNow").addEventListener("click", () => {
         if (
           addToCart(
@@ -3357,25 +3632,41 @@
     function addToCart(product, message) {
       if (!requireLogin()) return false;
       const quantity = getQuantity();
-      if (product.status !== "selling" || Number(product.stock || 0) <= 0) {
+      const variant = getSelectedVariant(product);
+      const stockLimit = getPurchasableStock(product, variant);
+      const sale = getVariantSalePrice(product, variant);
+      const cartKey = createCartKey(product, variant);
+      if (
+        product.status !== "selling" ||
+        variant.status !== "selling" ||
+        stockLimit <= 0
+      ) {
         showToast(
-          product.status !== "selling"
+          product.status !== "selling" || variant.status !== "selling"
             ? "\uD604\uC7AC \uD310\uB9E4\uC911\uC778 \uC0C1\uD488\uC774 \uC544\uB2D9\uB2C8\uB2E4."
             : "\uC7AC\uACE0\uAC00 \uC5C6\uC5B4 \uAD6C\uB9E4\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
         );
         return false;
       }
-      if (quantity > Number(product.stock || 0)) {
+      const item = state.cart.find((cartItem) => cartItem.cartKey === cartKey);
+      const nextQuantity = ((item == null ? void 0 : item.qty) || 0) + quantity;
+      if (nextQuantity > stockLimit) {
         showToast(
-          `\uC7AC\uACE0\uB294 ${product.stock.toLocaleString("ko-KR")}\uAC1C\uAE4C\uC9C0 \uAD6C\uB9E4\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`,
+          `\uC120\uD0DD \uC635\uC158 \uC7AC\uACE0\uB294 ${stockLimit.toLocaleString("ko-KR")}\uAC1C\uAE4C\uC9C0 \uAD6C\uB9E4\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`,
         );
         return false;
       }
-      const item = state.cart.find((cartItem) => cartItem.id === product.id);
       if (item) {
         item.qty += quantity;
       } else {
-        state.cart.push({ ...product, qty: quantity });
+        state.cart.push({
+          ...product,
+          cartKey,
+          option: variant.optionName,
+          variantSku: variant.sku,
+          sale,
+          qty: quantity,
+        });
       }
       updateCart();
       showToast(
@@ -3386,8 +3677,80 @@
     }
     function createStockLabel(product) {
       if (product.status !== "selling") return "Not selling";
-      const stock = Number(product.stock || 0);
+      const stock = getPurchasableStock(product, getDefaultVariant(product));
       return stock > 0 ? `${stock.toLocaleString("ko-KR")}\uAC1C` : "Sold out";
+    }
+    function createOptionSelect(product) {
+      const variants = getSellingVariants(product);
+      return `
+      <select class="option-select" id="optionSelect">
+        ${variants
+          .map(
+            (variant, index) => `
+            <option value="${index}" ${variant.status !== "selling" || Number(variant.stock || 0) <= 0 ? "disabled" : ""}>
+              ${escapeHtml(variant.optionName)}${variant.priceDelta ? ` / +${formatMoney(variant.priceDelta)}` : ""}${variant.stock <= 0 ? " / \uD488\uC808" : ""}
+            </option>
+          `,
+          )
+          .join("")}
+      </select>
+    `;
+    }
+    function getSellingVariants(product) {
+      return (product.variants || []).length
+        ? product.variants
+        : [
+            {
+              optionName: product.option || "\uAE30\uBCF8 \uC635\uC158",
+              sku: product.sku || product.id,
+              stock: product.stock,
+              priceDelta: 0,
+              status: product.status,
+            },
+          ];
+    }
+    function getDefaultVariant(product) {
+      return (
+        getSellingVariants(product).find(
+          (variant) =>
+            variant.status === "selling" && Number(variant.stock || 0) > 0,
+        ) || getSellingVariants(product)[0]
+      );
+    }
+    function getSelectedVariant(product) {
+      const variants = getSellingVariants(product);
+      const select = document.querySelector("#optionSelect");
+      const index = Number((select == null ? void 0 : select.value) || 0);
+      return variants[index] || getDefaultVariant(product);
+    }
+    function getVariantSalePrice(product, variant) {
+      return (
+        Number(product.sale || 0) +
+        Number((variant == null ? void 0 : variant.priceDelta) || 0)
+      );
+    }
+    function getPurchasableStock(product, variant) {
+      const productStock = Number(product.stock || 0);
+      const variantStock =
+        (variant == null ? void 0 : variant.stock) === void 0
+          ? productStock
+          : Number(variant.stock || 0);
+      return Math.max(0, Math.min(productStock, variantStock));
+    }
+    function createCartKey(product, variant) {
+      return `${product.id}::${(variant == null ? void 0 : variant.sku) || (variant == null ? void 0 : variant.optionName) || "default"}`;
+    }
+    function updateSelectedOptionStock(product) {
+      const stockStatus = document.querySelector("#stockStatus");
+      if (!stockStatus) return;
+      const variant = getSelectedVariant(product);
+      if (variant.status !== "selling") {
+        stockStatus.value = "Not selling";
+        return;
+      }
+      const stock = getPurchasableStock(product, variant);
+      stockStatus.value =
+        stock > 0 ? `${stock.toLocaleString("ko-KR")}\uAC1C` : "Sold out";
     }
     function updateCart() {
       const totals = getTotals();
@@ -3416,9 +3779,9 @@
         <p>${item.option}</p>
         <div class="cart-item-bottom">
           <div class="qty-control">
-            <button data-id="${item.id}" data-d="-1" aria-label="${item.ko} \uC218\uB7C9 \uC904\uC774\uAE30">\u2212</button>
+            <button data-key="${item.cartKey}" data-d="-1" aria-label="${item.ko} \uC218\uB7C9 \uC904\uC774\uAE30">\u2212</button>
             <span>${item.qty}</span>
-            <button data-id="${item.id}" data-d="1" aria-label="${item.ko} \uC218\uB7C9 \uB298\uB9AC\uAE30">+</button>
+            <button data-key="${item.cartKey}" data-d="1" aria-label="${item.ko} \uC218\uB7C9 \uB298\uB9AC\uAE30">+</button>
           </div>
           <strong>${formatMoney(item.sale * item.qty)}</strong>
         </div>
@@ -3786,13 +4149,26 @@
         openDetail(getProduct(card.dataset.id));
       });
       dom.cartList.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-id]");
+        const button = event.target.closest("button[data-key]");
         if (!button) return;
         const item = state.cart.find(
-          (cartItem) => cartItem.id === button.dataset.id,
+          (cartItem) => cartItem.cartKey === button.dataset.key,
         );
         if (!item) return;
-        item.qty += Number(button.dataset.d);
+        const product = getProduct(item.id);
+        const variant = (
+          (product == null ? void 0 : product.variants) || []
+        ).find((variantItem) => variantItem.sku === item.variantSku);
+        const nextQuantity = item.qty + Number(button.dataset.d);
+        if (
+          nextQuantity > getPurchasableStock(product || item, variant || item)
+        ) {
+          showToast(
+            "\uC120\uD0DD \uC635\uC158 \uC7AC\uACE0\uB97C \uCD08\uACFC\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+          );
+          return;
+        }
+        item.qty = nextQuantity;
         state.cart = state.cart.filter((cartItem) => cartItem.qty > 0);
         updateCart();
       });
@@ -3833,6 +4209,14 @@
           "\uC0C1\uD488 \uB370\uC774\uD130\uB294 \uCD5C\uC18C 10\uAC1C\uC640 \uC9C0\uC815\uB41C 3\uAC1C \uCE74\uD14C\uACE0\uB9AC\uB97C \uC720\uC9C0\uD574\uC57C \uD569\uB2C8\uB2E4.",
         );
       }
+    }
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
     }
     return {
       state,

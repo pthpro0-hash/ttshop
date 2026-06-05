@@ -709,6 +709,27 @@ function input(element, value) {
     4,
     "product management should expose all/category filters",
   );
+  assert.ok(
+    document.querySelector("[data-product-list-search]"),
+    "product management should expose product search",
+  );
+  assert.ok(
+    document.querySelector("[data-product-status-filter]"),
+    "product management should expose status filters",
+  );
+  assert.ok(
+    document.querySelector("[data-product-sort]"),
+    "product management should expose product sorting",
+  );
+  input(document.querySelector("[data-product-list-search]"), "sunscreen");
+  assert.equal(
+    document
+      .querySelector('[data-product-category-card="미용기구"]')
+      .classList.contains("is-filtered-out"),
+    true,
+    "product search should hide non-matching products",
+  );
+  input(document.querySelector("[data-product-list-search]"), "");
   click(
     dom.window,
     document.querySelector('[data-product-category-filter="화장품"]'),
@@ -736,6 +757,12 @@ function input(element, value) {
     document.querySelector('[data-product-form] [name="image"]').value,
     /^https:\/\/images\.unsplash\.com\//,
     "sample image button should populate the image field",
+  );
+  click(dom.window, document.querySelector("[data-product-image-clear]"));
+  assert.equal(
+    document.querySelector('[data-product-form] [name="image"]').value,
+    "",
+    "representative image clear should empty the image field",
   );
   let productForm = document.querySelector("[data-product-form]");
   click(dom.window, productForm.querySelector("[data-product-reset]"));
@@ -795,10 +822,24 @@ function input(element, value) {
     productForm.querySelector('[name="detailImage2"]'),
     "https://example.com/cos-sun-detail-2.jpg",
   );
-  input(
-    productForm.querySelector('[name="variants"]'),
-    "50ml / SPF50+ PA++++ | COS-SUN-STD | 33 | 0 | selling",
+  assert.ok(
+    productForm.querySelector("[data-variant-editor]"),
+    "product management should expose option SKU table editor",
   );
+  click(dom.window, productForm.querySelector("[data-variant-add]"));
+  const variantRows = productForm.querySelectorAll("[data-variant-row]");
+  input(
+    variantRows[0].querySelector("[data-variant-option]"),
+    "50ml / SPF50+ PA++++",
+  );
+  input(variantRows[0].querySelector("[data-variant-sku]"), "COS-SUN-STD");
+  input(variantRows[0].querySelector("[data-variant-stock]"), "33");
+  input(variantRows[0].querySelector("[data-variant-price-delta]"), "0");
+  input(variantRows[1].querySelector("[data-variant-option]"), "100ml 대용량");
+  input(variantRows[1].querySelector("[data-variant-sku]"), "COS-SUN-LARGE");
+  input(variantRows[1].querySelector("[data-variant-stock]"), "12");
+  input(variantRows[1].querySelector("[data-variant-price-delta]"), "5000");
+  input(variantRows[1].querySelector("[data-variant-status]"), "selling");
   click(dom.window, productForm.querySelector("[data-product-submit]"));
   assert.match(
     document.querySelector("#adminModalContent").textContent,
@@ -811,6 +852,13 @@ function input(element, value) {
     ).sale,
     24000,
     "product management should persist product sale price",
+  );
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.find(
+      (product) => product.id === "cos-sun",
+    ).variants.length,
+    2,
+    "product management should persist table-based option SKU rows",
   );
   assert.deepEqual(
     JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).products.find(
@@ -857,6 +905,21 @@ function input(element, value) {
     /할인판매가 :\s*24,000원/,
     "shop product card should render updated admin product data",
   );
+  click(dom.window, document.querySelector(".product-card[data-id='cos-sun']"));
+  input(document.querySelector("#optionSelect"), "1");
+  assert.match(
+    document.querySelector("#stockStatus").value,
+    /12개/,
+    "product detail should show selected option SKU stock",
+  );
+  click(dom.window, document.querySelector("#addCart"));
+  click(dom.window, document.querySelector("#bagButton"));
+  assert.match(
+    document.querySelector("#cartList").textContent,
+    /100ml 대용량|29,000원/,
+    "cart should keep selected option SKU and adjusted option price",
+  );
+  click(dom.window, document.querySelector("#cartClose"));
   click(dom.window, document.querySelector('[data-admin-detail="agencies"]'));
   const agencyForm = document.querySelector("[data-agency-form]");
   input(agencyForm.querySelector('[name="name"]'), "부산 뷰티 대리점");
@@ -924,7 +987,16 @@ function input(element, value) {
     /대리점 정산 대기 상세 리스트|지급 예정/,
     "admin settlement card should show settlement detail list",
   );
-  click(dom.window, document.querySelector('[data-management-link="agency"]'));
+  let agencyManagementLink = document.querySelector(
+    '[data-management-link="agency"]',
+  );
+  if (!agencyManagementLink) {
+    click(dom.window, document.querySelector("#loginLink"));
+    agencyManagementLink = document.querySelector(
+      '[data-management-link="agency"]',
+    );
+  }
+  click(dom.window, agencyManagementLink);
   assert.match(
     document.querySelector("#managementView").textContent,
     /영업비 예정|Settlement queue|18,240원/,
@@ -1002,13 +1074,31 @@ function input(element, value) {
     /영업비 예정 상세|지급 예정/,
     "agency commission card should show settlement detail modal",
   );
-  click(dom.window, document.querySelector('[data-management-link="member"]'));
+  let memberManagementLink = document.querySelector(
+    '[data-management-link="member"]',
+  );
+  if (!memberManagementLink) {
+    click(dom.window, document.querySelector("#loginLink"));
+    memberManagementLink = document.querySelector(
+      '[data-management-link="member"]',
+    );
+  }
+  click(dom.window, memberManagementLink);
   assert.match(
     document.querySelector("#managementView").textContent,
     /3,800P|Point history/,
     "member should show updated points after payment",
   );
-  click(dom.window, document.querySelector('[data-management-link="agency"]'));
+  agencyManagementLink = document.querySelector(
+    '[data-management-link="agency"]',
+  );
+  if (!agencyManagementLink) {
+    click(dom.window, document.querySelector("#loginLink"));
+    agencyManagementLink = document.querySelector(
+      '[data-management-link="agency"]',
+    );
+  }
+  click(dom.window, agencyManagementLink);
   click(dom.window, document.querySelector('[data-agency-detail="link"]'));
   click(
     dom.window,

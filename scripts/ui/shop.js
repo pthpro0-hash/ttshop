@@ -118,10 +118,7 @@ export function createShopController({
         ${createPriceBox(product)}
         <div class="option-box">
           <label class="option-label" for="optionSelect">Option</label>
-          <select class="option-select" id="optionSelect">
-            <option>${product.option}</option>
-            <option>Gift wrap 추가 +3,000원</option>
-          </select>
+          ${createOptionSelect(product)}
           <div class="quantity-row">
             <div>
               <label class="option-label" for="quantity">Quantity</label>
@@ -151,6 +148,13 @@ export function createShopController({
     document
       .querySelector("#addCart")
       .addEventListener("click", () => addToCart(product));
+    ["input", "change"].forEach((eventName) => {
+      document
+        .querySelector("#optionSelect")
+        ?.addEventListener(eventName, () => {
+          updateSelectedOptionStock(product);
+        });
+    });
     document.querySelector("#buyNow").addEventListener("click", () => {
       if (
         addToCart(product, "상품을 장바구니에 담고 주문 요약을 열었습니다.")
@@ -224,26 +228,42 @@ export function createShopController({
     if (!requireLogin()) return false;
 
     const quantity = getQuantity();
-    if (product.status !== "selling" || Number(product.stock || 0) <= 0) {
+    const variant = getSelectedVariant(product);
+    const stockLimit = getPurchasableStock(product, variant);
+    const sale = getVariantSalePrice(product, variant);
+    const cartKey = createCartKey(product, variant);
+    if (
+      product.status !== "selling" ||
+      variant.status !== "selling" ||
+      stockLimit <= 0
+    ) {
       showToast(
-        product.status !== "selling"
+        product.status !== "selling" || variant.status !== "selling"
           ? "현재 판매중인 상품이 아닙니다."
           : "재고가 없어 구매할 수 없습니다.",
       );
       return false;
     }
-    if (quantity > Number(product.stock || 0)) {
+    const item = state.cart.find((cartItem) => cartItem.cartKey === cartKey);
+    const nextQuantity = (item?.qty || 0) + quantity;
+    if (nextQuantity > stockLimit) {
       showToast(
-        `재고는 ${product.stock.toLocaleString("ko-KR")}개까지 구매할 수 있습니다.`,
+        `선택 옵션 재고는 ${stockLimit.toLocaleString("ko-KR")}개까지 구매할 수 있습니다.`,
       );
       return false;
     }
-    const item = state.cart.find((cartItem) => cartItem.id === product.id);
 
     if (item) {
       item.qty += quantity;
     } else {
-      state.cart.push({ ...product, qty: quantity });
+      state.cart.push({
+        ...product,
+        cartKey,
+        option: variant.optionName,
+        variantSku: variant.sku,
+        sale,
+        qty: quantity,
+      });
     }
 
     updateCart();
@@ -255,8 +275,83 @@ export function createShopController({
 
   function createStockLabel(product) {
     if (product.status !== "selling") return "Not selling";
-    const stock = Number(product.stock || 0);
+    const stock = getPurchasableStock(product, getDefaultVariant(product));
     return stock > 0 ? `${stock.toLocaleString("ko-KR")}개` : "Sold out";
+  }
+
+  function createOptionSelect(product) {
+    const variants = getSellingVariants(product);
+    return `
+      <select class="option-select" id="optionSelect">
+        ${variants
+          .map(
+            (variant, index) => `
+            <option value="${index}" ${variant.status !== "selling" || Number(variant.stock || 0) <= 0 ? "disabled" : ""}>
+              ${escapeHtml(variant.optionName)}${variant.priceDelta ? ` / +${formatMoney(variant.priceDelta)}` : ""}${variant.stock <= 0 ? " / 품절" : ""}
+            </option>
+          `,
+          )
+          .join("")}
+      </select>
+    `;
+  }
+
+  function getSellingVariants(product) {
+    return (product.variants || []).length
+      ? product.variants
+      : [
+          {
+            optionName: product.option || "기본 옵션",
+            sku: product.sku || product.id,
+            stock: product.stock,
+            priceDelta: 0,
+            status: product.status,
+          },
+        ];
+  }
+
+  function getDefaultVariant(product) {
+    return (
+      getSellingVariants(product).find(
+        (variant) =>
+          variant.status === "selling" && Number(variant.stock || 0) > 0,
+      ) || getSellingVariants(product)[0]
+    );
+  }
+
+  function getSelectedVariant(product) {
+    const variants = getSellingVariants(product);
+    const select = document.querySelector("#optionSelect");
+    const index = Number(select?.value || 0);
+    return variants[index] || getDefaultVariant(product);
+  }
+
+  function getVariantSalePrice(product, variant) {
+    return Number(product.sale || 0) + Number(variant?.priceDelta || 0);
+  }
+
+  function getPurchasableStock(product, variant) {
+    const productStock = Number(product.stock || 0);
+    const variantStock =
+      variant?.stock === undefined ? productStock : Number(variant.stock || 0);
+    return Math.max(0, Math.min(productStock, variantStock));
+  }
+
+  function createCartKey(product, variant) {
+    return `${product.id}::${variant?.sku || variant?.optionName || "default"}`;
+  }
+
+  function updateSelectedOptionStock(product) {
+    const stockStatus = document.querySelector("#stockStatus");
+    if (!stockStatus) return;
+    const variant = getSelectedVariant(product);
+    if (variant.status !== "selling") {
+      stockStatus.value = "Not selling";
+      return;
+    }
+    const stock = getPurchasableStock(product, variant);
+    stockStatus.value =
+      stock > 0 ? `${stock.toLocaleString("ko-KR")}개` : "Sold out";
   }
 
   function updateCart() {
@@ -283,9 +378,9 @@ export function createShopController({
         <p>${item.option}</p>
         <div class="cart-item-bottom">
           <div class="qty-control">
-            <button data-id="${item.id}" data-d="-1" aria-label="${item.ko} 수량 줄이기">−</button>
+            <button data-key="${item.cartKey}" data-d="-1" aria-label="${item.ko} 수량 줄이기">−</button>
             <span>${item.qty}</span>
-            <button data-id="${item.id}" data-d="1" aria-label="${item.ko} 수량 늘리기">+</button>
+            <button data-key="${item.cartKey}" data-d="1" aria-label="${item.ko} 수량 늘리기">+</button>
           </div>
           <strong>${formatMoney(item.sale * item.qty)}</strong>
         </div>
@@ -677,15 +772,26 @@ export function createShopController({
     });
 
     dom.cartList.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-id]");
+      const button = event.target.closest("button[data-key]");
       if (!button) return;
 
       const item = state.cart.find(
-        (cartItem) => cartItem.id === button.dataset.id,
+        (cartItem) => cartItem.cartKey === button.dataset.key,
       );
       if (!item) return;
 
-      item.qty += Number(button.dataset.d);
+      const product = getProduct(item.id);
+      const variant = (product?.variants || []).find(
+        (variantItem) => variantItem.sku === item.variantSku,
+      );
+      const nextQuantity = item.qty + Number(button.dataset.d);
+      if (
+        nextQuantity > getPurchasableStock(product || item, variant || item)
+      ) {
+        showToast("선택 옵션 재고를 초과할 수 없습니다.");
+        return;
+      }
+      item.qty = nextQuantity;
       state.cart = state.cart.filter((cartItem) => cartItem.qty > 0);
       updateCart();
     });
@@ -727,6 +833,15 @@ export function createShopController({
         "상품 데이터는 최소 10개와 지정된 3개 카테고리를 유지해야 합니다.",
       );
     }
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
   }
 
   return {

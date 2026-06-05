@@ -281,22 +281,25 @@ export function createManagementController({
       .querySelectorAll("[data-product-category-filter]")
       .forEach((button) => {
         button.addEventListener("click", () => {
-          const category = button.dataset.productCategoryFilter;
           modal
             .querySelectorAll("[data-product-category-filter]")
             .forEach((item) => {
               item.classList.toggle("is-active", item === button);
             });
-          modal
-            .querySelectorAll("[data-product-category-card]")
-            .forEach((card) => {
-              card.classList.toggle(
-                "is-filtered-out",
-                category !== "all" &&
-                  card.dataset.productCategoryCard !== category,
-              );
-            });
+          applyProductListControls(modal);
         });
+      });
+    modal
+      .querySelectorAll(
+        "[data-product-list-search], [data-product-status-filter], [data-product-sort]",
+      )
+      .forEach((control) => {
+        control.addEventListener("input", () =>
+          applyProductListControls(modal),
+        );
+        control.addEventListener("change", () =>
+          applyProductListControls(modal),
+        );
       });
 
     formBox
@@ -305,6 +308,12 @@ export function createManagementController({
     getProductField(formBox, "image").addEventListener("input", () =>
       updateProductImagePreview(formBox),
     );
+    formBox
+      .querySelector("[data-product-image-clear]")
+      .addEventListener("click", () => {
+        getProductField(formBox, "image").value = "";
+        updateProductImagePreview(formBox);
+      });
     formBox
       .querySelector("[data-product-image-sample]")
       .addEventListener("click", () => {
@@ -343,18 +352,142 @@ export function createManagementController({
         });
       });
     formBox
+      .querySelectorAll("[data-product-detail-image-clear]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const index = Number(button.dataset.productDetailImageClear);
+          getProductField(formBox, `detailImage${index}`).value = "";
+          updateProductDetailImagePreviews(formBox);
+        });
+      });
+    formBox
       .querySelectorAll("[data-product-detail-image-input]")
       .forEach((input) => {
         input.addEventListener("input", () =>
           updateProductDetailImagePreviews(formBox),
         );
       });
+    formBox
+      .querySelector("[data-variant-add]")
+      .addEventListener("click", () => {
+        addVariantEditorRow(formBox, {
+          optionName: getProductField(formBox, "option").value.trim(),
+          sku: createProductSku(getProductField(formBox, "name").value),
+          stock: readNumberField(formBox, "stock"),
+          priceDelta: 0,
+          status: "selling",
+        });
+        syncVariantEditorToTextarea(formBox);
+      });
+    formBox
+      .querySelector("[data-variant-editor]")
+      .addEventListener("input", () => syncVariantEditorToTextarea(formBox));
+    formBox
+      .querySelector("[data-variant-editor]")
+      .addEventListener("change", () => syncVariantEditorToTextarea(formBox));
+    formBox
+      .querySelector("[data-variant-editor]")
+      .addEventListener("click", (event) => {
+        const removeButton = event.target.closest("[data-variant-remove]");
+        if (!removeButton) return;
+
+        const rows = formBox.querySelectorAll("[data-variant-row]");
+        if (rows.length <= 1) {
+          resetVariantEditor(formBox);
+          return;
+        }
+        removeButton.closest("[data-variant-row]")?.remove();
+        syncVariantEditorToTextarea(formBox);
+      });
     updateProductImagePreview(formBox);
     updateProductDetailImagePreviews(formBox);
+    resetVariantEditor(formBox);
   }
 
   function getProductField(formBox, name) {
     return formBox.querySelector(`[name="${name}"]`);
+  }
+
+  function applyProductListControls(modal) {
+    const activeCategory =
+      modal.querySelector("[data-product-category-filter].is-active")?.dataset
+        .productCategoryFilter || "all";
+    const search = (
+      modal.querySelector("[data-product-list-search]")?.value || ""
+    )
+      .trim()
+      .toLowerCase();
+    const status =
+      modal.querySelector("[data-product-status-filter]")?.value || "all";
+    const sort = modal.querySelector("[data-product-sort]")?.value || "default";
+    const list = modal.querySelector("[data-product-card-list]");
+    const cards = Array.from(
+      modal.querySelectorAll("[data-product-category-card]"),
+    );
+
+    cards.forEach((card) => {
+      const stock = Number(card.dataset.productStock || 0);
+      const safetyStock = Number(card.dataset.productSafetyStock || 0);
+      const matchesCategory =
+        activeCategory === "all" ||
+        card.dataset.productCategoryCard === activeCategory;
+      const matchesSearch =
+        !search || card.dataset.productSearch?.includes(search);
+      const matchesStatus =
+        status === "all" ||
+        (status === "hidden"
+          ? card.dataset.productDisplay === "hidden"
+          : status === "low-stock"
+            ? stock <= safetyStock
+            : card.dataset.productStatus === status);
+
+      card.classList.toggle(
+        "is-filtered-out",
+        !matchesCategory || !matchesSearch || !matchesStatus,
+      );
+    });
+
+    sortProductCards(list, cards, sort);
+  }
+
+  function sortProductCards(list, cards, sort) {
+    if (!list) return;
+
+    const sorted = [...cards].sort((a, b) => {
+      if (sort === "name") {
+        return (a.dataset.productName || "").localeCompare(
+          b.dataset.productName || "",
+          "ko-KR",
+        );
+      }
+      if (sort === "sale-desc") {
+        return (
+          Number(b.dataset.productSale || 0) -
+          Number(a.dataset.productSale || 0)
+        );
+      }
+      if (sort === "sale-asc") {
+        return (
+          Number(a.dataset.productSale || 0) -
+          Number(b.dataset.productSale || 0)
+        );
+      }
+      if (sort === "stock-asc") {
+        return (
+          Number(a.dataset.productStock || 0) -
+          Number(b.dataset.productStock || 0)
+        );
+      }
+      if (sort === "hidden-first") {
+        return (
+          Number(b.dataset.productDisplay === "hidden") -
+          Number(a.dataset.productDisplay === "hidden")
+        );
+      }
+      return 0;
+    });
+
+    sorted.forEach((card) => list.append(card));
   }
 
   function saveProductFromForm(formBox) {
@@ -393,6 +526,7 @@ export function createManagementController({
   }
 
   function readProductForm(formBox) {
+    syncVariantEditorToTextarea(formBox);
     const price = readNumberField(formBox, "price");
     const sale = readNumberField(formBox, "sale");
     const stock = readNumberField(formBox, "stock");
@@ -477,6 +611,7 @@ export function createManagementController({
     });
     fillProductDetailImages(formBox, product.detailImages);
     getProductField(formBox, "variants").value = formatVariantRows(product);
+    fillVariantEditor(formBox, product.variants);
     updateProductImagePreview(formBox);
     updateProductDetailImagePreviews(formBox);
     formBox.querySelector("[data-product-submit]").textContent = "상품 수정";
@@ -494,6 +629,7 @@ export function createManagementController({
     getProductField(formBox, "shippingType").value = "default";
     getProductField(formBox, "shippingFee").value = "3000";
     getProductField(formBox, "safetyStock").value = "5";
+    resetVariantEditor(formBox);
     updateProductImagePreview(formBox);
     updateProductDetailImagePreviews(formBox);
     formBox.querySelector("[data-product-submit]").textContent = "상품 등록";
@@ -540,6 +676,58 @@ export function createManagementController({
           ? `<img src="${escapeAttribute(image)}" alt="상세 이미지 ${index} 미리보기" />`
           : `<span>${index}</span>`;
       });
+  }
+
+  function addVariantEditorRow(formBox, variant = {}) {
+    const editor = formBox.querySelector("[data-variant-editor]");
+    const row = document.createElement("article");
+    row.className = "variant-editor-row";
+    row.dataset.variantRow = "true";
+    row.innerHTML = createVariantEditorRow(variant);
+    editor.append(row);
+  }
+
+  function fillVariantEditor(formBox, variants = []) {
+    const editor = formBox.querySelector("[data-variant-editor]");
+    editor.innerHTML = "";
+    const rows = variants.length ? variants : parseVariantRows("", "", "", 0);
+    rows.forEach((variant) => addVariantEditorRow(formBox, variant));
+    syncVariantEditorToTextarea(formBox);
+  }
+
+  function resetVariantEditor(formBox) {
+    fillVariantEditor(formBox, [
+      {
+        optionName:
+          getProductField(formBox, "option").value.trim() || "기본 옵션",
+        sku: "",
+        stock: readNumberField(formBox, "stock"),
+        priceDelta: 0,
+        status: "selling",
+      },
+    ]);
+  }
+
+  function syncVariantEditorToTextarea(formBox) {
+    const rows = Array.from(formBox.querySelectorAll("[data-variant-row]"));
+    getProductField(formBox, "variants").value = rows
+      .map((row, index) => {
+        const optionName =
+          row.querySelector("[data-variant-option]")?.value.trim() ||
+          `옵션 ${index + 1}`;
+        const sku = row.querySelector("[data-variant-sku]")?.value.trim() || "";
+        const stock = Math.max(
+          0,
+          Number(row.querySelector("[data-variant-stock]")?.value || 0),
+        );
+        const priceDelta = Number(
+          row.querySelector("[data-variant-price-delta]")?.value || 0,
+        );
+        const status =
+          row.querySelector("[data-variant-status]")?.value || "selling";
+        return `${optionName} | ${sku} | ${stock} | ${priceDelta} | ${status}`;
+      })
+      .join("\n");
   }
 
   function readNumberField(formBox, name) {
@@ -1374,13 +1562,38 @@ function createProductManagementWorkspace(store) {
             <span>상품명을 선택하면 오른쪽 편집 패널에 불러옵니다.</span>
           </div>
         </div>
+        <div class="product-list-controls" aria-label="상품 목록 검색과 정렬">
+          <label>검색
+            <input class="quantity-input" type="search" placeholder="상품명, SKU, 키워드" data-product-list-search />
+          </label>
+          <label>상태
+            <select class="option-select" data-product-status-filter>
+              <option value="all">전체 상태</option>
+              <option value="selling">판매중</option>
+              <option value="soldout">품절</option>
+              <option value="stopped">판매중지</option>
+              <option value="hidden">숨김</option>
+              <option value="low-stock">재고주의</option>
+            </select>
+          </label>
+          <label>정렬
+            <select class="option-select" data-product-sort>
+              <option value="default">기본순</option>
+              <option value="name">상품명순</option>
+              <option value="sale-desc">판매가 높은순</option>
+              <option value="sale-asc">판매가 낮은순</option>
+              <option value="stock-asc">재고 적은순</option>
+              <option value="hidden-first">숨김 먼저</option>
+            </select>
+          </label>
+        </div>
         <div class="product-category-filters" aria-label="상품 카테고리 필터">
           ${createProductCategoryFilter("all", "전체", products.length, true)}
           ${createProductCategoryFilter("미용기구", "미용기구", categoryCounts["미용기구"] || 0)}
           ${createProductCategoryFilter("미용재료", "미용재료", categoryCounts["미용재료"] || 0)}
           ${createProductCategoryFilter("화장품", "화장품", categoryCounts["화장품"] || 0)}
         </div>
-        <div class="product-card-list">
+        <div class="product-card-list" data-product-card-list>
           ${products.map(createProductManageRow).join("")}
         </div>
       </aside>
@@ -1411,6 +1624,31 @@ function createProductCategoryFilter(category, label, count, isActive = false) {
       <span>${label}</span>
       <strong>${count}</strong>
     </button>
+  `;
+}
+
+function createVariantEditorRow(variant = {}) {
+  return `
+    <label>옵션명
+      <input class="quantity-input" data-variant-option value="${escapeAttribute(variant.optionName || "")}" placeholder="50ml / Rose" />
+    </label>
+    <label>SKU
+      <input class="quantity-input" data-variant-sku value="${escapeAttribute(variant.sku || "")}" placeholder="COS-SUN-STD" />
+    </label>
+    <label>재고
+      <input class="quantity-input" data-variant-stock type="number" min="0" value="${Number(variant.stock || 0)}" />
+    </label>
+    <label>추가금액
+      <input class="quantity-input" data-variant-price-delta type="number" value="${Number(variant.priceDelta || 0)}" />
+    </label>
+    <label>상태
+      <select class="option-select" data-variant-status>
+        <option value="selling" ${variant.status === "selling" ? "selected" : ""}>판매중</option>
+        <option value="soldout" ${variant.status === "soldout" ? "selected" : ""}>품절</option>
+        <option value="stopped" ${variant.status === "stopped" ? "selected" : ""}>판매중지</option>
+      </select>
+    </label>
+    <button class="cart-button mini-button" type="button" data-variant-remove>삭제</button>
   `;
 }
 
@@ -1452,6 +1690,7 @@ function createProductAdminForm() {
             <label>대표 이미지 URL<input class="quantity-input" name="image" placeholder="https://..." /></label>
             <label>로컬 이미지 선택<input class="quantity-input" type="file" accept="image/*" data-product-image-file /></label>
             <button class="cart-button mini-button" type="button" data-product-image-sample>샘플 이미지 적용</button>
+            <button class="cart-button mini-button" type="button" data-product-image-clear>대표 이미지 삭제</button>
           </div>
         </div>
         <div class="product-detail-image-manager">
@@ -1470,6 +1709,7 @@ function createProductAdminForm() {
               <label>파일 선택
                 <input class="quantity-input" type="file" accept="image/*" data-product-detail-image-file="${index + 1}" />
               </label>
+              <button class="cart-button mini-button" type="button" data-product-detail-image-clear="${index + 1}">삭제</button>
             </article>
           `,
           ).join("")}
@@ -1537,12 +1777,20 @@ function createProductAdminForm() {
           <strong>옵션 / SKU</strong>
           <span>색상, 용량, 밝기 같은 하위 상품군 관리</span>
         </div>
-        <div class="product-form-grid">
+        <div class="product-form-grid variant-main-grid">
           <label>대표 옵션<input class="quantity-input" name="option" placeholder="50ml / SPF50+ PA++++" /></label>
-          <label class="profile-wide">옵션 SKU
-            <textarea class="quantity-input" name="variants" rows="4" placeholder="옵션명 | SKU | 재고 | 추가금액 | 상태"></textarea>
-          </label>
         </div>
+        <div class="variant-editor-toolbar">
+          <div>
+            <strong>옵션 SKU 목록</strong>
+            <span>옵션별 재고, 추가금액, 판매상태를 개별 관리합니다.</span>
+          </div>
+          <button class="cart-button mini-button variant-add-button" type="button" data-variant-add>옵션 추가</button>
+        </div>
+        <div class="variant-editor" data-variant-editor aria-label="옵션 SKU 목록"></div>
+        <label class="profile-wide variant-raw-field" hidden>옵션 SKU 원본
+          <textarea class="quantity-input" name="variants" rows="4" placeholder="옵션명 | SKU | 재고 | 추가금액 | 상태" hidden></textarea>
+        </label>
       </section>
       <div class="agency-form-actions">
         <button class="buy-button" type="button" data-product-submit>상품 등록</button>
@@ -1566,7 +1814,7 @@ function createProductManageRow(product) {
   const visibilityLabel = isHidden ? "노출" : "숨김";
 
   return `
-    <article class="product-list-card ${isHidden ? "is-hidden-product" : ""}" data-product-category-card="${product.category}">
+    <article class="product-list-card ${isHidden ? "is-hidden-product" : ""}" data-product-category-card="${product.category}" data-product-search="${escapeAttribute(`${product.name} ${product.ko} ${product.sku || ""} ${product.id} ${product.searchKeywords || ""}`.toLowerCase())}" data-product-status="${product.status}" data-product-display="${product.displayStatus}" data-product-stock="${Number(product.stock || 0)}" data-product-safety-stock="${Number(product.safetyStock || 0)}" data-product-sale="${Number(product.sale || 0)}" data-product-name="${escapeAttribute(product.ko || product.name)}">
       <div class="product-list-thumb">${image}</div>
       <div class="product-list-main">
         <div class="product-list-title">
