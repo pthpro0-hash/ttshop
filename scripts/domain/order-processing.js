@@ -23,6 +23,10 @@ export function completeBypassPayment({ cart, store, payment }) {
   const paidAt = new Date().toISOString().slice(0, 10);
   const agencyIdAtOrder = member.agencyId || getHeadquartersAgency(store)?.id;
   const referralSourceType = payment.referralSourceType || "none";
+  const shippingSnapshot = normalizeShippingSnapshot(
+    payment.shippingSnapshot,
+    member,
+  );
 
   const order = {
     id: orderId,
@@ -36,6 +40,14 @@ export function completeBypassPayment({ cart, store, payment }) {
     pointUseLimit,
     pointEarned: earnedPoints,
     status: "paid",
+    shippingStatus: "preparing",
+    courier: "",
+    trackingNumber: "",
+    shippedAt: "",
+    deliveredAt: "",
+    shippingMemo: "",
+    shippingAddress: shippingSnapshot,
+    paymentMethod: shippingSnapshot.paymentMethod || "",
     paidAt,
     items: cart.map((item) => ({
       productId: item.id,
@@ -103,6 +115,19 @@ export function completeBypassPayment({ cart, store, payment }) {
       pointUsed,
       pointUseLimit,
     },
+  };
+}
+
+function normalizeShippingSnapshot(snapshot = {}, member = {}) {
+  const fallback = member.address || {};
+
+  return {
+    recipient: snapshot.recipient || member.name || "",
+    phone: snapshot.phone || member.phone || "",
+    postcode: snapshot.postcode || fallback.postcode || "",
+    address: snapshot.address || fallback.address || "",
+    addressDetail: snapshot.addressDetail || fallback.addressDetail || "",
+    paymentMethod: snapshot.paymentMethod || member.paymentMethod || "",
   };
 }
 

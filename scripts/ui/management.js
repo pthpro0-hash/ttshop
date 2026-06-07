@@ -159,6 +159,29 @@ export function createManagementController({
         return;
       }
 
+      const agencyAdminDetail = event.target.closest(
+        "[data-agency-admin-detail]",
+      );
+      if (agencyAdminDetail) {
+        modal.dataset.currentDetail = `agency:${agencyAdminDetail.dataset.agencyAdminDetail}`;
+        openDetailModal(
+          modal,
+          createAgencyAdminProfileDetail(
+            agencyAdminDetail.dataset.agencyAdminDetail,
+            store,
+          ),
+        );
+        return;
+      }
+
+      const agencyListBack = event.target.closest("[data-agency-list-back]");
+      if (agencyListBack) {
+        modal.dataset.currentDetail = "agencies";
+        openDetailModal(modal, createContent("agencies"));
+        bindAgencyAdminForm(modal);
+        return;
+      }
+
       const memberButton = event.target.closest("[data-member-detail]");
       if (memberButton) {
         openDetailModal(
@@ -193,6 +216,15 @@ export function createManagementController({
     });
 
     modal.addEventListener("submit", (event) => {
+      const shipmentForm = event.target.closest("[data-shipment-form]");
+      if (shipmentForm) {
+        event.preventDefault();
+        updateShipmentInfo(shipmentForm);
+        persistStore(store);
+        openDetailModal(modal, createContent("orders"));
+        return;
+      }
+
       const memoForm = event.target.closest("[data-member-memo-form]");
       if (!memoForm) return;
 
@@ -256,10 +288,38 @@ export function createManagementController({
     ];
   }
 
+  function updateShipmentInfo(form) {
+    const order = store.orders.find(
+      (item) => item.id === form.dataset.shipmentForm,
+    );
+    if (!order) return;
+
+    order.shippingStatus = form.querySelector('[name="shippingStatus"]').value;
+    order.courier = form.querySelector('[name="courier"]').value.trim();
+    order.trackingNumber = form
+      .querySelector('[name="trackingNumber"]')
+      .value.trim();
+    order.shippedAt = form.querySelector('[name="shippedAt"]').value;
+    order.deliveredAt = form.querySelector('[name="deliveredAt"]').value;
+    order.shippingMemo = form.querySelector('[name="shippingMemo"]').value;
+    if (order.shippingStatus === "shipping" && !order.shippedAt) {
+      order.shippedAt = new Date().toISOString().slice(0, 10);
+    }
+    if (order.shippingStatus === "delivered" && !order.deliveredAt) {
+      order.deliveredAt = new Date().toISOString().slice(0, 10);
+    }
+  }
+
   function bindAgencyAdminForm(modal) {
     const formBox = modal.querySelector("[data-agency-form]");
     if (!formBox) return;
 
+    modal
+      .querySelector("[data-agency-create]")
+      ?.addEventListener("click", () => {
+        resetAgencyForm(formBox);
+        showAgencyForm(formBox);
+      });
     formBox
       .querySelector("[data-agency-submit]")
       .addEventListener("click", () => {
@@ -314,6 +374,7 @@ export function createManagementController({
         getAgencyField(formBox, "linkSlug").dataset.manual = "true";
         formBox.querySelector("[data-agency-submit]").textContent =
           "대리점 수정";
+        showAgencyForm(formBox);
       });
     });
 
@@ -327,15 +388,22 @@ export function createManagementController({
 
     formBox
       .querySelector("[data-agency-reset]")
-      .addEventListener("click", () => {
-        formBox.querySelectorAll("input, textarea").forEach((input) => {
-          input.value = input.name === "commissionRate" ? "10" : "";
-          delete input.dataset.manual;
-        });
-        getAgencyField(formBox, "status").value = "active";
-        formBox.querySelector("[data-agency-submit]").textContent =
-          "대리점 등록";
-      });
+      .addEventListener("click", () => resetAgencyForm(formBox));
+  }
+
+  function showAgencyForm(formBox) {
+    formBox.classList.remove("is-hidden");
+    formBox.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    getAgencyField(formBox, "name")?.focus();
+  }
+
+  function resetAgencyForm(formBox) {
+    formBox.querySelectorAll("input, textarea").forEach((input) => {
+      input.value = input.name === "commissionRate" ? "10" : "";
+      delete input.dataset.manual;
+    });
+    getAgencyField(formBox, "status").value = "active";
+    formBox.querySelector("[data-agency-submit]").textContent = "대리점 등록";
   }
 
   function bindProductAdminForm(modal) {
@@ -1203,11 +1271,11 @@ function getAdminDetail(type, store) {
     },
     agencies: {
       label: "Agencies",
-      title: "대리점 상세 리스트",
+      title: "대리점 리스트",
       description:
-        "본사와 계약된 대리점 코드, 전용 링크, 영업비율, 상태를 등록/변경/삭제합니다.",
-      extra: createAgencyAdminForm(),
-      rows: store.agencies.map(createAgencyManageRow),
+        "대리점별 이달 매출, 영업비, 회원 수를 먼저 확인합니다. 대리점 코드와 전용 링크는 상세 화면에서만 표시합니다.",
+      extra: createAgencyAdminWorkspace(store),
+      rows: [],
     },
     members: {
       label: "Members",
@@ -1226,10 +1294,11 @@ function getAdminDetail(type, store) {
     },
     orders: {
       label: "Orders",
-      title: "이달의 주문 상세",
+      title: "이달의 주문 / 배송 관리",
       description:
-        "이번 달 결제 완료 주문의 배송비 제외 실결제 상품금액을 대리점별로 누적 표시합니다.",
-      rows: createMonthlyAgencySalesRows(store),
+        "대리점별 이달 누적 금액을 확인하고, 주문별 배송상태와 송장 정보를 관리합니다.",
+      extra: createAdminOrderShippingWorkspace(store),
+      rows: [],
     },
     points: {
       label: "Points",
@@ -1267,6 +1336,106 @@ function createAgencyDetailRow(agency) {
       <div><span>정산 계좌</span><strong>${agency.settlementAccount || "미등록"}</strong></div>
       <div><span>링크 복사</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">복사</button></div>
     </article>
+  `;
+}
+
+function createAgencyAdminWorkspace(store) {
+  const rows = store.agencies
+    .map((agency) => createAgencyManageRow(agency, store))
+    .join("");
+
+  return `
+    <section class="agency-admin-workspace" data-agency-workspace>
+      <div class="agency-admin-toolbar">
+        <div>
+          <div class="product-category">Agency list</div>
+          <strong>대리점 운영 현황</strong>
+          <span>대리점명 클릭 시 상세 정보로 이동합니다.</span>
+        </div>
+        <button class="buy-button" type="button" data-agency-create>대리점 추가</button>
+      </div>
+      ${createAgencyAdminForm({ hidden: true })}
+      <div class="agency-table-head">
+        <span>대리점</span>
+        <span>이달 매출</span>
+        <span>영업비 예정</span>
+        <span>총회원수</span>
+        <span>상태</span>
+        <span>관리</span>
+      </div>
+      <div class="agency-admin-list">
+        ${rows || '<div class="admin-detail-empty">등록된 대리점이 없습니다.</div>'}
+      </div>
+    </section>
+  `;
+}
+
+function createAgencyAdminProfileDetail(agencyId, store) {
+  const agency = store.agencies.find((item) => item.id === agencyId);
+  if (!agency) {
+    return '<div class="admin-detail-empty">대리점 정보를 찾을 수 없습니다.</div>';
+  }
+
+  const metrics = getAgencyAdminMetrics(agency, store);
+  const link = createAgencyPublicLink(agency);
+
+  return `
+    <div class="detail-panel-head">
+      <div>
+        <button class="back-button member-detail-back" type="button" data-agency-list-back>← 대리점 리스트</button>
+        <div class="product-category">Admin agency / ${agency.status}</div>
+        <h2 id="adminModalTitle">${agency.name}</h2>
+      </div>
+      <p>대리점 계약, 매출, 영업비, 회원, 로그인 계정 정보를 한 화면에서 확인합니다.</p>
+    </div>
+    <div class="member-detail-grid agency-admin-detail-grid">
+      <article><span>이달 매출</span><strong>${formatMoney(metrics.monthSales)}</strong></article>
+      <article><span>이달 영업비</span><strong>${formatMoney(metrics.monthCommission)}</strong></article>
+      <article><span>총회원수</span><strong>${metrics.memberCount}명</strong></article>
+      <article><span>구매 회원</span><strong>${metrics.buyerCount}명</strong></article>
+      <article><span>누적 매출</span><strong>${formatMoney(metrics.totalSales)}</strong></article>
+      <article><span>누적 영업비</span><strong>${formatMoney(metrics.totalCommission)}</strong></article>
+      <article><span>정산 대기</span><strong>${formatMoney(metrics.pendingCommission)}</strong></article>
+      <article><span>영업비율</span><strong>${agency.commissionRate}%</strong></article>
+      <article><span>대리점 코드</span><strong>${agency.code}</strong></article>
+      <article><span>전용 링크</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></article>
+      <article><span>전체 링크</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">링크 복사</button></article>
+      <article><span>로그인 ID</span><strong>${agency.loginUserId || "미등록"}</strong></article>
+      <article><span>계약 기간</span><strong>${formatAgencyContractPeriod(agency)}</strong></article>
+      <article><span>담당자</span><strong>${agency.managerName || "미등록"}</strong></article>
+      <article><span>담당 연락처</span><strong>${agency.managerPhone || "미등록"}</strong></article>
+      <article><span>정산 계좌</span><strong>${agency.settlementAccount || "미등록"}</strong></article>
+    </div>
+    <div class="member-detail-columns">
+      <section>
+        <div class="product-category">최근 주문</div>
+        <div class="process-list">
+          ${
+            metrics.orders
+              .slice(0, 10)
+              .map((order) => createOrderDetailRow(order, store))
+              .join("") ||
+            '<div class="admin-detail-empty">주문이 없습니다.</div>'
+          }
+        </div>
+      </section>
+      <section>
+        <div class="product-category">정산 장부</div>
+        <div class="process-list">
+          ${
+            metrics.settlements
+              .slice(0, 10)
+              .map((item) =>
+                createSettlementDetailRow(item, store, {
+                  allowStatusActions: true,
+                }),
+              )
+              .join("") ||
+            '<div class="admin-detail-empty">정산 장부가 없습니다.</div>'
+          }
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -1505,6 +1674,82 @@ function createMonthlyAgencySalesRows(store) {
       </article>
     `;
   });
+}
+
+function createAdminOrderShippingWorkspace(store) {
+  const orders = [...(store.orders || [])].sort((a, b) =>
+    String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
+  );
+
+  return `
+    <section class="shipment-workspace">
+      <div class="product-category">Agency monthly summary</div>
+      <div class="process-list shipment-summary-list">
+        ${createMonthlyAgencySalesRows(store).join("")}
+      </div>
+      <div class="shipment-head">
+        <div>
+          <div class="product-category">Shipment control</div>
+          <strong>주문별 배송 / 송장 관리</strong>
+        </div>
+        <span>송장번호 저장 시 고객 주문 상세에도 바로 반영됩니다.</span>
+      </div>
+      <div class="shipment-list">
+        ${orders.map((order) => createAdminShipmentRow(order, store)).join("") || '<div class="admin-detail-empty">관리할 주문이 없습니다.</div>'}
+      </div>
+    </section>
+  `;
+}
+
+function createAdminShipmentRow(order, store) {
+  const member = store.members.find((item) => item.id === order.memberId);
+  const address = order.shippingAddress || member?.address || {};
+  const firstItem = order.items?.[0];
+
+  return `
+    <form class="shipment-row" data-shipment-form="${order.id}">
+      <div class="shipment-order-main">
+        <strong>${order.id}</strong>
+        <span>${order.paidAt || "-"} · ${member?.name || "회원"} · ${firstItem?.productKo || "상품"}</span>
+        <em>${formatShipmentAddress(address)}</em>
+      </div>
+      <label>배송상태
+        <select class="option-select" name="shippingStatus">
+          ${createOption("preparing", "상품준비", order.shippingStatus)}
+          ${createOption("paid", "결제완료", order.shippingStatus)}
+          ${createOption("shipping", "배송중", order.shippingStatus)}
+          ${createOption("delivered", "배송완료", order.shippingStatus)}
+          ${createOption("returned", "취소/반품", order.shippingStatus)}
+        </select>
+      </label>
+      <label>택배사
+        <select class="option-select" name="courier">
+          ${createOption("", "선택", order.courier)}
+          ${createOption("CJ대한통운", "CJ대한통운", order.courier)}
+          ${createOption("롯데택배", "롯데택배", order.courier)}
+          ${createOption("한진택배", "한진택배", order.courier)}
+          ${createOption("우체국택배", "우체국택배", order.courier)}
+        </select>
+      </label>
+      <label>송장번호<input class="quantity-input" name="trackingNumber" value="${escapeAttribute(order.trackingNumber)}" placeholder="송장번호 입력" /></label>
+      <label>출고일<input class="quantity-input" name="shippedAt" type="date" value="${escapeAttribute(order.shippedAt)}" /></label>
+      <label>완료일<input class="quantity-input" name="deliveredAt" type="date" value="${escapeAttribute(order.deliveredAt)}" /></label>
+      <label class="shipment-memo">배송 메모<input class="quantity-input" name="shippingMemo" value="${escapeAttribute(order.shippingMemo)}" placeholder="배송 요청/특이사항" /></label>
+      <button class="buy-button mini-button" type="submit">배송 저장</button>
+    </form>
+  `;
+}
+
+function createOption(value, label, selectedValue) {
+  return `<option value="${escapeAttribute(value)}" ${String(value) === String(selectedValue || "") ? "selected" : ""}>${label}</option>`;
+}
+
+function formatShipmentAddress(address = {}) {
+  const recipient = [address.recipient, address.phone]
+    .filter(Boolean)
+    .join(" / ");
+  const addressText = formatAddress(address);
+  return [recipient, addressText].filter(Boolean).join(" · ");
 }
 
 function createMonthlyPointSummary(store) {
@@ -1991,9 +2236,9 @@ function createAgencyDetailContent(type, store) {
   `;
 }
 
-function createAgencyAdminForm() {
+function createAgencyAdminForm({ hidden = false } = {}) {
   return `
-    <div class="agency-admin-form" data-agency-form>
+    <div class="agency-admin-form ${hidden ? "is-hidden" : ""}" data-agency-form>
       <input type="hidden" name="agencyId" />
       <section class="agency-form-section product-required-group">
         <div class="product-form-group-head">
@@ -2052,7 +2297,8 @@ function createAgencyAdminForm() {
   `;
 }
 
-function createAgencyManageRow(agency) {
+function createAgencyManageRow(agency, store) {
+  const metrics = getAgencyAdminMetrics(agency, store);
   const controls = agency.isHeadquarters
     ? "<strong>기본값</strong>"
     : `
@@ -2062,14 +2308,64 @@ function createAgencyManageRow(agency) {
 
   return `
     <article class="agency-table-row">
-      <div><strong>${agency.name}</strong><span>${agency.isHeadquarters ? "본사" : "계약"}</span></div>
-      <div>${agency.code}</div>
-      <div><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></div>
-      <div>${agency.commissionRate}%</div>
-      <div>${agency.status}<span>${agency.managerName || "담당 미등록"} · ${agency.loginUserId ? `ID ${agency.loginUserId}` : "로그인 미등록"}</span></div>
+      <div>
+        <button class="member-detail-button agency-name-button" type="button" data-agency-admin-detail="${agency.id}">${agency.name}</button>
+        <span>${agency.isHeadquarters ? "본사" : "계약"} · ${agency.managerName || "담당 미등록"}</span>
+      </div>
+      <div>${formatMoney(metrics.monthSales)}</div>
+      <div>${formatMoney(metrics.monthCommission)}</div>
+      <div>${metrics.memberCount.toLocaleString("ko-KR")}명<span>구매 ${metrics.buyerCount}명</span></div>
+      <div>${agency.status}<span>${agency.commissionRate}% · ${agency.loginUserId ? "로그인 등록" : "로그인 미등록"}</span></div>
       <div class="agency-row-actions">${controls}</div>
     </article>
   `;
+}
+
+function getAgencyAdminMetrics(agency, store) {
+  const members = store.members.filter(
+    (member) => member.agencyId === agency.id,
+  );
+  const memberIds = new Set(members.map((member) => member.id));
+  const orders = store.orders
+    .filter((order) => order.agencyIdAtOrder === agency.id)
+    .sort((a, b) => String(b.paidAt).localeCompare(a.paidAt));
+  const monthOrders = orders.filter(
+    (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
+  );
+  const settlements = store.agencySettlementLedger
+    .filter((item) => item.agencyId === agency.id)
+    .sort((a, b) => String(b.createdAt).localeCompare(a.createdAt));
+  const monthSettlements = settlements.filter((item) =>
+    isCurrentMonthDate(item.createdAt),
+  );
+  const buyers = new Set(orders.map((order) => order.memberId));
+
+  return {
+    buyerCount: [...buyers].filter((memberId) => memberIds.has(memberId))
+      .length,
+    memberCount: members.length,
+    monthCommission: monthSettlements.reduce(
+      (sum, item) => sum + Number(item.commissionAmount || 0),
+      0,
+    ),
+    monthSales: monthOrders.reduce(
+      (sum, order) => sum + Number(order.paidProductAmount || 0),
+      0,
+    ),
+    orders,
+    pendingCommission: settlements
+      .filter((item) => item.status !== "paid")
+      .reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
+    settlements,
+    totalCommission: settlements.reduce(
+      (sum, item) => sum + Number(item.commissionAmount || 0),
+      0,
+    ),
+    totalSales: orders.reduce(
+      (sum, order) => sum + Number(order.paidProductAmount || 0),
+      0,
+    ),
+  };
 }
 
 function createProductManagementWorkspace(store) {

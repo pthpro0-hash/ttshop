@@ -10,6 +10,28 @@ export function createAuthController({
   showToast,
 }) {
   migrateMemberAuthDefaults();
+  const ADDRESS_LOOKUP_PRESETS = [
+    {
+      label: "강남 쇼룸",
+      postcode: "06236",
+      address: "서울시 강남구 테헤란로 000",
+    },
+    {
+      label: "성수 물류센터",
+      postcode: "04783",
+      address: "서울시 성동구 연무장길 00",
+    },
+    {
+      label: "마포 사무실",
+      postcode: "04157",
+      address: "서울시 마포구 양화로 00",
+    },
+    {
+      label: "부산 센텀점",
+      postcode: "48059",
+      address: "부산시 해운대구 센텀중앙로 00",
+    },
+  ];
 
   function openAuth(mode = "login") {
     closeCart();
@@ -164,13 +186,12 @@ export function createAuthController({
 
   function createAuthCompletePanel() {
     const member = getCurrentMember();
-    const agency = getMemberAgency(member);
 
     return `
     <div class="auth-complete">
       <div class="auth-mark">B</div>
       <h2>가입/로그인이 완료되었습니다.</h2>
-      <p>${member?.name || "회원"}님은 ${agency?.name || "본사"} 고객으로 쇼핑을 진행합니다.</p>
+      <p>${member?.name || "회원"}님, 쇼핑을 계속 진행할 수 있습니다.</p>
       <button class="buy-button auth-submit" id="authGoShop">Shop 보러가기</button>
     </div>
   `;
@@ -181,7 +202,6 @@ export function createAuthController({
     <div class="auth-management" aria-label="관리 메뉴">
       <a href="#admin" data-management-link="admin">Admin</a>
       <a href="#agency" data-management-link="agency">Agency</a>
-      <a href="#member" data-management-link="member">Member</a>
     </div>
   `;
   }
@@ -193,6 +213,8 @@ export function createAuthController({
     const note = isAdmin
       ? "관리자 전용 아이디와 비밀번호로 접속합니다."
       : "Admin에서 발급한 대리점별 아이디와 비밀번호로 접속합니다.";
+    const defaultUserId = isAdmin ? "adminChang" : "";
+    const defaultPassword = isAdmin ? "Chang$0909" : "";
 
     return `
     <section class="auth-dialog" role="dialog" aria-modal="true" aria-label="${label}">
@@ -210,9 +232,9 @@ export function createAuthController({
             <div class="login-visual" aria-hidden="true"><span></span></div>
             <div class="login-fields">
               <label class="sr-only" for="managementUserId">아이디</label>
-              <input class="quantity-input" id="managementUserId" name="userId" placeholder="아이디를 입력하세요." />
+              <input class="quantity-input" id="managementUserId" name="userId" value="${defaultUserId}" placeholder="아이디를 입력하세요." />
               <label class="sr-only" for="managementPassword">비밀번호</label>
-              <input class="quantity-input" id="managementPassword" name="password" type="password" placeholder="비밀번호를 입력하세요." />
+              <input class="quantity-input" id="managementPassword" name="password" type="password" value="${defaultPassword}" placeholder="비밀번호를 입력하세요." />
             </div>
             <button class="buy-button login-submit" type="submit">${label}</button>
           </div>
@@ -239,10 +261,32 @@ export function createAuthController({
       <div class="address-title">선택 배송지</div>
       <div class="quantity-row">
         <label>우편번호<input class="quantity-input" name="postcode" placeholder="06236" /></label>
-        <button class="cart-button address-search" type="button">검색</button>
+        <button class="cart-button address-search" type="button" data-address-search>배송지 조회</button>
       </div>
+      ${createAddressLookupPanel()}
       <label>배송지<input class="quantity-input" name="address" placeholder="서울시 강남구 테헤란로 000" /></label>
       <label>상세주소<input class="quantity-input" name="addressDetail" placeholder="동/호수 또는 요청사항" /></label>
+    </div>
+  `;
+  }
+
+  function createAddressLookupPanel(prefix = "") {
+    return `
+    <div class="address-lookup-panel is-hidden" data-address-panel="${prefix}">
+      <div class="address-lookup-head">
+        <strong>배송지 조회 결과</strong>
+        <span>주소를 선택하면 우편번호와 배송지가 자동 입력됩니다.</span>
+      </div>
+      <div class="address-lookup-list">
+        ${ADDRESS_LOOKUP_PRESETS.map(
+          (item) => `
+          <button class="address-result-button" type="button" data-address-result data-address-prefix="${prefix}" data-postcode="${item.postcode}" data-address="${escapeAttribute(item.address)}">
+            <strong>${item.label}</strong>
+            <span>${item.postcode} ${item.address}</span>
+          </button>
+        `,
+        ).join("")}
+      </div>
     </div>
   `;
   }
@@ -260,39 +304,53 @@ export function createAuthController({
       (member.shippingAddresses || []).find((address) => !address.isDefault) ||
       {};
 
+    // 상단 탭을 단일 내비게이션으로 유지해 개인회원 화면의 중복 메뉴를 막는다.
     return `
     <section class="auth-dialog profile-dialog" role="dialog" aria-modal="true" aria-label="내정보">
       <button class="cart-close auth-close" id="profileClose" type="button" aria-label="내정보 닫기">×</button>
       <section class="auth-card profile-card">
         <div class="profile-service-head">
-          <div class="profile-identity">
-            <div class="product-category">Member / My page</div>
-            <h2>${escapeHtml(member.name || member.userId || "회원")}님</h2>
-            <p>
-              ${escapeHtml(stats.agencyName)} 고객 · ${member.joinedAt || "가입일 없음"} 가입 ·
-              ${createMemberStatusLabel(member.status)}
-            </p>
+          <div class="profile-member-main">
+            <div class="profile-avatar" aria-hidden="true">${escapeHtml(createMemberInitial(member))}</div>
+            <div class="profile-identity">
+              <div class="product-category">Member / My page</div>
+              <h2>${escapeHtml(member.name || member.userId || "회원")}님</h2>
+              <p>
+                ${member.joinedAt || "가입일 없음"} 가입 ·
+                ${createMemberStatusLabel(member.status)}
+              </p>
+            </div>
           </div>
           <div class="profile-quick-actions">
-            <button class="cart-button" type="button" data-profile-tab="account">정보 수정</button>
-            <button class="cart-button" type="button" data-profile-tab="security">비밀번호</button>
             <button class="buy-button" type="button" data-profile-close>닫기</button>
           </div>
         </div>
+        <section class="profile-wallet-overview">
+          <div class="profile-wallet-main">
+            <span>사용 가능 포인트</span>
+            <strong>${member.points.toLocaleString("ko-KR")}P</strong>
+            <em>이번달 적립 ${stats.monthEarned.toLocaleString("ko-KR")}P · 사용 ${stats.monthUsed.toLocaleString("ko-KR")}P</em>
+          </div>
+          <div class="profile-next-action">
+            <span>최근 주문</span>
+            <strong>${stats.latestOrder?.id || "주문 없음"}</strong>
+            <em>${stats.latestOrder ? `${stats.latestOrder.paidAt} · ${formatMoney(stats.latestOrder.paidAmount)}` : "첫 주문을 기다리고 있습니다."}</em>
+          </div>
+        </section>
+        <nav class="profile-top-nav" aria-label="내정보 메뉴">
+          ${createProfileTabButton("account", "계정/배송지", true)}
+          ${createProfileTabButton("orders", "구매 내역", false)}
+          ${createProfileTabButton("points", "포인트 관리", false)}
+          ${createProfileTabButton("links", "추천 링크", false)}
+          ${createProfileTabButton("security", "보안", false)}
+        </nav>
         <div class="profile-summary-grid">
-          <button type="button" data-profile-section="points" data-profile-tab="points"><span>보유 포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>이번달 적립 ${stats.monthEarned.toLocaleString("ko-KR")}P</em></button>
-          <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>구매이력</span><strong>${orders.length}건</strong><em>누적 ${formatMoney(stats.totalPaid)}</em></button>
-          <button type="button" data-profile-section="links" data-profile-tab="links"><span>추천 링크</span><strong>${links.length}개</strong><em>활성 ${stats.activeLinks}개</em></button>
-          <div class="profile-status-card"><span>이번달 구매</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}건 결제</em></div>
+          <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>주문</span><strong>${orders.length}건</strong><em>누적 ${formatMoney(stats.totalPaid)}</em></button>
+          <button type="button" data-profile-section="points" data-profile-tab="points"><span>포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>총 사용 ${stats.usedPoints.toLocaleString("ko-KR")}P</em></button>
+          <button type="button" data-profile-section="links" data-profile-tab="links"><span>추천</span><strong>${links.length}개</strong><em>활성 ${stats.activeLinks}개</em></button>
+          <div class="profile-status-card"><span>이번달</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}건 결제</em></div>
         </div>
         <div class="profile-service-layout">
-          <nav class="profile-side-nav" aria-label="내정보 메뉴">
-            ${createProfileTabButton("account", "계정/배송지", true)}
-            ${createProfileTabButton("orders", "구매 내역", false)}
-            ${createProfileTabButton("points", "포인트 관리", false)}
-            ${createProfileTabButton("links", "추천 링크", false)}
-            ${createProfileTabButton("security", "보안", false)}
-          </nav>
           <div class="profile-tab-panels">
             <section class="profile-tab-panel" data-profile-panel="account">
               <div class="profile-section-head">
@@ -303,45 +361,92 @@ export function createAuthController({
                 <p>아이디는 변경할 수 없습니다. 주문과 배송에 필요한 기본 정보를 관리합니다.</p>
               </div>
               <form class="profile-form" data-profile-form>
-                <div class="profile-form-grid">
-                  <label>아이디<input class="quantity-input" name="userId" value="${escapeAttribute(member.userId || member.id)}" readonly /></label>
-                  <label>이름<input class="quantity-input" name="name" value="${escapeAttribute(member.name)}" /></label>
-                  <label>휴대폰<input class="quantity-input" name="phone" value="${escapeAttribute(member.phone)}" /></label>
-                  <label>이메일<input class="quantity-input" name="email" value="${escapeAttribute(member.email)}" /></label>
-                  <label>우편번호<input class="quantity-input" name="postcode" value="${escapeAttribute(member.address?.postcode)}" /></label>
-                  <label class="profile-wide">배송지<input class="quantity-input" name="address" value="${escapeAttribute(member.address?.address)}" /></label>
-                  <label class="profile-wide">상세주소<input class="quantity-input" name="addressDetail" value="${escapeAttribute(member.address?.addressDetail)}" /></label>
-                  <div class="profile-wide profile-address-overview">
-                    <div class="product-category">배송지 목록</div>
-                    ${createShippingAddressList(member)}
-                  </div>
-                  <div class="profile-wide profile-extra-address">
-                    <div class="product-category">추가 배송지</div>
-                    <div class="profile-form-grid nested">
-                      <label>배송지명<input class="quantity-input" name="extraAddressLabel" value="${escapeAttribute(extraAddress.label)}" placeholder="자택 / 매장 / 회사" /></label>
-                      <label>수령인<input class="quantity-input" name="extraAddressRecipient" value="${escapeAttribute(extraAddress.recipient)}" /></label>
-                      <label>연락처<input class="quantity-input" name="extraAddressPhone" value="${escapeAttribute(extraAddress.phone)}" /></label>
-                      <label>우편번호<input class="quantity-input" name="extraAddressPostcode" value="${escapeAttribute(extraAddress.postcode)}" /></label>
-                      <label class="profile-wide">배송지<input class="quantity-input" name="extraAddressAddress" value="${escapeAttribute(extraAddress.address)}" /></label>
-                      <label class="profile-wide">상세주소<input class="quantity-input" name="extraAddressDetail" value="${escapeAttribute(extraAddress.addressDetail)}" /></label>
+                <div class="profile-form-stack">
+                  <section class="profile-field-card profile-field-card--primary">
+                    <div class="profile-field-title">
+                      <span>기본 정보</span>
+                      <em>로그인 아이디는 변경할 수 없습니다.</em>
                     </div>
+                    <div class="profile-form-grid">
+                      <label>아이디<input class="quantity-input" name="userId" value="${escapeAttribute(member.userId || member.id)}" readonly /></label>
+                      <label>이름<input class="quantity-input" name="name" value="${escapeAttribute(member.name)}" /></label>
+                      <label>휴대폰<input class="quantity-input" name="phone" value="${escapeAttribute(member.phone)}" /></label>
+                      <label>이메일<input class="quantity-input" name="email" value="${escapeAttribute(member.email)}" /></label>
+                    </div>
+                  </section>
+
+                  <section class="profile-field-card">
+                    <div class="profile-field-title">
+                      <span>기본 배송지</span>
+                      <em>주문서에 우선 적용되는 배송 정보입니다.</em>
+                    </div>
+                    <div class="profile-form-grid profile-address-grid">
+                      <label>우편번호
+                        <span class="address-input-pair">
+                          <input class="quantity-input" name="postcode" value="${escapeAttribute(member.address?.postcode)}" />
+                          <button class="cart-button address-search" type="button" data-address-search>조회</button>
+                        </span>
+                      </label>
+                      <label class="profile-wide">배송지<input class="quantity-input" name="address" value="${escapeAttribute(member.address?.address)}" /></label>
+                      <label class="profile-wide">상세주소<input class="quantity-input" name="addressDetail" value="${escapeAttribute(member.address?.addressDetail)}" /></label>
+                      <div class="profile-address-lookup">${createAddressLookupPanel()}</div>
+                    </div>
+                  </section>
+
+                  <div class="profile-field-split">
+                    <section class="profile-field-card profile-address-overview">
+                      <div class="profile-field-title">
+                        <span>배송지 목록</span>
+                        <em>저장된 배송지를 확인합니다.</em>
+                      </div>
+                      ${createShippingAddressList(member)}
+                    </section>
+                    <section class="profile-field-card profile-extra-address">
+                      <div class="profile-field-title">
+                        <span>추가 배송지</span>
+                        <em>자택, 매장, 회사 등 자주 쓰는 주소를 등록합니다.</em>
+                      </div>
+                      <div class="profile-form-grid nested">
+                        <label>배송지명<input class="quantity-input" name="extraAddressLabel" value="${escapeAttribute(extraAddress.label)}" placeholder="자택 / 매장 / 회사" /></label>
+                        <label>수령인<input class="quantity-input" name="extraAddressRecipient" value="${escapeAttribute(extraAddress.recipient)}" /></label>
+                        <label>연락처<input class="quantity-input" name="extraAddressPhone" value="${escapeAttribute(extraAddress.phone)}" /></label>
+                        <label>우편번호
+                          <span class="address-input-pair">
+                            <input class="quantity-input" name="extraAddressPostcode" value="${escapeAttribute(extraAddress.postcode)}" />
+                            <button class="cart-button address-search" type="button" data-address-search data-address-prefix="extraAddress">조회</button>
+                          </span>
+                        </label>
+                        <label class="profile-wide">배송지<input class="quantity-input" name="extraAddressAddress" value="${escapeAttribute(extraAddress.address)}" /></label>
+                        <label class="profile-wide">상세주소<input class="quantity-input" name="extraAddressDetail" value="${escapeAttribute(extraAddress.addressDetail)}" /></label>
+                        <div class="profile-wide">${createAddressLookupPanel("extraAddress")}</div>
+                      </div>
+                    </section>
                   </div>
-                  <label>기본 결제수단
-                    <select class="option-select" name="paymentMethod">
-                      ${createOption("신용카드", member.paymentMethod)}
-                      ${createOption("카카오페이", member.paymentMethod)}
-                      ${createOption("네이버페이", member.paymentMethod)}
-                      ${createOption("무통장입금", member.paymentMethod)}
-                    </select>
-                  </label>
-                  <label>관심 카테고리
-                    <select class="option-select" name="favoriteCategory">
-                      ${createOption("미용기구", member.favoriteCategory)}
-                      ${createOption("미용재료", member.favoriteCategory)}
-                      ${createOption("화장품", member.favoriteCategory)}
-                    </select>
-                  </label>
-                  <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> 쇼핑 혜택 및 배송 알림 수신</label>
+
+                  <section class="profile-field-card profile-preference-card">
+                    <div class="profile-field-title">
+                      <span>쇼핑 설정</span>
+                      <em>결제와 혜택 안내에 사용할 기본 설정입니다.</em>
+                    </div>
+                    <div class="profile-form-grid profile-preference-grid">
+                      <label>기본 결제수단
+                        <select class="option-select" name="paymentMethod">
+                          ${createOption("신용카드", member.paymentMethod)}
+                          ${createOption("카카오페이", member.paymentMethod)}
+                          ${createOption("네이버페이", member.paymentMethod)}
+                          ${createOption("무통장입금", member.paymentMethod)}
+                        </select>
+                      </label>
+                      <label>관심 카테고리
+                        <select class="option-select" name="favoriteCategory">
+                          ${createOption("미용기구", member.favoriteCategory)}
+                          ${createOption("미용재료", member.favoriteCategory)}
+                          ${createOption("화장품", member.favoriteCategory)}
+                        </select>
+                      </label>
+                      <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> 쇼핑 혜택 및 배송 알림 수신</label>
+                    </div>
+                  </section>
                 </div>
                 <div class="buy-actions profile-actions">
                   <button class="buy-button" type="submit">변경사항 저장</button>
@@ -412,11 +517,9 @@ export function createAuthController({
       )
       .reduce((sum, point) => sum + Math.abs(Number(point.amount || 0)), 0);
     const latestOrder = sortOrderHistory(orders)[0];
-    const agency = store.agencies.find((item) => item.id === member.agencyId);
 
     return {
       activeLinks: links.filter((link) => link.status === "active").length,
-      agencyName: agency?.name || "본사",
       earnedPoints,
       latestOrder,
       monthEarned,
@@ -442,6 +545,12 @@ export function createAuthController({
   `;
   }
 
+  function createMemberInitial(member) {
+    return String(member.name || member.userId || "M")
+      .trim()
+      .slice(0, 1);
+  }
+
   function createProfileOrderDashboard(orders, stats) {
     return `
     <div class="profile-section-head">
@@ -457,16 +566,18 @@ export function createAuthController({
       <article><span>이번달 주문</span><strong>${stats.monthOrderCount}건</strong><em>${formatMoney(stats.monthPaid)}</em></article>
     </div>
     <div class="profile-order-status-strip">
-      ${createOrderStatusCount(orders, "paid", "결제완료")}
+      ${createOrderStatusCount(orders, "preparing", "상품준비")}
       ${createOrderStatusCount(orders, "shipping", "배송중")}
-      ${createOrderStatusCount(orders, "completed", "구매확정")}
-      ${createOrderStatusCount(orders, "cancelled", "취소/환불")}
+      ${createOrderStatusCount(orders, "delivered", "배송완료")}
+      ${createOrderStatusCount(orders, "returned", "취소/반품")}
     </div>
   `;
   }
 
   function createOrderStatusCount(orders, status, label) {
-    const count = orders.filter((order) => order.status === status).length;
+    const count = orders.filter(
+      (order) => (order.shippingStatus || "preparing") === status,
+    ).length;
 
     return `<div><span>${label}</span><strong>${count}</strong></div>`;
   }
@@ -546,7 +657,7 @@ export function createAuthController({
     <article class="profile-row profile-order-row">
       <div>
         <strong>${order.id}</strong>
-        <span>${order.paidAt} · ${createOrderStatusLabel(order.status)}</span>
+        <span>${order.paidAt} · ${createShippingStatusLabel(order.shippingStatus)}</span>
       </div>
       <div>
         <strong>${firstItem?.productKo || "상품"}</strong>
@@ -565,9 +676,7 @@ export function createAuthController({
   }
 
   function createProfileOrderDetail(order) {
-    const agency = store.agencies.find(
-      (item) => item.id === order.agencyIdAtOrder,
-    );
+    const address = order.shippingAddress || {};
 
     return `
     <div class="profile-history-head">
@@ -579,13 +688,15 @@ export function createAuthController({
     </div>
     <div class="profile-order-summary-grid">
       <div><span>주문일</span><strong>${order.paidAt}</strong></div>
-      <div><span>상태</span><strong>${order.status}</strong></div>
+      <div><span>배송상태</span><strong>${createShippingStatusLabel(order.shippingStatus)}</strong></div>
+      <div><span>택배사</span><strong>${order.courier || "출고 전"}</strong></div>
+      <div><span>송장번호</span><strong>${order.trackingNumber || "등록 대기"}</strong></div>
+      <div><span>배송지</span><strong>${formatProfileAddress(address)}</strong></div>
       <div><span>상품금액</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>배송비</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "무료"}</strong></div>
       <div><span>포인트 사용</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
       <div><span>적립 포인트</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
       <div><span>결제금액</span><strong>${formatMoney(order.paidAmount)}</strong></div>
-      <div><span>대리점</span><strong>${agency?.name || "본사"}</strong></div>
     </div>
     <div class="profile-list">
       ${(order.items || [])
@@ -600,6 +711,27 @@ export function createAuthController({
         .join("")}
     </div>
   `;
+  }
+
+  function createShippingStatusLabel(status) {
+    const labels = {
+      preparing: "상품준비",
+      paid: "결제완료",
+      shipping: "배송중",
+      delivered: "배송완료",
+      returned: "취소/반품",
+    };
+    return labels[status] || createOrderStatusLabel(status);
+  }
+
+  function formatProfileAddress(address = {}) {
+    const recipient = [address.recipient, address.phone]
+      .filter(Boolean)
+      .join(" / ");
+    const location = [address.postcode, address.address, address.addressDetail]
+      .filter(Boolean)
+      .join(" ");
+    return [recipient, location].filter(Boolean).join(" · ") || "-";
   }
 
   function createProfilePointRow(point) {
@@ -710,6 +842,7 @@ export function createAuthController({
         event.preventDefault();
         changePassword(event.currentTarget);
       });
+    bindAddressLookupEvents();
     document.querySelectorAll("[data-profile-tab]").forEach((button) => {
       button.addEventListener("click", () =>
         activateProfileTab(button.dataset.profileTab),
@@ -890,11 +1023,7 @@ export function createAuthController({
       });
     });
     document.querySelector("#authGoShop")?.addEventListener("click", closeAuth);
-    document.querySelectorAll(".address-search").forEach((button) => {
-      button.addEventListener("click", () =>
-        showToast("우편번호 검색 UI 샘플입니다."),
-      );
-    });
+    bindAddressLookupEvents();
   }
 
   function bindManagementLoginEvents(role, onSuccess) {
@@ -906,10 +1035,6 @@ export function createAuthController({
       link.addEventListener("click", (event) => {
         event.preventDefault();
         const targetRole = link.dataset.managementLink;
-        if (targetRole === "member") {
-          openAuth("login");
-          return;
-        }
         openManagementLogin(targetRole, onSuccess);
       });
     });
@@ -926,6 +1051,53 @@ export function createAuthController({
       closeAuth();
       onSuccess(role);
     });
+  }
+
+  function bindAddressLookupEvents() {
+    document.querySelectorAll("[data-address-search]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const container =
+          button.closest("form") || button.closest(".address-box");
+        const prefix = button.dataset.addressPrefix || "";
+        const panel = container?.querySelector(
+          `[data-address-panel="${prefix}"]`,
+        );
+        panel?.classList.toggle("is-hidden");
+      });
+    });
+
+    document.querySelectorAll("[data-address-result]").forEach((button) => {
+      button.addEventListener("click", () => {
+        fillAddressFields(button);
+        button.closest("[data-address-panel]")?.classList.add("is-hidden");
+      });
+    });
+  }
+
+  function fillAddressFields(button) {
+    const container = button.closest("form") || button.closest(".address-box");
+    if (!container) return;
+
+    const prefix = button.dataset.addressPrefix || "";
+    const fieldNames = prefix
+      ? {
+          postcode: `${prefix}Postcode`,
+          address: `${prefix}Address`,
+          detail: `${prefix}Detail`,
+        }
+      : {
+          postcode: "postcode",
+          address: "address",
+          detail: "addressDetail",
+        };
+
+    const postcode = container.querySelector(`[name="${fieldNames.postcode}"]`);
+    const address = container.querySelector(`[name="${fieldNames.address}"]`);
+    const detail = container.querySelector(`[name="${fieldNames.detail}"]`);
+    if (postcode) postcode.value = button.dataset.postcode || "";
+    if (address) address.value = button.dataset.address || "";
+    if (detail) detail.focus();
+    showToast("배송지를 선택했습니다. 상세주소를 입력해주세요.");
   }
 
   function registerMember(form) {
@@ -1246,10 +1418,6 @@ export function createAuthController({
 
   function getCurrentMember() {
     return store.members.find((member) => member.id === store.currentMemberId);
-  }
-
-  function getMemberAgency(member) {
-    return store.agencies.find((agency) => agency.id === member?.agencyId);
   }
 
   function findAgencyByCode(code) {

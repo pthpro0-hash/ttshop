@@ -126,6 +126,20 @@ export const defaultStore = {
       pointUseLimit: 18000,
       pointEarned: 3800,
       status: "paid",
+      shippingStatus: "preparing",
+      courier: "",
+      trackingNumber: "",
+      shippedAt: "",
+      deliveredAt: "",
+      shippingMemo: "결제 확인 후 출고 준비",
+      shippingAddress: {
+        recipient: "홍길동",
+        phone: "010-0000-0000",
+        postcode: "06236",
+        address: "서울시 강남구 테헤란로 000",
+        addressDetail: "",
+      },
+      paymentMethod: "신용카드",
       paidAt: "2026-05-29",
       items: [
         {

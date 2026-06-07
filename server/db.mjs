@@ -42,6 +42,19 @@ function migrateDatabase(database) {
     "point_use_limit",
     "INTEGER NOT NULL DEFAULT 0",
   );
+  ensureColumn(
+    database,
+    "orders",
+    "shipping_status",
+    "TEXT NOT NULL DEFAULT 'preparing'",
+  );
+  ensureColumn(database, "orders", "courier", "TEXT");
+  ensureColumn(database, "orders", "tracking_number", "TEXT");
+  ensureColumn(database, "orders", "shipped_at", "TEXT");
+  ensureColumn(database, "orders", "delivered_at", "TEXT");
+  ensureColumn(database, "orders", "shipping_memo", "TEXT");
+  ensureColumn(database, "orders", "shipping_address", "TEXT");
+  ensureColumn(database, "orders", "payment_method", "TEXT");
   ensureColumn(database, "agency_settlement_ledger", "updated_at", "TEXT");
   ensureColumn(
     database,
@@ -362,8 +375,9 @@ function insertOrder(database, order) {
         (id, member_id, agency_id_at_order, referral_source_type,
          paid_product_amount, shipping_amount, paid_amount, point_used,
          point_use_limit, point_earned,
-         status, paid_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         status, shipping_status, courier, tracking_number, shipped_at,
+         delivered_at, shipping_memo, shipping_address, payment_method, paid_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -378,6 +392,14 @@ function insertOrder(database, order) {
       Number(order.pointUseLimit) || 0,
       Number(order.pointEarned) || 0,
       order.status || "paid",
+      order.shippingStatus || "preparing",
+      order.courier || "",
+      order.trackingNumber || "",
+      order.shippedAt || "",
+      order.deliveredAt || "",
+      order.shippingMemo || "",
+      JSON.stringify(order.shippingAddress || {}),
+      order.paymentMethod || "",
       order.paidAt || "",
     );
 }
@@ -675,9 +697,28 @@ function mapOrder(row) {
     pointUseLimit: row.point_use_limit || 0,
     pointEarned: row.point_earned,
     status: row.status,
+    shippingStatus: row.shipping_status || "preparing",
+    courier: row.courier || "",
+    trackingNumber: row.tracking_number || "",
+    shippedAt: row.shipped_at || "",
+    deliveredAt: row.delivered_at || "",
+    shippingMemo: row.shipping_memo || "",
+    shippingAddress: parseJsonObject(row.shipping_address),
+    paymentMethod: row.payment_method || "",
     paidAt: row.paid_at,
     items: [],
   };
+}
+
+function parseJsonObject(value) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 function mapOrderItem(row) {

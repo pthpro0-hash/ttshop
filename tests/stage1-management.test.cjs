@@ -21,7 +21,7 @@ async function createDom() {
     .readFileSync(path.join(root, "index.html"), "utf8")
     .replace(/<link[^>]+href="style\.css\?v=20260604-product-groups"[^>]*>/, "")
     .replace(
-      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260604-product-groups"[\s\S]*?<\/script>/,
+      /<script[\s\S]*?src="scripts\/app\.bundle\.js\?v=20260607-shipping-tracking"[\s\S]*?<\/script>/,
       "",
     );
   const errors = [];
@@ -188,6 +188,18 @@ function submitManagementLogin(window, role, userId, password) {
   }
   click(window, link);
   const form = document.querySelector(`[data-management-login="${role}"]`);
+  if (role === "admin") {
+    assert.equal(
+      form.querySelector('[name="userId"]').value,
+      "adminChang",
+      "admin login should prefill the development admin id",
+    );
+    assert.equal(
+      form.querySelector('[name="password"]').value,
+      "Chang$0909",
+      "admin login should prefill the development admin password",
+    );
+  }
   input(form.querySelector('[name="userId"]'), userId);
   input(form.querySelector('[name="password"]'), password);
   click(window, form.querySelector('[type="submit"]'));
@@ -214,7 +226,7 @@ function submitManagementLogin(window, role, userId, password) {
   assert.doesNotMatch(html, /type="module"/);
   assert.match(
     html,
-    /src="scripts\/app\.bundle\.js\?v=20260604-product-groups"/,
+    /src="scripts\/app\.bundle\.js\?v=20260607-shipping-tracking"/,
   );
   assert.match(html, /id="managementView"/);
 
@@ -358,8 +370,13 @@ function submitManagementLogin(window, role, userId, password) {
   click(dom.window, document.querySelector("#loginLink"));
   assert.equal(
     document.querySelectorAll("#authView [data-management-link]").length,
-    3,
-    "management links should be inside the auth view",
+    2,
+    "only admin and agency links should be inside the auth view",
+  );
+  assert.equal(
+    document.querySelector('#authView [data-management-link="member"]'),
+    null,
+    "login footer should not expose the old member management shortcut",
   );
   let loginForm = document.querySelector('[data-auth-form="login"]');
   input(loginForm.querySelector('[name="userId"]'), "unknown_user");
@@ -399,6 +416,18 @@ function submitManagementLogin(window, role, userId, password) {
   input(signupForm.querySelector('[name="phone"]'), "010-1111-2222");
   input(signupForm.querySelector('[name="email"]'), "new@example.com");
   input(signupForm.querySelector('[name="agencyCode"]'), "GNBEAUTY");
+  click(dom.window, signupForm.querySelector("[data-address-search]"));
+  click(dom.window, signupForm.querySelector("[data-address-result]"));
+  assert.equal(
+    signupForm.querySelector('[name="postcode"]').value,
+    "06236",
+    "signup address lookup should fill postcode",
+  );
+  assert.match(
+    signupForm.querySelector('[name="address"]').value,
+    /테헤란로/,
+    "signup address lookup should fill address",
+  );
   click(dom.window, signupForm.querySelector('[type="submit"]'));
   assert.equal(
     document.querySelector("#authView").classList.contains("is-hidden"),
@@ -435,6 +464,37 @@ function submitManagementLogin(window, role, userId, password) {
     "profile should include password change form",
   );
   assert.ok(
+    document.querySelector(".profile-top-nav"),
+    "profile should use a top tab menu",
+  );
+  assert.ok(
+    document.querySelector(".profile-wallet-overview"),
+    "profile should show a customer friendly wallet overview",
+  );
+  assert.equal(
+    document.querySelectorAll(".profile-field-card").length,
+    5,
+    "profile account tab should group fields into service-style cards",
+  );
+  assert.ok(
+    document.querySelector(".profile-field-split"),
+    "profile account tab should split address list and extra address form",
+  );
+  assert.ok(
+    document.querySelector(".profile-preference-grid"),
+    "profile account tab should group shopping preferences separately",
+  );
+  assert.equal(
+    document.querySelector(".profile-side-nav"),
+    null,
+    "profile should not render the old duplicated side menu",
+  );
+  assert.equal(
+    document.querySelectorAll(".profile-top-nav [data-profile-tab]").length,
+    5,
+    "profile top menu should expose the five member sections",
+  );
+  assert.ok(
     document.querySelector('[data-profile-section="points"]'),
     "profile point summary should be clickable",
   );
@@ -451,7 +511,27 @@ function submitManagementLogin(window, role, userId, password) {
     null,
     "member profile should not expose internal memo",
   );
+  assert.doesNotMatch(
+    document.querySelector("#authView").textContent,
+    /강남 뷰티 대리점|내부 대리점|영업비|정산/,
+    "member profile should not expose internal agency or settlement data",
+  );
   const profileForm = document.querySelector("[data-profile-form]");
+  click(
+    dom.window,
+    profileForm.querySelector('[data-address-prefix="extraAddress"]'),
+  );
+  click(
+    dom.window,
+    profileForm.querySelector(
+      '[data-address-result][data-address-prefix="extraAddress"]',
+    ),
+  );
+  assert.equal(
+    profileForm.querySelector('[name="extraAddressPostcode"]').value,
+    "06236",
+    "profile extra address lookup should fill postcode",
+  );
   input(profileForm.querySelector('[name="name"]'), "김수정");
   input(profileForm.querySelector('[name="phone"]'), "010-9999-0000");
   input(profileForm.querySelector('[name="postcode"]'), "04524");
@@ -552,6 +632,14 @@ function submitManagementLogin(window, role, userId, password) {
     /적립 예정\s*3,800P/,
     "checkout summary should preview purchase points using the configured rate",
   );
+  click(dom.window, document.querySelector("[data-checkout-address-search]"));
+  click(dom.window, document.querySelector("[data-checkout-address-result]"));
+  assert.equal(
+    document.querySelector("#zipCode").value,
+    "06236",
+    "checkout address lookup should fill postcode",
+  );
+  input(document.querySelector("#addressDetail"), "테스트 101호");
   click(dom.window, document.querySelector("#finalPay"));
   assert.ok(
     document.querySelector("#paymentResult"),
@@ -567,9 +655,22 @@ function submitManagementLogin(window, role, userId, password) {
     /구매 상품 종류 기준/,
     "payment result should explain product-level referral links",
   );
+  assert.doesNotMatch(
+    document.querySelector("#paymentResult").textContent,
+    /대리점|영업비|정산|Admin|Agency/,
+    "member payment result should not expose agency or settlement data",
+  );
   assert.ok(
     document.querySelector("#paymentResult [data-copy-referral]"),
     "payment result should expose referral link copy buttons",
+  );
+  const latestOrder = JSON.parse(
+    localStorage.getItem("beauty-ref-demo-store-v1"),
+  ).orders[0];
+  assert.equal(
+    latestOrder.shippingAddress.addressDetail,
+    "테스트 101호",
+    "payment should persist checkout shipping detail",
   );
 
   submitManagementLogin(dom.window, "admin", "adminChang", "Chang$0909");
@@ -623,8 +724,25 @@ function submitManagementLogin(window, role, userId, password) {
   );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /이달의 주문 상세|강남 뷰티 대리점|누적 상품금액|76,000원/,
-    "admin should show monthly agency sales totals",
+    /이달의 주문 \/ 배송 관리|강남 뷰티 대리점|누적 상품금액|76,000원|주문별 배송 \/ 송장 관리/,
+    "admin should show monthly agency sales totals and shipment controls",
+  );
+  const shipmentForm = document.querySelector("[data-shipment-form]");
+  input(shipmentForm.querySelector('[name="shippingStatus"]'), "shipping");
+  input(shipmentForm.querySelector('[name="courier"]'), "CJ대한통운");
+  input(shipmentForm.querySelector('[name="trackingNumber"]'), "1234567890");
+  click(dom.window, shipmentForm.querySelector('[type="submit"]'));
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).orders[0]
+      .trackingNumber,
+    "1234567890",
+    "admin shipment form should persist tracking number",
+  );
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).orders[0]
+      .shippingStatus,
+    "shipping",
+    "admin shipment form should persist shipping status",
   );
   click(
     dom.window,
@@ -975,7 +1093,23 @@ function submitManagementLogin(window, role, userId, password) {
   );
   click(dom.window, document.querySelector("#cartClose"));
   click(dom.window, document.querySelector('[data-admin-detail="agencies"]'));
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /대리점 운영 현황|이달 매출|영업비 예정|총회원수/,
+    "agency admin should show the agency list before the form",
+  );
+  assert.doesNotMatch(
+    document.querySelector(".agency-admin-list").textContent,
+    /GNBEAUTY|gangnam-beauty/,
+    "agency list should hide agency codes and links",
+  );
+  click(dom.window, document.querySelector("[data-agency-create]"));
   const agencyForm = document.querySelector("[data-agency-form]");
+  assert.equal(
+    agencyForm.classList.contains("is-hidden"),
+    false,
+    "agency create form should open only after clicking the add button",
+  );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
     /필수 계약 정보|운영 정보|대리점명, 대리점 코드, 전용 링크, 영업비율/,
@@ -1005,14 +1139,29 @@ function submitManagementLogin(window, role, userId, password) {
   input(agencyForm.querySelector('[name="loginPassword"]'), "agency123");
   click(dom.window, agencyForm.querySelector("[data-agency-submit]"));
   assert.match(
-    document.querySelector("#adminModalContent").textContent,
-    /부산 뷰티 대리점|BUSANBEAUTY|15%|김담당|ID busan01/,
-    "admin should create a new agency with operating fields",
+    document.querySelector(".agency-admin-list").textContent,
+    /부산 뷰티 대리점|0원|0명|15%|로그인 등록/,
+    "admin should create a new agency and show list metrics",
+  );
+  assert.doesNotMatch(
+    document.querySelector(".agency-admin-list").textContent,
+    /BUSANBEAUTY|busan-beauty/,
+    "agency code and link should stay out of the list row",
   );
   assert.ok(
     document.querySelector(".agency-table-row"),
     "agency list should render compact table rows",
   );
+  click(
+    dom.window,
+    document.querySelector('[data-agency-admin-detail^="agency-busan-beauty"]'),
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /부산 뷰티 대리점|대리점 코드|BUSANBEAUTY|전용 링크|busan-beauty|로그인 ID|busan01/,
+    "agency detail should expose code, link, login and detailed metrics",
+  );
+  click(dom.window, document.querySelector("[data-agency-list-back]"));
   assert.match(
     document.querySelector("#managementView").textContent,
     /대리점 수\s*3/,
@@ -1184,21 +1333,13 @@ function submitManagementLogin(window, role, userId, password) {
     /상태 변경/,
     "agency settlement summary should not expose admin settlement controls",
   );
-  let memberManagementLink = document.querySelector(
-    '[data-management-link="member"]',
-  );
-  if (!memberManagementLink) {
-    click(dom.window, document.querySelector("#loginLink"));
-    memberManagementLink = document.querySelector(
-      '[data-management-link="member"]',
-    );
-  }
-  click(dom.window, memberManagementLink);
+  click(dom.window, document.querySelector("#sessionUser"));
   assert.match(
-    document.querySelector("#managementView").textContent,
-    /3,800P|Point history/,
-    "member should show updated points after payment",
+    document.querySelector("#authView").textContent,
+    /3,800P|포인트 관리/,
+    "member profile should show updated points after payment",
   );
+  click(dom.window, document.querySelector("#profileClose"));
   submitManagementLogin(dom.window, "agency", "gangnam01", "agency123");
   click(dom.window, document.querySelector('[data-agency-detail="link"]'));
   assert.ok(

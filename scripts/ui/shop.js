@@ -12,6 +12,28 @@ export function createShopController({
   persistStore,
   requireLogin = () => true,
 }) {
+  const ADDRESS_LOOKUP_PRESETS = [
+    {
+      label: "기본 배송지",
+      postcode: "06236",
+      address: "서울시 강남구 테헤란로 000",
+    },
+    {
+      label: "성수 물류센터",
+      postcode: "04783",
+      address: "서울시 성동구 연무장길 00",
+    },
+    {
+      label: "마포 사무실",
+      postcode: "04157",
+      address: "서울시 마포구 양화로 00",
+    },
+    {
+      label: "부산 센텀점",
+      postcode: "48059",
+      address: "부산시 해운대구 센텀중앙로 00",
+    },
+  ];
   const state = {
     activeCategory: "all",
     cart: [],
@@ -442,6 +464,8 @@ export function createShopController({
 
     closeCart();
     const totals = getTotals();
+    const member = getCurrentMember();
+    const defaultAddress = getDefaultShippingAddress(member);
 
     dom.detail.innerHTML = `
     <div class="breadcrumb">
@@ -455,19 +479,26 @@ export function createShopController({
         <p class="detail-subtitle">주문자 정보, 배송지, 결제수단을 확인하는 샘플 결제 페이지입니다.</p>
         <div class="option-box">
           <label class="option-label" for="customerName">주문자명</label>
-          <input class="quantity-input" id="customerName" value="홍길동" />
+          <input class="quantity-input" id="customerName" value="${escapeAttribute(defaultAddress.recipient || member?.name || "")}" />
           <div class="quantity-row">
             <div>
               <label class="option-label" for="customerPhone">연락처</label>
-              <input class="quantity-input" id="customerPhone" value="010-0000-0000" />
+              <input class="quantity-input" id="customerPhone" value="${escapeAttribute(defaultAddress.phone || member?.phone || "")}" />
             </div>
             <div>
               <label class="option-label" for="zipCode">우편번호</label>
-              <input class="quantity-input" id="zipCode" value="06236" />
+              <div class="address-input-pair">
+                <input class="quantity-input" id="zipCode" value="${escapeAttribute(defaultAddress.postcode || "")}" />
+                <button class="cart-button address-search" type="button" data-checkout-address-search>조회</button>
+              </div>
             </div>
           </div>
+          ${createCheckoutAddressLookup()}
+          ${createCheckoutSavedAddresses(member)}
           <label class="option-label" for="address">배송지</label>
-          <input class="quantity-input" id="address" value="서울시 강남구 테헤란로 000" />
+          <input class="quantity-input" id="address" value="${escapeAttribute(defaultAddress.address || "")}" />
+          <label class="option-label" for="addressDetail">상세주소</label>
+          <input class="quantity-input" id="addressDetail" value="${escapeAttribute(defaultAddress.addressDetail || "")}" />
           <label class="option-label" for="paymentMethod">결제수단</label>
           <select class="option-select" id="paymentMethod">
             <option>신용카드</option>
@@ -508,6 +539,7 @@ export function createShopController({
         state.pointToUse = event.currentTarget.value;
         openCheckout();
       });
+    bindCheckoutAddressEvents();
   }
 
   function completeCheckoutBypass() {
@@ -525,6 +557,7 @@ export function createShopController({
         memberId: store.currentMemberId,
         referralSourceType: "none",
         pointUsed: getTotals().pointUsed,
+        shippingSnapshot: readCheckoutShippingSnapshot(),
       },
     });
     state.cart = [];
@@ -535,6 +568,140 @@ export function createShopController({
     showToast(
       `결제 완료: ${result.earnedPoints.toLocaleString("ko-KR")} 포인트가 적립되었습니다.`,
     );
+  }
+
+  function createCheckoutAddressLookup() {
+    return `
+    <div class="address-lookup-panel checkout-address-lookup is-hidden" data-checkout-address-panel>
+      <div class="address-lookup-head">
+        <strong>배송지 조회 결과</strong>
+        <span>선택하면 우편번호와 기본 주소가 자동 입력됩니다.</span>
+      </div>
+      <div class="address-lookup-list">
+        ${ADDRESS_LOOKUP_PRESETS.map(
+          (item) => `
+          <button class="address-result-button" type="button" data-checkout-address-result data-postcode="${item.postcode}" data-address="${escapeAttribute(item.address)}">
+            <strong>${item.label}</strong>
+            <span>${item.postcode} ${item.address}</span>
+          </button>
+        `,
+        ).join("")}
+      </div>
+    </div>
+  `;
+  }
+
+  function createCheckoutSavedAddresses(member) {
+    const addresses = normalizeShippingAddresses(member);
+    if (!addresses.length) return "";
+
+    return `
+    <div class="checkout-saved-addresses">
+      <div class="address-lookup-head">
+        <strong>저장 배송지</strong>
+        <span>주문에 사용할 배송지를 선택하세요.</span>
+      </div>
+      <div class="address-lookup-list">
+        ${addresses
+          .map(
+            (address) => `
+            <button class="address-result-button" type="button" data-checkout-saved-address data-recipient="${escapeAttribute(address.recipient)}" data-phone="${escapeAttribute(address.phone)}" data-postcode="${escapeAttribute(address.postcode)}" data-address="${escapeAttribute(address.address)}" data-address-detail="${escapeAttribute(address.addressDetail)}">
+              <strong>${escapeHtml(address.label)}${address.isDefault ? " · 기본" : ""}</strong>
+              <span>${escapeHtml(address.postcode)} ${escapeHtml(address.address)} ${escapeHtml(address.addressDetail)}</span>
+            </button>
+          `,
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+  }
+
+  function bindCheckoutAddressEvents() {
+    document
+      .querySelector("[data-checkout-address-search]")
+      ?.addEventListener("click", () => {
+        document
+          .querySelector("[data-checkout-address-panel]")
+          ?.classList.toggle("is-hidden");
+      });
+
+    document
+      .querySelectorAll("[data-checkout-address-result]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          setCheckoutField("#zipCode", button.dataset.postcode);
+          setCheckoutField("#address", button.dataset.address);
+          document
+            .querySelector("[data-checkout-address-panel]")
+            ?.classList.add("is-hidden");
+          document.querySelector("#addressDetail")?.focus();
+        });
+      });
+
+    document
+      .querySelectorAll("[data-checkout-saved-address]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          setCheckoutField("#customerName", button.dataset.recipient);
+          setCheckoutField("#customerPhone", button.dataset.phone);
+          setCheckoutField("#zipCode", button.dataset.postcode);
+          setCheckoutField("#address", button.dataset.address);
+          setCheckoutField("#addressDetail", button.dataset.addressDetail);
+        });
+      });
+  }
+
+  function setCheckoutField(selector, value = "") {
+    const field = document.querySelector(selector);
+    if (field) field.value = value || "";
+  }
+
+  function readCheckoutShippingSnapshot() {
+    return {
+      recipient: document.querySelector("#customerName")?.value.trim() || "",
+      phone: document.querySelector("#customerPhone")?.value.trim() || "",
+      postcode: document.querySelector("#zipCode")?.value.trim() || "",
+      address: document.querySelector("#address")?.value.trim() || "",
+      addressDetail:
+        document.querySelector("#addressDetail")?.value.trim() || "",
+      paymentMethod: document.querySelector("#paymentMethod")?.value || "",
+    };
+  }
+
+  function getDefaultShippingAddress(member) {
+    const address = normalizeShippingAddresses(member).find(
+      (item) => item.isDefault,
+    );
+    if (address) return address;
+
+    return {
+      recipient: member?.name || "",
+      phone: member?.phone || "",
+      postcode: member?.address?.postcode || "",
+      address: member?.address?.address || "",
+      addressDetail: member?.address?.addressDetail || "",
+    };
+  }
+
+  function normalizeShippingAddresses(member) {
+    const addresses = Array.isArray(member?.shippingAddresses)
+      ? member.shippingAddresses
+      : [];
+    if (addresses.length) return addresses;
+    if (!member?.address) return [];
+
+    return [
+      {
+        label: "기본 배송지",
+        recipient: member.name || "",
+        phone: member.phone || "",
+        postcode: member.address.postcode || "",
+        address: member.address.address || "",
+        addressDetail: member.address.addressDetail || "",
+        isDefault: true,
+      },
+    ].filter((address) => address.postcode || address.address);
   }
 
   function openPaymentResult(result) {
@@ -550,8 +717,7 @@ export function createShopController({
           <h1 class="detail-title">Order<br />Complete.</h1>
         </div>
         <p>
-          PG 결제창은 우회 처리했고, 배송비를 제외한 실결제 상품금액 기준으로
-          포인트 적립과 대리점 정산 대기 장부를 생성했습니다.
+          PG 결제창은 우회 처리했고, 주문 금액과 포인트 적립 내역을 저장했습니다.
         </p>
       </div>
       <div class="management-grid">
@@ -560,28 +726,26 @@ export function createShopController({
         <article><span>배송비</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "무료"}</strong></article>
         <article><span>포인트 사용</span><strong>${result.totals.pointUsed ? `-${result.totals.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></article>
         <article><span>적립 포인트</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
-        <article><span>대리점 정산 기준</span><strong>${formatMoney(result.agencyProcessing?.baseAmount || 0)}</strong></article>
-        <article><span>영업비 예정</span><strong>${formatMoney(result.agencyProcessing?.commissionAmount || 0)}</strong></article>
         <article><span>추천 링크 생성</span><strong>${result.referralLinks.length}개</strong></article>
         <article><span>처리 상태</span><strong>완료</strong></article>
       </div>
       <div class="payment-process">
         <div><strong>01 주문 생성</strong><span>${result.order.id} 주문을 paid 상태로 저장했습니다.</span></div>
         <div><strong>02 포인트 적립</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}원 × ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
-        <div><strong>03 대리점 처리</strong><span>개인 추천링크 구매가 아니므로 ${result.agencyProcessing ? "대리점 정산 대기 장부에 반영했습니다." : "대리점 정산 대상에서 제외했습니다."}</span></div>
-        <div><strong>04 개인 추천링크</strong><span>구매 상품 종류 기준으로 ${result.referralLinks.length}개 링크를 생성했습니다.</span></div>
+        <div><strong>03 개인 추천링크</strong><span>구매 상품 종류 기준으로 ${result.referralLinks.length}개 링크를 생성했습니다.</span></div>
       </div>
       ${createReferralCopyPanel(result.referralLinks)}
       <div class="buy-actions result-actions">
-        <button class="buy-button" type="button" data-management-link="admin">Admin 처리 확인</button>
-        <button class="cart-button" type="button" data-management-link="agency">Agency 정산 확인</button>
-        <button class="cart-button" type="button" data-management-link="member">Member 포인트 확인</button>
+        <button class="buy-button" type="button" id="resultBackToShop">Shop 계속 보기</button>
       </div>
     </section>
   `;
 
     showDetailView();
     document.querySelector("#backToShop").addEventListener("click", showHome);
+    document
+      .querySelector("#resultBackToShop")
+      ?.addEventListener("click", showHome);
     bindReferralCopyButtons();
   }
 
@@ -906,6 +1070,10 @@ export function createShopController({
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value);
   }
 
   return {

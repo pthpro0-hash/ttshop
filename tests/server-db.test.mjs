@@ -99,6 +99,14 @@ try {
       memberId: "member-db-test",
       referralSourceType: "none",
       pointUsed: 6000,
+      shippingSnapshot: {
+        recipient: "DB 테스트",
+        phone: "010-1234-5678",
+        postcode: "04524",
+        address: "서울시 중구 세종대로 110",
+        addressDetail: "테스트 3층",
+        paymentMethod: "신용카드",
+      },
     },
     cart: [
       {
@@ -163,6 +171,9 @@ try {
   assert.equal(order.pointUsed, 6000);
   assert.equal(order.paidAmount, 44000);
   assert.equal(order.pointEarned, 2500);
+  assert.equal(order.shippingStatus, "preparing");
+  assert.equal(order.shippingAddress.addressDetail, "테스트 3층");
+  assert.equal(order.paymentMethod, "신용카드");
   assert.equal(member.points, 6500);
   assert.equal(order.items[0].qty, 2);
   assert.equal(
@@ -202,6 +213,11 @@ try {
       note: "정산 확정",
     },
   ];
+  order.shippingStatus = "shipping";
+  order.courier = "CJ대한통운";
+  order.trackingNumber = "1234567890";
+  order.shippedAt = "2026-06-16";
+  order.shippingMemo = "문 앞 배송";
   writeStore(database, reloaded);
   const reloadedAgain = readStore(database);
   const confirmedSettlement = reloadedAgain.agencySettlementLedger.find(
@@ -210,6 +226,13 @@ try {
   assert.equal(confirmedSettlement.status, "confirmed");
   assert.equal(confirmedSettlement.updatedAt, "2026-06-15");
   assert.equal(confirmedSettlement.statusHistory[0].note, "정산 확정");
+  const shippedOrder = reloadedAgain.orders.find(
+    (item) => item.id === order.id,
+  );
+  assert.equal(shippedOrder.shippingStatus, "shipping");
+  assert.equal(shippedOrder.courier, "CJ대한통운");
+  assert.equal(shippedOrder.trackingNumber, "1234567890");
+  assert.equal(shippedOrder.shippingMemo, "문 앞 배송");
 
   console.log("Server SQLite database test passed");
 } finally {

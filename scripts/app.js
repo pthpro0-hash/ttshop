@@ -93,20 +93,16 @@ async function initializeApp() {
     auth.openProfile();
   });
   dom.logoutButton.addEventListener("click", () => {
-    const member = getCurrentMember();
-    const shouldReturnHome = ["admin", "agency_manager"].includes(member?.role);
     store.currentMemberId = "";
     saveStore(store);
     updateSessionUi();
     auth.closeAuth();
-    if (shouldReturnHome || !dom.management.classList.contains("is-hidden")) {
-      activeManagementRole = "";
-      shop.showHome();
-      dom.management.classList.add("is-hidden");
-      dom.detail.classList.add("is-hidden");
-      dom.home.classList.remove("is-hidden");
-      window.location.hash = "";
-    }
+    activeManagementRole = "";
+    shop.showHome();
+    dom.management.classList.add("is-hidden");
+    dom.detail.classList.add("is-hidden");
+    dom.home.classList.remove("is-hidden");
+    window.location.hash = "";
     shop.showToast("로그아웃되었습니다.");
   });
 

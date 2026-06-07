@@ -338,6 +338,22 @@
         pointUseLimit: 18e3,
         pointEarned: 3800,
         status: "paid",
+        shippingStatus: "preparing",
+        courier: "",
+        trackingNumber: "",
+        shippedAt: "",
+        deliveredAt: "",
+        shippingMemo:
+          "\uACB0\uC81C \uD655\uC778 \uD6C4 \uCD9C\uACE0 \uC900\uBE44",
+        shippingAddress: {
+          recipient: "\uD64D\uAE38\uB3D9",
+          phone: "010-0000-0000",
+          postcode: "06236",
+          address:
+            "\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000",
+          addressDetail: "",
+        },
+        paymentMethod: "\uC2E0\uC6A9\uCE74\uB4DC",
         paidAt: "2026-05-29",
         items: [
           {
@@ -647,6 +663,31 @@
     showToast,
   }) {
     migrateMemberAuthDefaults();
+    const ADDRESS_LOOKUP_PRESETS = [
+      {
+        label: "\uAC15\uB0A8 \uC1FC\uB8F8",
+        postcode: "06236",
+        address:
+          "\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000",
+      },
+      {
+        label: "\uC131\uC218 \uBB3C\uB958\uC13C\uD130",
+        postcode: "04783",
+        address:
+          "\uC11C\uC6B8\uC2DC \uC131\uB3D9\uAD6C \uC5F0\uBB34\uC7A5\uAE38 00",
+      },
+      {
+        label: "\uB9C8\uD3EC \uC0AC\uBB34\uC2E4",
+        postcode: "04157",
+        address: "\uC11C\uC6B8\uC2DC \uB9C8\uD3EC\uAD6C \uC591\uD654\uB85C 00",
+      },
+      {
+        label: "\uBD80\uC0B0 \uC13C\uD140\uC810",
+        postcode: "48059",
+        address:
+          "\uBD80\uC0B0\uC2DC \uD574\uC6B4\uB300\uAD6C \uC13C\uD140\uC911\uC559\uB85C 00",
+      },
+    ];
     function openAuth(mode = "login") {
       closeCart();
       dom.auth.innerHTML = createAuthView(mode);
@@ -786,12 +827,11 @@
     }
     function createAuthCompletePanel() {
       const member = getCurrentMember2();
-      const agency = getMemberAgency(member);
       return `
     <div class="auth-complete">
       <div class="auth-mark">B</div>
       <h2>\uAC00\uC785/\uB85C\uADF8\uC778\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.</h2>
-      <p>${(member == null ? void 0 : member.name) || "\uD68C\uC6D0"}\uB2D8\uC740 ${(agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC"} \uACE0\uAC1D\uC73C\uB85C \uC1FC\uD551\uC744 \uC9C4\uD589\uD569\uB2C8\uB2E4.</p>
+      <p>${(member == null ? void 0 : member.name) || "\uD68C\uC6D0"}\uB2D8, \uC1FC\uD551\uC744 \uACC4\uC18D \uC9C4\uD589\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>
       <button class="buy-button auth-submit" id="authGoShop">Shop \uBCF4\uB7EC\uAC00\uAE30</button>
     </div>
   `;
@@ -801,7 +841,6 @@
     <div class="auth-management" aria-label="\uAD00\uB9AC \uBA54\uB274">
       <a href="#admin" data-management-link="admin">Admin</a>
       <a href="#agency" data-management-link="agency">Agency</a>
-      <a href="#member" data-management-link="member">Member</a>
     </div>
   `;
     }
@@ -814,6 +853,8 @@
       const note = isAdmin
         ? "\uAD00\uB9AC\uC790 \uC804\uC6A9 \uC544\uC774\uB514\uC640 \uBE44\uBC00\uBC88\uD638\uB85C \uC811\uC18D\uD569\uB2C8\uB2E4."
         : "Admin\uC5D0\uC11C \uBC1C\uAE09\uD55C \uB300\uB9AC\uC810\uBCC4 \uC544\uC774\uB514\uC640 \uBE44\uBC00\uBC88\uD638\uB85C \uC811\uC18D\uD569\uB2C8\uB2E4.";
+      const defaultUserId = isAdmin ? "adminChang" : "";
+      const defaultPassword = isAdmin ? "Chang$0909" : "";
       return `
     <section class="auth-dialog" role="dialog" aria-modal="true" aria-label="${label}">
       <button class="cart-close auth-close" id="authClose" type="button" aria-label="${label} \uB2EB\uAE30">\xD7</button>
@@ -830,9 +871,9 @@
             <div class="login-visual" aria-hidden="true"><span></span></div>
             <div class="login-fields">
               <label class="sr-only" for="managementUserId">\uC544\uC774\uB514</label>
-              <input class="quantity-input" id="managementUserId" name="userId" placeholder="\uC544\uC774\uB514\uB97C \uC785\uB825\uD558\uC138\uC694." />
+              <input class="quantity-input" id="managementUserId" name="userId" value="${defaultUserId}" placeholder="\uC544\uC774\uB514\uB97C \uC785\uB825\uD558\uC138\uC694." />
               <label class="sr-only" for="managementPassword">\uBE44\uBC00\uBC88\uD638</label>
-              <input class="quantity-input" id="managementPassword" name="password" type="password" placeholder="\uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694." />
+              <input class="quantity-input" id="managementPassword" name="password" type="password" value="${defaultPassword}" placeholder="\uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC138\uC694." />
             </div>
             <button class="buy-button login-submit" type="submit">${label}</button>
           </div>
@@ -857,15 +898,36 @@
       <div class="address-title">\uC120\uD0DD \uBC30\uC1A1\uC9C0</div>
       <div class="quantity-row">
         <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="postcode" placeholder="06236" /></label>
-        <button class="cart-button address-search" type="button">\uAC80\uC0C9</button>
+        <button class="cart-button address-search" type="button" data-address-search>\uBC30\uC1A1\uC9C0 \uC870\uD68C</button>
       </div>
+      ${createAddressLookupPanel()}
       <label>\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" placeholder="\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000" /></label>
       <label>\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" placeholder="\uB3D9/\uD638\uC218 \uB610\uB294 \uC694\uCCAD\uC0AC\uD56D" /></label>
     </div>
   `;
     }
+    function createAddressLookupPanel(prefix = "") {
+      return `
+    <div class="address-lookup-panel is-hidden" data-address-panel="${prefix}">
+      <div class="address-lookup-head">
+        <strong>\uBC30\uC1A1\uC9C0 \uC870\uD68C \uACB0\uACFC</strong>
+        <span>\uC8FC\uC18C\uB97C \uC120\uD0DD\uD558\uBA74 \uC6B0\uD3B8\uBC88\uD638\uC640 \uBC30\uC1A1\uC9C0\uAC00 \uC790\uB3D9 \uC785\uB825\uB429\uB2C8\uB2E4.</span>
+      </div>
+      <div class="address-lookup-list">
+        ${ADDRESS_LOOKUP_PRESETS.map(
+          (item) => `
+          <button class="address-result-button" type="button" data-address-result data-address-prefix="${prefix}" data-postcode="${item.postcode}" data-address="${escapeAttribute2(item.address)}">
+            <strong>${item.label}</strong>
+            <span>${item.postcode} ${item.address}</span>
+          </button>
+        `,
+        ).join("")}
+      </div>
+    </div>
+  `;
+    }
     function createProfileView(member) {
-      var _a, _b, _c;
+      var _a, _b, _c, _d;
       const orders = store.orders.filter(
         (order) => order.memberId === member.id,
       );
@@ -885,34 +947,47 @@
       <button class="cart-close auth-close" id="profileClose" type="button" aria-label="\uB0B4\uC815\uBCF4 \uB2EB\uAE30">\xD7</button>
       <section class="auth-card profile-card">
         <div class="profile-service-head">
-          <div class="profile-identity">
-            <div class="product-category">Member / My page</div>
-            <h2>${escapeHtml(member.name || member.userId || "\uD68C\uC6D0")}\uB2D8</h2>
-            <p>
-              ${escapeHtml(stats.agencyName)} \uACE0\uAC1D \xB7 ${member.joinedAt || "\uAC00\uC785\uC77C \uC5C6\uC74C"} \uAC00\uC785 \xB7
-              ${createMemberStatusLabel(member.status)}
-            </p>
+          <div class="profile-member-main">
+            <div class="profile-avatar" aria-hidden="true">${escapeHtml(createMemberInitial(member))}</div>
+            <div class="profile-identity">
+              <div class="product-category">Member / My page</div>
+              <h2>${escapeHtml(member.name || member.userId || "\uD68C\uC6D0")}\uB2D8</h2>
+              <p>
+                ${member.joinedAt || "\uAC00\uC785\uC77C \uC5C6\uC74C"} \uAC00\uC785 \xB7
+                ${createMemberStatusLabel(member.status)}
+              </p>
+            </div>
           </div>
           <div class="profile-quick-actions">
-            <button class="cart-button" type="button" data-profile-tab="account">\uC815\uBCF4 \uC218\uC815</button>
-            <button class="cart-button" type="button" data-profile-tab="security">\uBE44\uBC00\uBC88\uD638</button>
             <button class="buy-button" type="button" data-profile-close>\uB2EB\uAE30</button>
           </div>
         </div>
+        <section class="profile-wallet-overview">
+          <div class="profile-wallet-main">
+            <span>\uC0AC\uC6A9 \uAC00\uB2A5 \uD3EC\uC778\uD2B8</span>
+            <strong>${member.points.toLocaleString("ko-KR")}P</strong>
+            <em>\uC774\uBC88\uB2EC \uC801\uB9BD ${stats.monthEarned.toLocaleString("ko-KR")}P \xB7 \uC0AC\uC6A9 ${stats.monthUsed.toLocaleString("ko-KR")}P</em>
+          </div>
+          <div class="profile-next-action">
+            <span>\uCD5C\uADFC \uC8FC\uBB38</span>
+            <strong>${((_a = stats.latestOrder) == null ? void 0 : _a.id) || "\uC8FC\uBB38 \uC5C6\uC74C"}</strong>
+            <em>${stats.latestOrder ? `${stats.latestOrder.paidAt} \xB7 ${formatMoney(stats.latestOrder.paidAmount)}` : "\uCCAB \uC8FC\uBB38\uC744 \uAE30\uB2E4\uB9AC\uACE0 \uC788\uC2B5\uB2C8\uB2E4."}</em>
+          </div>
+        </section>
+        <nav class="profile-top-nav" aria-label="\uB0B4\uC815\uBCF4 \uBA54\uB274">
+          ${createProfileTabButton("account", "\uACC4\uC815/\uBC30\uC1A1\uC9C0", true)}
+          ${createProfileTabButton("orders", "\uAD6C\uB9E4 \uB0B4\uC5ED", false)}
+          ${createProfileTabButton("points", "\uD3EC\uC778\uD2B8 \uAD00\uB9AC", false)}
+          ${createProfileTabButton("links", "\uCD94\uCC9C \uB9C1\uD06C", false)}
+          ${createProfileTabButton("security", "\uBCF4\uC548", false)}
+        </nav>
         <div class="profile-summary-grid">
-          <button type="button" data-profile-section="points" data-profile-tab="points"><span>\uBCF4\uC720 \uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>\uC774\uBC88\uB2EC \uC801\uB9BD ${stats.monthEarned.toLocaleString("ko-KR")}P</em></button>
-          <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>\uAD6C\uB9E4\uC774\uB825</span><strong>${orders.length}\uAC74</strong><em>\uB204\uC801 ${formatMoney(stats.totalPaid)}</em></button>
-          <button type="button" data-profile-section="links" data-profile-tab="links"><span>\uCD94\uCC9C \uB9C1\uD06C</span><strong>${links.length}\uAC1C</strong><em>\uD65C\uC131 ${stats.activeLinks}\uAC1C</em></button>
-          <div class="profile-status-card"><span>\uC774\uBC88\uB2EC \uAD6C\uB9E4</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}\uAC74 \uACB0\uC81C</em></div>
+          <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>\uC8FC\uBB38</span><strong>${orders.length}\uAC74</strong><em>\uB204\uC801 ${formatMoney(stats.totalPaid)}</em></button>
+          <button type="button" data-profile-section="points" data-profile-tab="points"><span>\uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>\uCD1D \uC0AC\uC6A9 ${stats.usedPoints.toLocaleString("ko-KR")}P</em></button>
+          <button type="button" data-profile-section="links" data-profile-tab="links"><span>\uCD94\uCC9C</span><strong>${links.length}\uAC1C</strong><em>\uD65C\uC131 ${stats.activeLinks}\uAC1C</em></button>
+          <div class="profile-status-card"><span>\uC774\uBC88\uB2EC</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}\uAC74 \uACB0\uC81C</em></div>
         </div>
         <div class="profile-service-layout">
-          <nav class="profile-side-nav" aria-label="\uB0B4\uC815\uBCF4 \uBA54\uB274">
-            ${createProfileTabButton("account", "\uACC4\uC815/\uBC30\uC1A1\uC9C0", true)}
-            ${createProfileTabButton("orders", "\uAD6C\uB9E4 \uB0B4\uC5ED", false)}
-            ${createProfileTabButton("points", "\uD3EC\uC778\uD2B8 \uAD00\uB9AC", false)}
-            ${createProfileTabButton("links", "\uCD94\uCC9C \uB9C1\uD06C", false)}
-            ${createProfileTabButton("security", "\uBCF4\uC548", false)}
-          </nav>
           <div class="profile-tab-panels">
             <section class="profile-tab-panel" data-profile-panel="account">
               <div class="profile-section-head">
@@ -923,45 +998,92 @@
                 <p>\uC544\uC774\uB514\uB294 \uBCC0\uACBD\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uC8FC\uBB38\uACFC \uBC30\uC1A1\uC5D0 \uD544\uC694\uD55C \uAE30\uBCF8 \uC815\uBCF4\uB97C \uAD00\uB9AC\uD569\uB2C8\uB2E4.</p>
               </div>
               <form class="profile-form" data-profile-form>
-                <div class="profile-form-grid">
-                  <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" value="${escapeAttribute2(member.userId || member.id)}" readonly /></label>
-                  <label>\uC774\uB984<input class="quantity-input" name="name" value="${escapeAttribute2(member.name)}" /></label>
-                  <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" value="${escapeAttribute2(member.phone)}" /></label>
-                  <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" value="${escapeAttribute2(member.email)}" /></label>
-                  <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="postcode" value="${escapeAttribute2((_a = member.address) == null ? void 0 : _a.postcode)}" /></label>
-                  <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" value="${escapeAttribute2((_b = member.address) == null ? void 0 : _b.address)}" /></label>
-                  <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" value="${escapeAttribute2((_c = member.address) == null ? void 0 : _c.addressDetail)}" /></label>
-                  <div class="profile-wide profile-address-overview">
-                    <div class="product-category">\uBC30\uC1A1\uC9C0 \uBAA9\uB85D</div>
-                    ${createShippingAddressList(member)}
-                  </div>
-                  <div class="profile-wide profile-extra-address">
-                    <div class="product-category">\uCD94\uAC00 \uBC30\uC1A1\uC9C0</div>
-                    <div class="profile-form-grid nested">
-                      <label>\uBC30\uC1A1\uC9C0\uBA85<input class="quantity-input" name="extraAddressLabel" value="${escapeAttribute2(extraAddress.label)}" placeholder="\uC790\uD0DD / \uB9E4\uC7A5 / \uD68C\uC0AC" /></label>
-                      <label>\uC218\uB839\uC778<input class="quantity-input" name="extraAddressRecipient" value="${escapeAttribute2(extraAddress.recipient)}" /></label>
-                      <label>\uC5F0\uB77D\uCC98<input class="quantity-input" name="extraAddressPhone" value="${escapeAttribute2(extraAddress.phone)}" /></label>
-                      <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" name="extraAddressPostcode" value="${escapeAttribute2(extraAddress.postcode)}" /></label>
-                      <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="extraAddressAddress" value="${escapeAttribute2(extraAddress.address)}" /></label>
-                      <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="extraAddressDetail" value="${escapeAttribute2(extraAddress.addressDetail)}" /></label>
+                <div class="profile-form-stack">
+                  <section class="profile-field-card profile-field-card--primary">
+                    <div class="profile-field-title">
+                      <span>\uAE30\uBCF8 \uC815\uBCF4</span>
+                      <em>\uB85C\uADF8\uC778 \uC544\uC774\uB514\uB294 \uBCC0\uACBD\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.</em>
                     </div>
+                    <div class="profile-form-grid">
+                      <label>\uC544\uC774\uB514<input class="quantity-input" name="userId" value="${escapeAttribute2(member.userId || member.id)}" readonly /></label>
+                      <label>\uC774\uB984<input class="quantity-input" name="name" value="${escapeAttribute2(member.name)}" /></label>
+                      <label>\uD734\uB300\uD3F0<input class="quantity-input" name="phone" value="${escapeAttribute2(member.phone)}" /></label>
+                      <label>\uC774\uBA54\uC77C<input class="quantity-input" name="email" value="${escapeAttribute2(member.email)}" /></label>
+                    </div>
+                  </section>
+
+                  <section class="profile-field-card">
+                    <div class="profile-field-title">
+                      <span>\uAE30\uBCF8 \uBC30\uC1A1\uC9C0</span>
+                      <em>\uC8FC\uBB38\uC11C\uC5D0 \uC6B0\uC120 \uC801\uC6A9\uB418\uB294 \uBC30\uC1A1 \uC815\uBCF4\uC785\uB2C8\uB2E4.</em>
+                    </div>
+                    <div class="profile-form-grid profile-address-grid">
+                      <label>\uC6B0\uD3B8\uBC88\uD638
+                        <span class="address-input-pair">
+                          <input class="quantity-input" name="postcode" value="${escapeAttribute2((_b = member.address) == null ? void 0 : _b.postcode)}" />
+                          <button class="cart-button address-search" type="button" data-address-search>\uC870\uD68C</button>
+                        </span>
+                      </label>
+                      <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="address" value="${escapeAttribute2((_c = member.address) == null ? void 0 : _c.address)}" /></label>
+                      <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="addressDetail" value="${escapeAttribute2((_d = member.address) == null ? void 0 : _d.addressDetail)}" /></label>
+                      <div class="profile-address-lookup">${createAddressLookupPanel()}</div>
+                    </div>
+                  </section>
+
+                  <div class="profile-field-split">
+                    <section class="profile-field-card profile-address-overview">
+                      <div class="profile-field-title">
+                        <span>\uBC30\uC1A1\uC9C0 \uBAA9\uB85D</span>
+                        <em>\uC800\uC7A5\uB41C \uBC30\uC1A1\uC9C0\uB97C \uD655\uC778\uD569\uB2C8\uB2E4.</em>
+                      </div>
+                      ${createShippingAddressList(member)}
+                    </section>
+                    <section class="profile-field-card profile-extra-address">
+                      <div class="profile-field-title">
+                        <span>\uCD94\uAC00 \uBC30\uC1A1\uC9C0</span>
+                        <em>\uC790\uD0DD, \uB9E4\uC7A5, \uD68C\uC0AC \uB4F1 \uC790\uC8FC \uC4F0\uB294 \uC8FC\uC18C\uB97C \uB4F1\uB85D\uD569\uB2C8\uB2E4.</em>
+                      </div>
+                      <div class="profile-form-grid nested">
+                        <label>\uBC30\uC1A1\uC9C0\uBA85<input class="quantity-input" name="extraAddressLabel" value="${escapeAttribute2(extraAddress.label)}" placeholder="\uC790\uD0DD / \uB9E4\uC7A5 / \uD68C\uC0AC" /></label>
+                        <label>\uC218\uB839\uC778<input class="quantity-input" name="extraAddressRecipient" value="${escapeAttribute2(extraAddress.recipient)}" /></label>
+                        <label>\uC5F0\uB77D\uCC98<input class="quantity-input" name="extraAddressPhone" value="${escapeAttribute2(extraAddress.phone)}" /></label>
+                        <label>\uC6B0\uD3B8\uBC88\uD638
+                          <span class="address-input-pair">
+                            <input class="quantity-input" name="extraAddressPostcode" value="${escapeAttribute2(extraAddress.postcode)}" />
+                            <button class="cart-button address-search" type="button" data-address-search data-address-prefix="extraAddress">\uC870\uD68C</button>
+                          </span>
+                        </label>
+                        <label class="profile-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" name="extraAddressAddress" value="${escapeAttribute2(extraAddress.address)}" /></label>
+                        <label class="profile-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" name="extraAddressDetail" value="${escapeAttribute2(extraAddress.addressDetail)}" /></label>
+                        <div class="profile-wide">${createAddressLookupPanel("extraAddress")}</div>
+                      </div>
+                    </section>
                   </div>
-                  <label>\uAE30\uBCF8 \uACB0\uC81C\uC218\uB2E8
-                    <select class="option-select" name="paymentMethod">
-                      ${createOption("\uC2E0\uC6A9\uCE74\uB4DC", member.paymentMethod)}
-                      ${createOption("\uCE74\uCE74\uC624\uD398\uC774", member.paymentMethod)}
-                      ${createOption("\uB124\uC774\uBC84\uD398\uC774", member.paymentMethod)}
-                      ${createOption("\uBB34\uD1B5\uC7A5\uC785\uAE08", member.paymentMethod)}
-                    </select>
-                  </label>
-                  <label>\uAD00\uC2EC \uCE74\uD14C\uACE0\uB9AC
-                    <select class="option-select" name="favoriteCategory">
-                      ${createOption("\uBBF8\uC6A9\uAE30\uAD6C", member.favoriteCategory)}
-                      ${createOption("\uBBF8\uC6A9\uC7AC\uB8CC", member.favoriteCategory)}
-                      ${createOption("\uD654\uC7A5\uD488", member.favoriteCategory)}
-                    </select>
-                  </label>
-                  <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> \uC1FC\uD551 \uD61C\uD0DD \uBC0F \uBC30\uC1A1 \uC54C\uB9BC \uC218\uC2E0</label>
+
+                  <section class="profile-field-card profile-preference-card">
+                    <div class="profile-field-title">
+                      <span>\uC1FC\uD551 \uC124\uC815</span>
+                      <em>\uACB0\uC81C\uC640 \uD61C\uD0DD \uC548\uB0B4\uC5D0 \uC0AC\uC6A9\uD560 \uAE30\uBCF8 \uC124\uC815\uC785\uB2C8\uB2E4.</em>
+                    </div>
+                    <div class="profile-form-grid profile-preference-grid">
+                      <label>\uAE30\uBCF8 \uACB0\uC81C\uC218\uB2E8
+                        <select class="option-select" name="paymentMethod">
+                          ${createOption2("\uC2E0\uC6A9\uCE74\uB4DC", member.paymentMethod)}
+                          ${createOption2("\uCE74\uCE74\uC624\uD398\uC774", member.paymentMethod)}
+                          ${createOption2("\uB124\uC774\uBC84\uD398\uC774", member.paymentMethod)}
+                          ${createOption2("\uBB34\uD1B5\uC7A5\uC785\uAE08", member.paymentMethod)}
+                        </select>
+                      </label>
+                      <label>\uAD00\uC2EC \uCE74\uD14C\uACE0\uB9AC
+                        <select class="option-select" name="favoriteCategory">
+                          ${createOption2("\uBBF8\uC6A9\uAE30\uAD6C", member.favoriteCategory)}
+                          ${createOption2("\uBBF8\uC6A9\uC7AC\uB8CC", member.favoriteCategory)}
+                          ${createOption2("\uD654\uC7A5\uD488", member.favoriteCategory)}
+                        </select>
+                      </label>
+                      <label class="auth-check profile-wide"><input type="checkbox" name="marketingOptIn" ${member.marketingOptIn === false ? "" : "checked"} /> \uC1FC\uD551 \uD61C\uD0DD \uBC0F \uBC30\uC1A1 \uC54C\uB9BC \uC218\uC2E0</label>
+                    </div>
+                  </section>
                 </div>
                 <div class="buy-actions profile-actions">
                   <button class="buy-button" type="submit">\uBCC0\uACBD\uC0AC\uD56D \uC800\uC7A5</button>
@@ -1031,10 +1153,8 @@
         )
         .reduce((sum, point) => sum + Math.abs(Number(point.amount || 0)), 0);
       const latestOrder = sortOrderHistory(orders)[0];
-      const agency = store.agencies.find((item) => item.id === member.agencyId);
       return {
         activeLinks: links.filter((link) => link.status === "active").length,
-        agencyName: (agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC",
         earnedPoints,
         latestOrder,
         monthEarned,
@@ -1058,6 +1178,11 @@
     </button>
   `;
     }
+    function createMemberInitial(member) {
+      return String(member.name || member.userId || "M")
+        .trim()
+        .slice(0, 1);
+    }
     function createProfileOrderDashboard(orders, stats) {
       var _a, _b;
       return `
@@ -1074,15 +1199,17 @@
       <article><span>\uC774\uBC88\uB2EC \uC8FC\uBB38</span><strong>${stats.monthOrderCount}\uAC74</strong><em>${formatMoney(stats.monthPaid)}</em></article>
     </div>
     <div class="profile-order-status-strip">
-      ${createOrderStatusCount(orders, "paid", "\uACB0\uC81C\uC644\uB8CC")}
+      ${createOrderStatusCount(orders, "preparing", "\uC0C1\uD488\uC900\uBE44")}
       ${createOrderStatusCount(orders, "shipping", "\uBC30\uC1A1\uC911")}
-      ${createOrderStatusCount(orders, "completed", "\uAD6C\uB9E4\uD655\uC815")}
-      ${createOrderStatusCount(orders, "cancelled", "\uCDE8\uC18C/\uD658\uBD88")}
+      ${createOrderStatusCount(orders, "delivered", "\uBC30\uC1A1\uC644\uB8CC")}
+      ${createOrderStatusCount(orders, "returned", "\uCDE8\uC18C/\uBC18\uD488")}
     </div>
   `;
     }
     function createOrderStatusCount(orders, status, label) {
-      const count = orders.filter((order) => order.status === status).length;
+      const count = orders.filter(
+        (order) => (order.shippingStatus || "preparing") === status,
+      ).length;
       return `<div><span>${label}</span><strong>${count}</strong></div>`;
     }
     function createProfilePointDashboard(points, stats) {
@@ -1121,7 +1248,7 @@
     </div>
   `;
     }
-    function createOption(value, selectedValue) {
+    function createOption2(value, selectedValue) {
       return `<option value="${value}" ${value === selectedValue ? "selected" : ""}>${value}</option>`;
     }
     function createShippingAddressList(member) {
@@ -1156,7 +1283,7 @@
     <article class="profile-row profile-order-row">
       <div>
         <strong>${order.id}</strong>
-        <span>${order.paidAt} \xB7 ${createOrderStatusLabel(order.status)}</span>
+        <span>${order.paidAt} \xB7 ${createShippingStatusLabel(order.shippingStatus)}</span>
       </div>
       <div>
         <strong>${(firstItem == null ? void 0 : firstItem.productKo) || "\uC0C1\uD488"}</strong>
@@ -1174,9 +1301,7 @@
   `;
     }
     function createProfileOrderDetail(order) {
-      const agency = store.agencies.find(
-        (item) => item.id === order.agencyIdAtOrder,
-      );
+      const address = order.shippingAddress || {};
       return `
     <div class="profile-history-head">
       <div>
@@ -1187,13 +1312,15 @@
     </div>
     <div class="profile-order-summary-grid">
       <div><span>\uC8FC\uBB38\uC77C</span><strong>${order.paidAt}</strong></div>
-      <div><span>\uC0C1\uD0DC</span><strong>${order.status}</strong></div>
+      <div><span>\uBC30\uC1A1\uC0C1\uD0DC</span><strong>${createShippingStatusLabel(order.shippingStatus)}</strong></div>
+      <div><span>\uD0DD\uBC30\uC0AC</span><strong>${order.courier || "\uCD9C\uACE0 \uC804"}</strong></div>
+      <div><span>\uC1A1\uC7A5\uBC88\uD638</span><strong>${order.trackingNumber || "\uB4F1\uB85D \uB300\uAE30"}</strong></div>
+      <div><span>\uBC30\uC1A1\uC9C0</span><strong>${formatProfileAddress(address)}</strong></div>
       <div><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>\uBC30\uC1A1\uBE44</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "\uBB34\uB8CC"}</strong></div>
       <div><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
       <div><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
       <div><span>\uACB0\uC81C\uAE08\uC561</span><strong>${formatMoney(order.paidAmount)}</strong></div>
-      <div><span>\uB300\uB9AC\uC810</span><strong>${(agency == null ? void 0 : agency.name) || "\uBCF8\uC0AC"}</strong></div>
     </div>
     <div class="profile-list">
       ${(order.items || [])
@@ -1208,6 +1335,29 @@
         .join("")}
     </div>
   `;
+    }
+    function createShippingStatusLabel(status) {
+      const labels = {
+        preparing: "\uC0C1\uD488\uC900\uBE44",
+        paid: "\uACB0\uC81C\uC644\uB8CC",
+        shipping: "\uBC30\uC1A1\uC911",
+        delivered: "\uBC30\uC1A1\uC644\uB8CC",
+        returned: "\uCDE8\uC18C/\uBC18\uD488",
+      };
+      return labels[status] || createOrderStatusLabel(status);
+    }
+    function formatProfileAddress(address = {}) {
+      const recipient = [address.recipient, address.phone]
+        .filter(Boolean)
+        .join(" / ");
+      const location = [
+        address.postcode,
+        address.address,
+        address.addressDetail,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return [recipient, location].filter(Boolean).join(" \xB7 ") || "-";
     }
     function createProfilePointRow(point) {
       const typeLabel = point.amount >= 0 ? "\uC801\uB9BD" : "\uC0AC\uC6A9";
@@ -1312,6 +1462,7 @@
             event.preventDefault();
             changePassword(event.currentTarget);
           });
+      bindAddressLookupEvents();
       document.querySelectorAll("[data-profile-tab]").forEach((button) => {
         button.addEventListener("click", () =>
           activateProfileTab(button.dataset.profileTab),
@@ -1517,13 +1668,7 @@
       (_b = document.querySelector("#authGoShop")) == null
         ? void 0
         : _b.addEventListener("click", closeAuth);
-      document.querySelectorAll(".address-search").forEach((button) => {
-        button.addEventListener("click", () =>
-          showToast(
-            "\uC6B0\uD3B8\uBC88\uD638 \uAC80\uC0C9 UI \uC0D8\uD50C\uC785\uB2C8\uB2E4.",
-          ),
-        );
-      });
+      bindAddressLookupEvents();
     }
     function bindManagementLoginEvents(role, onSuccess) {
       var _a;
@@ -1537,10 +1682,6 @@
         link.addEventListener("click", (event) => {
           event.preventDefault();
           const targetRole = link.dataset.managementLink;
-          if (targetRole === "member") {
-            openAuth("login");
-            return;
-          }
           openManagementLogin(targetRole, onSuccess);
         });
       });
@@ -1560,6 +1701,57 @@
             closeAuth();
             onSuccess(role);
           });
+    }
+    function bindAddressLookupEvents() {
+      document.querySelectorAll("[data-address-search]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const container =
+            button.closest("form") || button.closest(".address-box");
+          const prefix = button.dataset.addressPrefix || "";
+          const panel =
+            container == null
+              ? void 0
+              : container.querySelector(`[data-address-panel="${prefix}"]`);
+          panel == null ? void 0 : panel.classList.toggle("is-hidden");
+        });
+      });
+      document.querySelectorAll("[data-address-result]").forEach((button) => {
+        button.addEventListener("click", () => {
+          var _a;
+          fillAddressFields(button);
+          (_a = button.closest("[data-address-panel]")) == null
+            ? void 0
+            : _a.classList.add("is-hidden");
+        });
+      });
+    }
+    function fillAddressFields(button) {
+      const container =
+        button.closest("form") || button.closest(".address-box");
+      if (!container) return;
+      const prefix = button.dataset.addressPrefix || "";
+      const fieldNames = prefix
+        ? {
+            postcode: `${prefix}Postcode`,
+            address: `${prefix}Address`,
+            detail: `${prefix}Detail`,
+          }
+        : {
+            postcode: "postcode",
+            address: "address",
+            detail: "addressDetail",
+          };
+      const postcode = container.querySelector(
+        `[name="${fieldNames.postcode}"]`,
+      );
+      const address = container.querySelector(`[name="${fieldNames.address}"]`);
+      const detail = container.querySelector(`[name="${fieldNames.detail}"]`);
+      if (postcode) postcode.value = button.dataset.postcode || "";
+      if (address) address.value = button.dataset.address || "";
+      if (detail) detail.focus();
+      showToast(
+        "\uBC30\uC1A1\uC9C0\uB97C \uC120\uD0DD\uD588\uC2B5\uB2C8\uB2E4. \uC0C1\uC138\uC8FC\uC18C\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+      );
     }
     function registerMember(form) {
       clearFormError(form);
@@ -1877,11 +2069,6 @@
         (member) => member.id === store.currentMemberId,
       );
     }
-    function getMemberAgency(member) {
-      return store.agencies.find(
-        (agency) => agency.id === (member == null ? void 0 : member.agencyId),
-      );
-    }
     function findAgencyByCode(code) {
       const normalized = String(code || "")
         .trim()
@@ -2113,6 +2300,27 @@
           openDetailModal(modal, createContent(backType));
           return;
         }
+        const agencyAdminDetail = event.target.closest(
+          "[data-agency-admin-detail]",
+        );
+        if (agencyAdminDetail) {
+          modal.dataset.currentDetail = `agency:${agencyAdminDetail.dataset.agencyAdminDetail}`;
+          openDetailModal(
+            modal,
+            createAgencyAdminProfileDetail(
+              agencyAdminDetail.dataset.agencyAdminDetail,
+              store,
+            ),
+          );
+          return;
+        }
+        const agencyListBack = event.target.closest("[data-agency-list-back]");
+        if (agencyListBack) {
+          modal.dataset.currentDetail = "agencies";
+          openDetailModal(modal, createContent("agencies"));
+          bindAgencyAdminForm(modal);
+          return;
+        }
         const memberButton = event.target.closest("[data-member-detail]");
         if (memberButton) {
           openDetailModal(
@@ -2143,6 +2351,14 @@
         }
       });
       modal.addEventListener("submit", (event) => {
+        const shipmentForm = event.target.closest("[data-shipment-form]");
+        if (shipmentForm) {
+          event.preventDefault();
+          updateShipmentInfo(shipmentForm);
+          persistStore(store);
+          openDetailModal(modal, createContent("orders"));
+          return;
+        }
         const memoForm = event.target.closest("[data-member-memo-form]");
         if (!memoForm) return;
         event.preventDefault();
@@ -2203,9 +2419,40 @@
         },
       ];
     }
+    function updateShipmentInfo(form) {
+      const order = store.orders.find(
+        (item) => item.id === form.dataset.shipmentForm,
+      );
+      if (!order) return;
+      order.shippingStatus = form.querySelector(
+        '[name="shippingStatus"]',
+      ).value;
+      order.courier = form.querySelector('[name="courier"]').value.trim();
+      order.trackingNumber = form
+        .querySelector('[name="trackingNumber"]')
+        .value.trim();
+      order.shippedAt = form.querySelector('[name="shippedAt"]').value;
+      order.deliveredAt = form.querySelector('[name="deliveredAt"]').value;
+      order.shippingMemo = form.querySelector('[name="shippingMemo"]').value;
+      if (order.shippingStatus === "shipping" && !order.shippedAt) {
+        order.shippedAt = /* @__PURE__ */ new Date().toISOString().slice(0, 10);
+      }
+      if (order.shippingStatus === "delivered" && !order.deliveredAt) {
+        order.deliveredAt = /* @__PURE__ */ new Date()
+          .toISOString()
+          .slice(0, 10);
+      }
+    }
     function bindAgencyAdminForm(modal) {
+      var _a;
       const formBox = modal.querySelector("[data-agency-form]");
       if (!formBox) return;
+      (_a = modal.querySelector("[data-agency-create]")) == null
+        ? void 0
+        : _a.addEventListener("click", () => {
+            resetAgencyForm(formBox);
+            showAgencyForm(formBox);
+          });
       formBox
         .querySelector("[data-agency-submit]")
         .addEventListener("click", () => {
@@ -2261,6 +2508,7 @@
           getAgencyField(formBox, "linkSlug").dataset.manual = "true";
           formBox.querySelector("[data-agency-submit]").textContent =
             "\uB300\uB9AC\uC810 \uC218\uC815";
+          showAgencyForm(formBox);
         });
       });
       modal.querySelectorAll("[data-agency-delete]").forEach((button) => {
@@ -2272,15 +2520,24 @@
       });
       formBox
         .querySelector("[data-agency-reset]")
-        .addEventListener("click", () => {
-          formBox.querySelectorAll("input, textarea").forEach((input) => {
-            input.value = input.name === "commissionRate" ? "10" : "";
-            delete input.dataset.manual;
-          });
-          getAgencyField(formBox, "status").value = "active";
-          formBox.querySelector("[data-agency-submit]").textContent =
-            "\uB300\uB9AC\uC810 \uB4F1\uB85D";
-        });
+        .addEventListener("click", () => resetAgencyForm(formBox));
+    }
+    function showAgencyForm(formBox) {
+      var _a, _b;
+      formBox.classList.remove("is-hidden");
+      (_a = formBox.scrollIntoView) == null
+        ? void 0
+        : _a.call(formBox, { behavior: "smooth", block: "start" });
+      (_b = getAgencyField(formBox, "name")) == null ? void 0 : _b.focus();
+    }
+    function resetAgencyForm(formBox) {
+      formBox.querySelectorAll("input, textarea").forEach((input) => {
+        input.value = input.name === "commissionRate" ? "10" : "";
+        delete input.dataset.manual;
+      });
+      getAgencyField(formBox, "status").value = "active";
+      formBox.querySelector("[data-agency-submit]").textContent =
+        "\uB300\uB9AC\uC810 \uB4F1\uB85D";
     }
     function bindProductAdminForm(modal) {
       const formBox = modal.querySelector("[data-product-form]");
@@ -3117,11 +3374,11 @@
       },
       agencies: {
         label: "Agencies",
-        title: "\uB300\uB9AC\uC810 \uC0C1\uC138 \uB9AC\uC2A4\uD2B8",
+        title: "\uB300\uB9AC\uC810 \uB9AC\uC2A4\uD2B8",
         description:
-          "\uBCF8\uC0AC\uC640 \uACC4\uC57D\uB41C \uB300\uB9AC\uC810 \uCF54\uB4DC, \uC804\uC6A9 \uB9C1\uD06C, \uC601\uC5C5\uBE44\uC728, \uC0C1\uD0DC\uB97C \uB4F1\uB85D/\uBCC0\uACBD/\uC0AD\uC81C\uD569\uB2C8\uB2E4.",
-        extra: createAgencyAdminForm(),
-        rows: store.agencies.map(createAgencyManageRow),
+          "\uB300\uB9AC\uC810\uBCC4 \uC774\uB2EC \uB9E4\uCD9C, \uC601\uC5C5\uBE44, \uD68C\uC6D0 \uC218\uB97C \uBA3C\uC800 \uD655\uC778\uD569\uB2C8\uB2E4. \uB300\uB9AC\uC810 \uCF54\uB4DC\uC640 \uC804\uC6A9 \uB9C1\uD06C\uB294 \uC0C1\uC138 \uD654\uBA74\uC5D0\uC11C\uB9CC \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+        extra: createAgencyAdminWorkspace(store),
+        rows: [],
       },
       members: {
         label: "Members",
@@ -3142,10 +3399,11 @@
       },
       orders: {
         label: "Orders",
-        title: "\uC774\uB2EC\uC758 \uC8FC\uBB38 \uC0C1\uC138",
+        title: "\uC774\uB2EC\uC758 \uC8FC\uBB38 / \uBC30\uC1A1 \uAD00\uB9AC",
         description:
-          "\uC774\uBC88 \uB2EC \uACB0\uC81C \uC644\uB8CC \uC8FC\uBB38\uC758 \uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561\uC744 \uB300\uB9AC\uC810\uBCC4\uB85C \uB204\uC801 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
-        rows: createMonthlyAgencySalesRows(store),
+          "\uB300\uB9AC\uC810\uBCC4 \uC774\uB2EC \uB204\uC801 \uAE08\uC561\uC744 \uD655\uC778\uD558\uACE0, \uC8FC\uBB38\uBCC4 \uBC30\uC1A1\uC0C1\uD0DC\uC640 \uC1A1\uC7A5 \uC815\uBCF4\uB97C \uAD00\uB9AC\uD569\uB2C8\uB2E4.",
+        extra: createAdminOrderShippingWorkspace(store),
+        rows: [],
       },
       points: {
         label: "Points",
@@ -3181,6 +3439,101 @@
       <div><span>\uC815\uC0B0 \uACC4\uC88C</span><strong>${agency.settlementAccount || "\uBBF8\uB4F1\uB85D"}</strong></div>
       <div><span>\uB9C1\uD06C \uBCF5\uC0AC</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">\uBCF5\uC0AC</button></div>
     </article>
+  `;
+  }
+  function createAgencyAdminWorkspace(store) {
+    const rows = store.agencies
+      .map((agency) => createAgencyManageRow(agency, store))
+      .join("");
+    return `
+    <section class="agency-admin-workspace" data-agency-workspace>
+      <div class="agency-admin-toolbar">
+        <div>
+          <div class="product-category">Agency list</div>
+          <strong>\uB300\uB9AC\uC810 \uC6B4\uC601 \uD604\uD669</strong>
+          <span>\uB300\uB9AC\uC810\uBA85 \uD074\uB9AD \uC2DC \uC0C1\uC138 \uC815\uBCF4\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.</span>
+        </div>
+        <button class="buy-button" type="button" data-agency-create>\uB300\uB9AC\uC810 \uCD94\uAC00</button>
+      </div>
+      ${createAgencyAdminForm({ hidden: true })}
+      <div class="agency-table-head">
+        <span>\uB300\uB9AC\uC810</span>
+        <span>\uC774\uB2EC \uB9E4\uCD9C</span>
+        <span>\uC601\uC5C5\uBE44 \uC608\uC815</span>
+        <span>\uCD1D\uD68C\uC6D0\uC218</span>
+        <span>\uC0C1\uD0DC</span>
+        <span>\uAD00\uB9AC</span>
+      </div>
+      <div class="agency-admin-list">
+        ${rows || '<div class="admin-detail-empty">\uB4F1\uB85D\uB41C \uB300\uB9AC\uC810\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+      </div>
+    </section>
+  `;
+  }
+  function createAgencyAdminProfileDetail(agencyId, store) {
+    const agency = store.agencies.find((item) => item.id === agencyId);
+    if (!agency) {
+      return '<div class="admin-detail-empty">\uB300\uB9AC\uC810 \uC815\uBCF4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+    }
+    const metrics = getAgencyAdminMetrics(agency, store);
+    const link = createAgencyPublicLink(agency);
+    return `
+    <div class="detail-panel-head">
+      <div>
+        <button class="back-button member-detail-back" type="button" data-agency-list-back>\u2190 \uB300\uB9AC\uC810 \uB9AC\uC2A4\uD2B8</button>
+        <div class="product-category">Admin agency / ${agency.status}</div>
+        <h2 id="adminModalTitle">${agency.name}</h2>
+      </div>
+      <p>\uB300\uB9AC\uC810 \uACC4\uC57D, \uB9E4\uCD9C, \uC601\uC5C5\uBE44, \uD68C\uC6D0, \uB85C\uADF8\uC778 \uACC4\uC815 \uC815\uBCF4\uB97C \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD569\uB2C8\uB2E4.</p>
+    </div>
+    <div class="member-detail-grid agency-admin-detail-grid">
+      <article><span>\uC774\uB2EC \uB9E4\uCD9C</span><strong>${formatMoney(metrics.monthSales)}</strong></article>
+      <article><span>\uC774\uB2EC \uC601\uC5C5\uBE44</span><strong>${formatMoney(metrics.monthCommission)}</strong></article>
+      <article><span>\uCD1D\uD68C\uC6D0\uC218</span><strong>${metrics.memberCount}\uBA85</strong></article>
+      <article><span>\uAD6C\uB9E4 \uD68C\uC6D0</span><strong>${metrics.buyerCount}\uBA85</strong></article>
+      <article><span>\uB204\uC801 \uB9E4\uCD9C</span><strong>${formatMoney(metrics.totalSales)}</strong></article>
+      <article><span>\uB204\uC801 \uC601\uC5C5\uBE44</span><strong>${formatMoney(metrics.totalCommission)}</strong></article>
+      <article><span>\uC815\uC0B0 \uB300\uAE30</span><strong>${formatMoney(metrics.pendingCommission)}</strong></article>
+      <article><span>\uC601\uC5C5\uBE44\uC728</span><strong>${agency.commissionRate}%</strong></article>
+      <article><span>\uB300\uB9AC\uC810 \uCF54\uB4DC</span><strong>${agency.code}</strong></article>
+      <article><span>\uC804\uC6A9 \uB9C1\uD06C</span><strong><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></strong></article>
+      <article><span>\uC804\uCCB4 \uB9C1\uD06C</span><button class="cart-button mini-button" type="button" data-copy-agency-link="${escapeAttribute(link)}">\uB9C1\uD06C \uBCF5\uC0AC</button></article>
+      <article><span>\uB85C\uADF8\uC778 ID</span><strong>${agency.loginUserId || "\uBBF8\uB4F1\uB85D"}</strong></article>
+      <article><span>\uACC4\uC57D \uAE30\uAC04</span><strong>${formatAgencyContractPeriod(agency)}</strong></article>
+      <article><span>\uB2F4\uB2F9\uC790</span><strong>${agency.managerName || "\uBBF8\uB4F1\uB85D"}</strong></article>
+      <article><span>\uB2F4\uB2F9 \uC5F0\uB77D\uCC98</span><strong>${agency.managerPhone || "\uBBF8\uB4F1\uB85D"}</strong></article>
+      <article><span>\uC815\uC0B0 \uACC4\uC88C</span><strong>${agency.settlementAccount || "\uBBF8\uB4F1\uB85D"}</strong></article>
+    </div>
+    <div class="member-detail-columns">
+      <section>
+        <div class="product-category">\uCD5C\uADFC \uC8FC\uBB38</div>
+        <div class="process-list">
+          ${
+            metrics.orders
+              .slice(0, 10)
+              .map((order) => createOrderDetailRow(order, store))
+              .join("") ||
+            '<div class="admin-detail-empty">\uC8FC\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'
+          }
+        </div>
+      </section>
+      <section>
+        <div class="product-category">\uC815\uC0B0 \uC7A5\uBD80</div>
+        <div class="process-list">
+          ${
+            metrics.settlements
+              .slice(0, 10)
+              .map((item) =>
+                createSettlementDetailRow(item, store, {
+                  allowStatusActions: true,
+                }),
+              )
+              .join("") ||
+            '<div class="admin-detail-empty">\uC815\uC0B0 \uC7A5\uBD80\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'
+          }
+        </div>
+      </section>
+    </div>
   `;
   }
   function createMemberDetailRow(member, store) {
@@ -3396,6 +3749,78 @@
       </article>
     `;
     });
+  }
+  function createAdminOrderShippingWorkspace(store) {
+    const orders = [...(store.orders || [])].sort((a, b) =>
+      String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
+    );
+    return `
+    <section class="shipment-workspace">
+      <div class="product-category">Agency monthly summary</div>
+      <div class="process-list shipment-summary-list">
+        ${createMonthlyAgencySalesRows(store).join("")}
+      </div>
+      <div class="shipment-head">
+        <div>
+          <div class="product-category">Shipment control</div>
+          <strong>\uC8FC\uBB38\uBCC4 \uBC30\uC1A1 / \uC1A1\uC7A5 \uAD00\uB9AC</strong>
+        </div>
+        <span>\uC1A1\uC7A5\uBC88\uD638 \uC800\uC7A5 \uC2DC \uACE0\uAC1D \uC8FC\uBB38 \uC0C1\uC138\uC5D0\uB3C4 \uBC14\uB85C \uBC18\uC601\uB429\uB2C8\uB2E4.</span>
+      </div>
+      <div class="shipment-list">
+        ${orders.map((order) => createAdminShipmentRow(order, store)).join("") || '<div class="admin-detail-empty">\uAD00\uB9AC\uD560 \uC8FC\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+      </div>
+    </section>
+  `;
+  }
+  function createAdminShipmentRow(order, store) {
+    var _a;
+    const member = store.members.find((item) => item.id === order.memberId);
+    const address =
+      order.shippingAddress || (member == null ? void 0 : member.address) || {};
+    const firstItem = (_a = order.items) == null ? void 0 : _a[0];
+    return `
+    <form class="shipment-row" data-shipment-form="${order.id}">
+      <div class="shipment-order-main">
+        <strong>${order.id}</strong>
+        <span>${order.paidAt || "-"} \xB7 ${(member == null ? void 0 : member.name) || "\uD68C\uC6D0"} \xB7 ${(firstItem == null ? void 0 : firstItem.productKo) || "\uC0C1\uD488"}</span>
+        <em>${formatShipmentAddress(address)}</em>
+      </div>
+      <label>\uBC30\uC1A1\uC0C1\uD0DC
+        <select class="option-select" name="shippingStatus">
+          ${createOption("preparing", "\uC0C1\uD488\uC900\uBE44", order.shippingStatus)}
+          ${createOption("paid", "\uACB0\uC81C\uC644\uB8CC", order.shippingStatus)}
+          ${createOption("shipping", "\uBC30\uC1A1\uC911", order.shippingStatus)}
+          ${createOption("delivered", "\uBC30\uC1A1\uC644\uB8CC", order.shippingStatus)}
+          ${createOption("returned", "\uCDE8\uC18C/\uBC18\uD488", order.shippingStatus)}
+        </select>
+      </label>
+      <label>\uD0DD\uBC30\uC0AC
+        <select class="option-select" name="courier">
+          ${createOption("", "\uC120\uD0DD", order.courier)}
+          ${createOption("CJ\uB300\uD55C\uD1B5\uC6B4", "CJ\uB300\uD55C\uD1B5\uC6B4", order.courier)}
+          ${createOption("\uB86F\uB370\uD0DD\uBC30", "\uB86F\uB370\uD0DD\uBC30", order.courier)}
+          ${createOption("\uD55C\uC9C4\uD0DD\uBC30", "\uD55C\uC9C4\uD0DD\uBC30", order.courier)}
+          ${createOption("\uC6B0\uCCB4\uAD6D\uD0DD\uBC30", "\uC6B0\uCCB4\uAD6D\uD0DD\uBC30", order.courier)}
+        </select>
+      </label>
+      <label>\uC1A1\uC7A5\uBC88\uD638<input class="quantity-input" name="trackingNumber" value="${escapeAttribute(order.trackingNumber)}" placeholder="\uC1A1\uC7A5\uBC88\uD638 \uC785\uB825" /></label>
+      <label>\uCD9C\uACE0\uC77C<input class="quantity-input" name="shippedAt" type="date" value="${escapeAttribute(order.shippedAt)}" /></label>
+      <label>\uC644\uB8CC\uC77C<input class="quantity-input" name="deliveredAt" type="date" value="${escapeAttribute(order.deliveredAt)}" /></label>
+      <label class="shipment-memo">\uBC30\uC1A1 \uBA54\uBAA8<input class="quantity-input" name="shippingMemo" value="${escapeAttribute(order.shippingMemo)}" placeholder="\uBC30\uC1A1 \uC694\uCCAD/\uD2B9\uC774\uC0AC\uD56D" /></label>
+      <button class="buy-button mini-button" type="submit">\uBC30\uC1A1 \uC800\uC7A5</button>
+    </form>
+  `;
+  }
+  function createOption(value, label, selectedValue) {
+    return `<option value="${escapeAttribute(value)}" ${String(value) === String(selectedValue || "") ? "selected" : ""}>${label}</option>`;
+  }
+  function formatShipmentAddress(address = {}) {
+    const recipient = [address.recipient, address.phone]
+      .filter(Boolean)
+      .join(" / ");
+    const addressText = formatAddress(address);
+    return [recipient, addressText].filter(Boolean).join(" \xB7 ");
   }
   function createMonthlyPointSummary(store) {
     const summary = getCurrentMonthPointSummary(store);
@@ -3847,9 +4272,9 @@
     </div>
   `;
   }
-  function createAgencyAdminForm() {
+  function createAgencyAdminForm({ hidden = false } = {}) {
     return `
-    <div class="agency-admin-form" data-agency-form>
+    <div class="agency-admin-form ${hidden ? "is-hidden" : ""}" data-agency-form>
       <input type="hidden" name="agencyId" />
       <section class="agency-form-section product-required-group">
         <div class="product-form-group-head">
@@ -3907,7 +4332,8 @@
     </div>
   `;
   }
-  function createAgencyManageRow(agency) {
+  function createAgencyManageRow(agency, store) {
+    const metrics = getAgencyAdminMetrics(agency, store);
     const controls = agency.isHeadquarters
       ? "<strong>\uAE30\uBCF8\uAC12</strong>"
       : `
@@ -3916,14 +4342,62 @@
     `;
     return `
     <article class="agency-table-row">
-      <div><strong>${agency.name}</strong><span>${agency.isHeadquarters ? "\uBCF8\uC0AC" : "\uACC4\uC57D"}</span></div>
-      <div>${agency.code}</div>
-      <div><a href="?agency=${agency.linkSlug}#signup" data-agency-join-link="${agency.linkSlug}">/join/${agency.linkSlug}</a></div>
-      <div>${agency.commissionRate}%</div>
-      <div>${agency.status}<span>${agency.managerName || "\uB2F4\uB2F9 \uBBF8\uB4F1\uB85D"} \xB7 ${agency.loginUserId ? `ID ${agency.loginUserId}` : "\uB85C\uADF8\uC778 \uBBF8\uB4F1\uB85D"}</span></div>
+      <div>
+        <button class="member-detail-button agency-name-button" type="button" data-agency-admin-detail="${agency.id}">${agency.name}</button>
+        <span>${agency.isHeadquarters ? "\uBCF8\uC0AC" : "\uACC4\uC57D"} \xB7 ${agency.managerName || "\uB2F4\uB2F9 \uBBF8\uB4F1\uB85D"}</span>
+      </div>
+      <div>${formatMoney(metrics.monthSales)}</div>
+      <div>${formatMoney(metrics.monthCommission)}</div>
+      <div>${metrics.memberCount.toLocaleString("ko-KR")}\uBA85<span>\uAD6C\uB9E4 ${metrics.buyerCount}\uBA85</span></div>
+      <div>${agency.status}<span>${agency.commissionRate}% \xB7 ${agency.loginUserId ? "\uB85C\uADF8\uC778 \uB4F1\uB85D" : "\uB85C\uADF8\uC778 \uBBF8\uB4F1\uB85D"}</span></div>
       <div class="agency-row-actions">${controls}</div>
     </article>
   `;
+  }
+  function getAgencyAdminMetrics(agency, store) {
+    const members = store.members.filter(
+      (member) => member.agencyId === agency.id,
+    );
+    const memberIds = new Set(members.map((member) => member.id));
+    const orders = store.orders
+      .filter((order) => order.agencyIdAtOrder === agency.id)
+      .sort((a, b) => String(b.paidAt).localeCompare(a.paidAt));
+    const monthOrders = orders.filter(
+      (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
+    );
+    const settlements = store.agencySettlementLedger
+      .filter((item) => item.agencyId === agency.id)
+      .sort((a, b) => String(b.createdAt).localeCompare(a.createdAt));
+    const monthSettlements = settlements.filter((item) =>
+      isCurrentMonthDate(item.createdAt),
+    );
+    const buyers = new Set(orders.map((order) => order.memberId));
+    return {
+      buyerCount: [...buyers].filter((memberId) => memberIds.has(memberId))
+        .length,
+      memberCount: members.length,
+      monthCommission: monthSettlements.reduce(
+        (sum, item) => sum + Number(item.commissionAmount || 0),
+        0,
+      ),
+      monthSales: monthOrders.reduce(
+        (sum, order) => sum + Number(order.paidProductAmount || 0),
+        0,
+      ),
+      orders,
+      pendingCommission: settlements
+        .filter((item) => item.status !== "paid")
+        .reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
+      settlements,
+      totalCommission: settlements.reduce(
+        (sum, item) => sum + Number(item.commissionAmount || 0),
+        0,
+      ),
+      totalSales: orders.reduce(
+        (sum, order) => sum + Number(order.paidProductAmount || 0),
+        0,
+      ),
+    };
   }
   function createProductManagementWorkspace(store) {
     const products2 = (store.products || []).filter(
@@ -4450,6 +4924,10 @@
       member.agencyId ||
       ((_a = getHeadquartersAgency(store)) == null ? void 0 : _a.id);
     const referralSourceType = payment.referralSourceType || "none";
+    const shippingSnapshot = normalizeShippingSnapshot(
+      payment.shippingSnapshot,
+      member,
+    );
     const order = {
       id: orderId,
       memberId: member.id,
@@ -4462,6 +4940,14 @@
       pointUseLimit,
       pointEarned: earnedPoints,
       status: "paid",
+      shippingStatus: "preparing",
+      courier: "",
+      trackingNumber: "",
+      shippedAt: "",
+      deliveredAt: "",
+      shippingMemo: "",
+      shippingAddress: shippingSnapshot,
+      paymentMethod: shippingSnapshot.paymentMethod || "",
       paidAt,
       items: cart.map((item) => ({
         productId: item.id,
@@ -4525,6 +5011,17 @@
         pointUsed,
         pointUseLimit,
       },
+    };
+  }
+  function normalizeShippingSnapshot(snapshot = {}, member = {}) {
+    const fallback = member.address || {};
+    return {
+      recipient: snapshot.recipient || member.name || "",
+      phone: snapshot.phone || member.phone || "",
+      postcode: snapshot.postcode || fallback.postcode || "",
+      address: snapshot.address || fallback.address || "",
+      addressDetail: snapshot.addressDetail || fallback.addressDetail || "",
+      paymentMethod: snapshot.paymentMethod || member.paymentMethod || "",
     };
   }
   function decrementProductStock(store, cart) {
@@ -4641,6 +5138,31 @@
     persistStore,
     requireLogin = () => true,
   }) {
+    const ADDRESS_LOOKUP_PRESETS = [
+      {
+        label: "\uAE30\uBCF8 \uBC30\uC1A1\uC9C0",
+        postcode: "06236",
+        address:
+          "\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000",
+      },
+      {
+        label: "\uC131\uC218 \uBB3C\uB958\uC13C\uD130",
+        postcode: "04783",
+        address:
+          "\uC11C\uC6B8\uC2DC \uC131\uB3D9\uAD6C \uC5F0\uBB34\uC7A5\uAE38 00",
+      },
+      {
+        label: "\uB9C8\uD3EC \uC0AC\uBB34\uC2E4",
+        postcode: "04157",
+        address: "\uC11C\uC6B8\uC2DC \uB9C8\uD3EC\uAD6C \uC591\uD654\uB85C 00",
+      },
+      {
+        label: "\uBD80\uC0B0 \uC13C\uD140\uC810",
+        postcode: "48059",
+        address:
+          "\uBD80\uC0B0\uC2DC \uD574\uC6B4\uB300\uAD6C \uC13C\uD140\uC911\uC559\uB85C 00",
+      },
+    ];
     const state = {
       activeCategory: "all",
       cart: [],
@@ -5058,6 +5580,8 @@
       if (!requireLogin()) return;
       closeCart();
       const totals = getTotals();
+      const member = getCurrentMember2();
+      const defaultAddress = getDefaultShippingAddress(member);
       dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">\u2190 Back to shop</button>
@@ -5070,19 +5594,26 @@
         <p class="detail-subtitle">\uC8FC\uBB38\uC790 \uC815\uBCF4, \uBC30\uC1A1\uC9C0, \uACB0\uC81C\uC218\uB2E8\uC744 \uD655\uC778\uD558\uB294 \uC0D8\uD50C \uACB0\uC81C \uD398\uC774\uC9C0\uC785\uB2C8\uB2E4.</p>
         <div class="option-box">
           <label class="option-label" for="customerName">\uC8FC\uBB38\uC790\uBA85</label>
-          <input class="quantity-input" id="customerName" value="\uD64D\uAE38\uB3D9" />
+          <input class="quantity-input" id="customerName" value="${escapeAttribute2(defaultAddress.recipient || (member == null ? void 0 : member.name) || "")}" />
           <div class="quantity-row">
             <div>
               <label class="option-label" for="customerPhone">\uC5F0\uB77D\uCC98</label>
-              <input class="quantity-input" id="customerPhone" value="010-0000-0000" />
+              <input class="quantity-input" id="customerPhone" value="${escapeAttribute2(defaultAddress.phone || (member == null ? void 0 : member.phone) || "")}" />
             </div>
             <div>
               <label class="option-label" for="zipCode">\uC6B0\uD3B8\uBC88\uD638</label>
-              <input class="quantity-input" id="zipCode" value="06236" />
+              <div class="address-input-pair">
+                <input class="quantity-input" id="zipCode" value="${escapeAttribute2(defaultAddress.postcode || "")}" />
+                <button class="cart-button address-search" type="button" data-checkout-address-search>\uC870\uD68C</button>
+              </div>
             </div>
           </div>
+          ${createCheckoutAddressLookup()}
+          ${createCheckoutSavedAddresses(member)}
           <label class="option-label" for="address">\uBC30\uC1A1\uC9C0</label>
-          <input class="quantity-input" id="address" value="\uC11C\uC6B8\uC2DC \uAC15\uB0A8\uAD6C \uD14C\uD5E4\uB780\uB85C 000" />
+          <input class="quantity-input" id="address" value="${escapeAttribute2(defaultAddress.address || "")}" />
+          <label class="option-label" for="addressDetail">\uC0C1\uC138\uC8FC\uC18C</label>
+          <input class="quantity-input" id="addressDetail" value="${escapeAttribute2(defaultAddress.addressDetail || "")}" />
           <label class="option-label" for="paymentMethod">\uACB0\uC81C\uC218\uB2E8</label>
           <select class="option-select" id="paymentMethod">
             <option>\uC2E0\uC6A9\uCE74\uB4DC</option>
@@ -5122,6 +5653,7 @@
             state.pointToUse = event.currentTarget.value;
             openCheckout();
           });
+      bindCheckoutAddressEvents();
     }
     function completeCheckoutBypass() {
       if (!requireLogin()) return;
@@ -5138,6 +5670,7 @@
           memberId: store.currentMemberId,
           referralSourceType: "none",
           pointUsed: getTotals().pointUsed,
+          shippingSnapshot: readCheckoutShippingSnapshot(),
         },
       });
       state.cart = [];
@@ -5149,8 +5682,167 @@
         `\uACB0\uC81C \uC644\uB8CC: ${result.earnedPoints.toLocaleString("ko-KR")} \uD3EC\uC778\uD2B8\uAC00 \uC801\uB9BD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
       );
     }
+    function createCheckoutAddressLookup() {
+      return `
+    <div class="address-lookup-panel checkout-address-lookup is-hidden" data-checkout-address-panel>
+      <div class="address-lookup-head">
+        <strong>\uBC30\uC1A1\uC9C0 \uC870\uD68C \uACB0\uACFC</strong>
+        <span>\uC120\uD0DD\uD558\uBA74 \uC6B0\uD3B8\uBC88\uD638\uC640 \uAE30\uBCF8 \uC8FC\uC18C\uAC00 \uC790\uB3D9 \uC785\uB825\uB429\uB2C8\uB2E4.</span>
+      </div>
+      <div class="address-lookup-list">
+        ${ADDRESS_LOOKUP_PRESETS.map(
+          (item) => `
+          <button class="address-result-button" type="button" data-checkout-address-result data-postcode="${item.postcode}" data-address="${escapeAttribute2(item.address)}">
+            <strong>${item.label}</strong>
+            <span>${item.postcode} ${item.address}</span>
+          </button>
+        `,
+        ).join("")}
+      </div>
+    </div>
+  `;
+    }
+    function createCheckoutSavedAddresses(member) {
+      const addresses = normalizeShippingAddresses(member);
+      if (!addresses.length) return "";
+      return `
+    <div class="checkout-saved-addresses">
+      <div class="address-lookup-head">
+        <strong>\uC800\uC7A5 \uBC30\uC1A1\uC9C0</strong>
+        <span>\uC8FC\uBB38\uC5D0 \uC0AC\uC6A9\uD560 \uBC30\uC1A1\uC9C0\uB97C \uC120\uD0DD\uD558\uC138\uC694.</span>
+      </div>
+      <div class="address-lookup-list">
+        ${addresses
+          .map(
+            (address) => `
+            <button class="address-result-button" type="button" data-checkout-saved-address data-recipient="${escapeAttribute2(address.recipient)}" data-phone="${escapeAttribute2(address.phone)}" data-postcode="${escapeAttribute2(address.postcode)}" data-address="${escapeAttribute2(address.address)}" data-address-detail="${escapeAttribute2(address.addressDetail)}">
+              <strong>${escapeHtml(address.label)}${address.isDefault ? " \xB7 \uAE30\uBCF8" : ""}</strong>
+              <span>${escapeHtml(address.postcode)} ${escapeHtml(address.address)} ${escapeHtml(address.addressDetail)}</span>
+            </button>
+          `,
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+    }
+    function bindCheckoutAddressEvents() {
+      var _a;
+      (_a = document.querySelector("[data-checkout-address-search]")) == null
+        ? void 0
+        : _a.addEventListener("click", () => {
+            var _a2;
+            (_a2 = document.querySelector("[data-checkout-address-panel]")) ==
+            null
+              ? void 0
+              : _a2.classList.toggle("is-hidden");
+          });
+      document
+        .querySelectorAll("[data-checkout-address-result]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            var _a2, _b;
+            setCheckoutField("#zipCode", button.dataset.postcode);
+            setCheckoutField("#address", button.dataset.address);
+            (_a2 = document.querySelector("[data-checkout-address-panel]")) ==
+            null
+              ? void 0
+              : _a2.classList.add("is-hidden");
+            (_b = document.querySelector("#addressDetail")) == null
+              ? void 0
+              : _b.focus();
+          });
+        });
+      document
+        .querySelectorAll("[data-checkout-saved-address]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            setCheckoutField("#customerName", button.dataset.recipient);
+            setCheckoutField("#customerPhone", button.dataset.phone);
+            setCheckoutField("#zipCode", button.dataset.postcode);
+            setCheckoutField("#address", button.dataset.address);
+            setCheckoutField("#addressDetail", button.dataset.addressDetail);
+          });
+        });
+    }
+    function setCheckoutField(selector, value = "") {
+      const field = document.querySelector(selector);
+      if (field) field.value = value || "";
+    }
+    function readCheckoutShippingSnapshot() {
+      var _a, _b, _c, _d, _e, _f;
+      return {
+        recipient:
+          ((_a = document.querySelector("#customerName")) == null
+            ? void 0
+            : _a.value.trim()) || "",
+        phone:
+          ((_b = document.querySelector("#customerPhone")) == null
+            ? void 0
+            : _b.value.trim()) || "",
+        postcode:
+          ((_c = document.querySelector("#zipCode")) == null
+            ? void 0
+            : _c.value.trim()) || "",
+        address:
+          ((_d = document.querySelector("#address")) == null
+            ? void 0
+            : _d.value.trim()) || "",
+        addressDetail:
+          ((_e = document.querySelector("#addressDetail")) == null
+            ? void 0
+            : _e.value.trim()) || "",
+        paymentMethod:
+          ((_f = document.querySelector("#paymentMethod")) == null
+            ? void 0
+            : _f.value) || "",
+      };
+    }
+    function getDefaultShippingAddress(member) {
+      var _a, _b, _c;
+      const address = normalizeShippingAddresses(member).find(
+        (item) => item.isDefault,
+      );
+      if (address) return address;
+      return {
+        recipient: (member == null ? void 0 : member.name) || "",
+        phone: (member == null ? void 0 : member.phone) || "",
+        postcode:
+          ((_a = member == null ? void 0 : member.address) == null
+            ? void 0
+            : _a.postcode) || "",
+        address:
+          ((_b = member == null ? void 0 : member.address) == null
+            ? void 0
+            : _b.address) || "",
+        addressDetail:
+          ((_c = member == null ? void 0 : member.address) == null
+            ? void 0
+            : _c.addressDetail) || "",
+      };
+    }
+    function normalizeShippingAddresses(member) {
+      const addresses = Array.isArray(
+        member == null ? void 0 : member.shippingAddresses,
+      )
+        ? member.shippingAddresses
+        : [];
+      if (addresses.length) return addresses;
+      if (!(member == null ? void 0 : member.address)) return [];
+      return [
+        {
+          label: "\uAE30\uBCF8 \uBC30\uC1A1\uC9C0",
+          recipient: member.name || "",
+          phone: member.phone || "",
+          postcode: member.address.postcode || "",
+          address: member.address.address || "",
+          addressDetail: member.address.addressDetail || "",
+          isDefault: true,
+        },
+      ].filter((address) => address.postcode || address.address);
+    }
     function openPaymentResult(result) {
-      var _a, _b;
+      var _a;
       dom.detail.innerHTML = `
     <div class="breadcrumb">
       <button class="back-button" id="backToShop">\u2190 Back to shop</button>
@@ -5163,8 +5855,7 @@
           <h1 class="detail-title">Order<br />Complete.</h1>
         </div>
         <p>
-          PG \uACB0\uC81C\uCC3D\uC740 \uC6B0\uD68C \uCC98\uB9AC\uD588\uACE0, \uBC30\uC1A1\uBE44\uB97C \uC81C\uC678\uD55C \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900\uC73C\uB85C
-          \uD3EC\uC778\uD2B8 \uC801\uB9BD\uACFC \uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC7A5\uBD80\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.
+          PG \uACB0\uC81C\uCC3D\uC740 \uC6B0\uD68C \uCC98\uB9AC\uD588\uACE0, \uC8FC\uBB38 \uAE08\uC561\uACFC \uD3EC\uC778\uD2B8 \uC801\uB9BD \uB0B4\uC5ED\uC744 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.
         </p>
       </div>
       <div class="management-grid">
@@ -5173,27 +5864,25 @@
         <article><span>\uBC30\uC1A1\uBE44</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "\uBB34\uB8CC"}</strong></article>
         <article><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9</span><strong>${result.totals.pointUsed ? `-${result.totals.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></article>
         <article><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
-        <article><span>\uB300\uB9AC\uC810 \uC815\uC0B0 \uAE30\uC900</span><strong>${formatMoney(((_a = result.agencyProcessing) == null ? void 0 : _a.baseAmount) || 0)}</strong></article>
-        <article><span>\uC601\uC5C5\uBE44 \uC608\uC815</span><strong>${formatMoney(((_b = result.agencyProcessing) == null ? void 0 : _b.commissionAmount) || 0)}</strong></article>
         <article><span>\uCD94\uCC9C \uB9C1\uD06C \uC0DD\uC131</span><strong>${result.referralLinks.length}\uAC1C</strong></article>
         <article><span>\uCC98\uB9AC \uC0C1\uD0DC</span><strong>\uC644\uB8CC</strong></article>
       </div>
       <div class="payment-process">
         <div><strong>01 \uC8FC\uBB38 \uC0DD\uC131</strong><span>${result.order.id} \uC8FC\uBB38\uC744 paid \uC0C1\uD0DC\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.</span></div>
         <div><strong>02 \uD3EC\uC778\uD2B8 \uC801\uB9BD</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
-        <div><strong>03 \uB300\uB9AC\uC810 \uCC98\uB9AC</strong><span>\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C ${result.agencyProcessing ? "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uAE30 \uC7A5\uBD80\uC5D0 \uBC18\uC601\uD588\uC2B5\uB2C8\uB2E4." : "\uB300\uB9AC\uC810 \uC815\uC0B0 \uB300\uC0C1\uC5D0\uC11C \uC81C\uC678\uD588\uC2B5\uB2C8\uB2E4."}</span></div>
-        <div><strong>04 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC885\uB958 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
+        <div><strong>03 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC885\uB958 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
       </div>
       ${createReferralCopyPanel(result.referralLinks)}
       <div class="buy-actions result-actions">
-        <button class="buy-button" type="button" data-management-link="admin">Admin \uCC98\uB9AC \uD655\uC778</button>
-        <button class="cart-button" type="button" data-management-link="agency">Agency \uC815\uC0B0 \uD655\uC778</button>
-        <button class="cart-button" type="button" data-management-link="member">Member \uD3EC\uC778\uD2B8 \uD655\uC778</button>
+        <button class="buy-button" type="button" id="resultBackToShop">Shop \uACC4\uC18D \uBCF4\uAE30</button>
       </div>
     </section>
   `;
       showDetailView();
       document.querySelector("#backToShop").addEventListener("click", showHome);
+      (_a = document.querySelector("#resultBackToShop")) == null
+        ? void 0
+        : _a.addEventListener("click", showHome);
       bindReferralCopyButtons();
     }
     function createReferralCopyPanel(links) {
@@ -5502,6 +6191,9 @@
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
     }
+    function escapeAttribute2(value) {
+      return escapeHtml(value);
+    }
     return {
       state,
       renderProducts,
@@ -5604,22 +6296,16 @@
       auth.openProfile();
     });
     dom.logoutButton.addEventListener("click", () => {
-      const member = getCurrentMember2();
-      const shouldReturnHome = ["admin", "agency_manager"].includes(
-        member == null ? void 0 : member.role,
-      );
       store.currentMemberId = "";
       saveStore(store);
       updateSessionUi();
       auth.closeAuth();
-      if (shouldReturnHome || !dom.management.classList.contains("is-hidden")) {
-        activeManagementRole = "";
-        shop.showHome();
-        dom.management.classList.add("is-hidden");
-        dom.detail.classList.add("is-hidden");
-        dom.home.classList.remove("is-hidden");
-        window.location.hash = "";
-      }
+      activeManagementRole = "";
+      shop.showHome();
+      dom.management.classList.add("is-hidden");
+      dom.detail.classList.add("is-hidden");
+      dom.home.classList.remove("is-hidden");
+      window.location.hash = "";
       shop.showToast("\uB85C\uADF8\uC544\uC6C3\uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
     });
     document.addEventListener("click", (event) => {
