@@ -19,6 +19,8 @@ export function createManagementController({
   closeCart,
   persistStore = () => {},
 }) {
+  // Back-office controller for both Admin and Agency views.
+  // It renders dashboards first, then loads detailed workspaces inside modals.
   function openManagement(role = "admin") {
     closeCart();
     dom.management.innerHTML = createManagementView(role, store);
@@ -89,6 +91,8 @@ export function createManagementController({
   }
 
   function bindMetricModal(cardSelector, modalSelector, scope, createContent) {
+    // Dashboard cards are intentionally generic. The clicked data-* value picks
+    // the detail workspace: agency list, products, monthly orders, points, etc.
     const modal = dom.management.querySelector(modalSelector);
     if (!modal) return;
 
@@ -289,6 +293,8 @@ export function createManagementController({
   }
 
   function updateShipmentInfo(form) {
+    // Admin shipment edits update the order itself. Member order detail reads
+    // these same fields, so tracking information becomes visible immediately.
     const order = store.orders.find(
       (item) => item.id === form.dataset.shipmentForm,
     );
@@ -1241,6 +1247,8 @@ function closeDetailModal(modal) {
 }
 
 function createAdminDetailContent(type, store) {
+  // Admin detail content is routed by metric type. Large management surfaces
+  // return an `extra` workspace instead of simple process rows.
   const detail = getAdminDetail(type, store);
 
   return `
@@ -1677,6 +1685,8 @@ function createMonthlyAgencySalesRows(store) {
 }
 
 function createAdminOrderShippingWorkspace(store) {
+  // Combines monthly agency sales with operational shipment controls.
+  // Sales stay grouped by agency, while each order can be updated individually.
   const orders = [...(store.orders || [])].sort((a, b) =>
     String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
   );
@@ -2369,6 +2379,8 @@ function getAgencyAdminMetrics(agency, store) {
 }
 
 function createProductManagementWorkspace(store) {
+  // Product admin follows a Cafe24-like structure: required basics first,
+  // then grouped sections for images, price/stock, shipping/supplier, and option SKUs.
   const products = (store.products || []).filter(
     (product) => product.status !== "deleted",
   );

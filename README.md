@@ -1,172 +1,246 @@
 # BEAUTY REF. Shop Demo
 
-미용 관련 제품 10개를 판매하는 온라인 쇼핑몰 데모입니다. 외부 프레임워크 없이 순수 HTML, CSS, JavaScript로 구성되어 있습니다.
+미용 관련 제품 10개를 판매하는 순수 HTML/CSS/JavaScript 쇼핑몰 데모입니다. 회원, 주문, 포인트, 대리점, 상품관리, 배송/송장 데이터를 로컬 SQLite DB에 저장하도록 구성했습니다.
 
-## 실행 방법
-
-데이터 유지를 확인하려면 로컬 서버로 실행하세요. 프로젝트 폴더에서 아래 명령어를 실행합니다.
+## 빠른 실행
 
 ```bash
+npm install
 npm start
 ```
 
-그 다음 브라우저에서 `http://localhost:8000`으로 접속합니다. 회원, 주문, 포인트, 대리점 정산 데이터는 `data/beauty-shop.sqlite`에 저장됩니다.
+브라우저에서 `http://localhost:8000/`을 엽니다.
 
-탐색기에서 `index.html`을 직접 열어도 화면은 동작하지만, 이 경우 서버 API를 사용할 수 없으므로 브라우저 IndexedDB fallback으로 저장됩니다.
+로컬 서버로 접속하면 `data/beauty-shop.sqlite`가 원본 데이터 저장소입니다. 탐색기에서 `index.html`을 직접 열면 서버 API가 없으므로 IndexedDB/localStorage fallback으로 동작합니다.
 
-번들을 다시 생성하려면 아래 명령어를 실행합니다.
+## 다른 PC에서 이어서 작업
+
+```bash
+git clone https://github.com/pthpro0-hash/ttshop.git
+cd ttshop
+npm install
+npm start
+```
+
+현재 PC의 실제 회원/주문 데이터까지 옮기려면 `data/beauty-shop.sqlite` 파일을 다른 PC의 `ttshop/data/` 폴더에 복사합니다. 이 파일이 없으면 기본 샘플 데이터로 시작합니다.
+
+## 개발 명령
 
 ```bash
 npm run build
-```
-
-DB 저장소 테스트는 아래 명령어로 실행합니다.
-
-```bash
 npm test
 ```
 
-## 파일 구조
+- `npm run build`: `scripts/app.js`를 `scripts/app.bundle.js`로 번들링합니다.
+- `npm test`: SQLite 저장/복원 테스트를 실행합니다.
+- 주요 통합 UI 테스트: `node tests/stage1-management.test.cjs`
+- 서버 DB 테스트: `node tests/server-db.test.mjs`
 
-- `index.html`: 페이지 마크업과 기본 쇼핑몰 구조
-- `style.css`: 미니멀 쇼핑몰 톤의 레이아웃, 반응형 스타일, 장바구니 드로어 스타일
-- `scripts/app.js`: DOM 연결, 화면 전환, 모듈 초기화
-- `scripts/app.bundle.js`: 탐색기에서 `index.html`을 직접 열어도 동작하도록 만든 브라우저 실행용 번들
-- `scripts/data/catalog.js`: 상품 10개와 카테고리 데이터
-- `scripts/data/demo-store.js`: 관리자/대리점/회원 데모 데이터, 서버 API 저장소, IndexedDB fallback
-- `scripts/ui/shop.js`: 상품 목록, 상세페이지, 장바구니, 결제 화면 로직
-- `scripts/ui/auth.js`: 로그인/회원가입 데모 화면
-- `scripts/ui/management.js`: Admin / Agency / Member 관리 화면
-- `scripts/utils/format.js`: 공통 포맷 유틸리티
-- `server/server.mjs`: 정적 파일 제공과 `/api/store` API를 담당하는 로컬 서버
-- `server/db.mjs`: SQLite 테이블 저장/조회 로직
-- `server/schema.sql`: 로컬 DB 테이블 스키마
-- `data/beauty-shop.sqlite`: 로컬 서버 실행 시 생성되는 SQLite DB 파일
+## 전체 구조
 
-## 구현 기능
+```text
+index.html                  화면 뼈대와 주요 DOM 컨테이너
+style.css                   쇼핑몰, 회원, 관리자, 상품관리, 배송관리 UI 스타일
+scripts/app.js              앱 진입점, 공통 store 로드, 컨트롤러 연결, 세션 UI 처리
+scripts/app.bundle.js       file:// 실행도 가능하게 만든 브라우저용 번들
+scripts/data/catalog.js     기본 상품 10개와 카테고리
+scripts/data/demo-store.js  전체 store 기본값, 서버/IndexedDB/localStorage 저장소 선택
+scripts/domain/order-processing.js
+                            결제 우회 후 주문/포인트/재고/추천/정산 생성 로직
+scripts/ui/shop.js          상품 목록, 상세, 장바구니, 결제, 배송지 선택
+scripts/ui/auth.js          로그인, 회원가입, 내정보, 배송지 관리
+scripts/ui/management.js    Admin/Agency 대시보드, 상품/회원/대리점/배송/정산 관리
+server/server.mjs           정적 파일 제공, /api/store API
+server/db.mjs               store와 SQLite 테이블 간 매핑, 마이그레이션
+server/schema.sql           SQLite 기본 스키마
+tests/                      DB와 주요 UI 흐름 검증
+```
 
-- 메인 히어로 영역
-- Shop 상품 영역
-- 카테고리 필터: 미용기구 / 미용재료 / 화장품
-- 총 10개 상품 표시
-- 상품 카드 클릭 또는 키보드 Enter/Space로 상세페이지 이동
-- 상세페이지에서 Add to cart
-- 상세페이지에서 Buy now 후 장바구니 드로어 열기
-- 장바구니 수량 + / - 조절
-- 장바구니 Checkout 클릭 시 결제 페이지 표시
-- LED Skin Lifting Device 구매 시 결제 화면 하단에 전용 상세 섹션 표시
-- 회원가입/로그인 화면
-- 간편회원가입 / 간편 로그인 데모 화면
-- 일반회원가입 / 일반 로그인 데모 화면
-- 로그인/회원가입 팝업 화면
-- 로그인 세션 유지, 헤더 회원명 표시, 로그아웃 처리
-- 일반 회원가입 회원 데이터 저장, 중복 아이디 차단, 아이디/비밀번호 검증 로그인
-- 회원 아이디 규칙: 영문 및 숫자만 허용, 6자 이상
-- 비밀번호 규칙: 영문과 숫자를 모두 포함한 8자 이상, 특수문자 사용 가능
-- 회원명 클릭 시 실서비스형 내정보 팝업 표시: 포인트 지갑형 요약, 최근 주문 안내, 상단 탭 메뉴로 계정/배송지, 구매 내역, 포인트 관리, 추천 링크, 보안 화면 구성
-- 내정보 비밀번호 변경: 기존 비밀번호 검증 후 새 비밀번호 저장
-- 내정보 배송지 관리: 배송지 조회 선택, 기본 배송지와 추가 배송지 저장, 배송지 목록 표시
-- 내정보 구매 관리: 누적 결제, 이번달 주문, 주문 상태별 건수, 주문 상세 보기 표시
-- 내정보 포인트 관리: 총 적립/사용, 이번달 적립/사용, 최근 변동, 포인트 이력 최근 10개 및 더보기 표시
-- 내정보 추천 관리: 활성 링크 수, 상품별 링크 수, 최근 추천 링크와 복사 기능 표시
-- 내정보 주문 상세: 구매이력에서 주문별 상품, 결제금액, 배송비, 포인트 사용/적립, 배송상태와 송장번호 확인
-- 추천 링크 생성: 동일 상품 여러 개 구매 시 상품별 링크 1개만 생성, 서로 다른 상품은 각각 생성
-- 추천 링크 복사: 주문 완료 화면과 내정보 추천 링크 목록에서 복사 가능
-- Admin/Agency 회원 상세 메모: 관리자와 대리점만 내부 메모 확인/수정
-- 미로그인 상태 구매 차단 및 로그인 화면 이동
-- 회원가입/결제/내정보 배송지 조회: 샘플 주소 선택 시 우편번호와 배송지 자동 입력
-- Admin 관리 화면: 포인트 설정, 대리점 수, 회원 수, 최근 주문 확인용 데모 대시보드
-- Admin settings 수정: 구매 적립률, 포인트 사용 한도, 친구가입 포인트, 개인 추천 지급률 저장
-- Admin 상품관리: 기본정보, 대표 이미지와 상세 이미지 최대 5개 등록, 가격/재고, 배송/정책/공급, 옵션 SKU 그룹별 등록/수정/숨김/노출 관리
-- 결제 상품 상세 안내: 결제 페이지 하단에서 상품별 상세 이미지, 옵션, 사용 안내 표시
-- Admin 월 지표: 이달의 주문 누적금액, 이달의 적립포인트 누적 표시 및 상세 팝업
-- Admin 주문/배송관리: 주문별 배송상태, 택배사, 송장번호, 출고일, 배송완료일, 배송 메모 저장
-- Agency 대리점 화면: 로그인 회원의 대리점 기준 전용 코드/링크, 링크 성과, 고객 수, 최근 6개월 정산매출/영업비 통합 요약 및 월별 상세 확인
-- Admin 대리점관리: 대리점 리스트에서 이달 매출, 영업비 예정, 총회원수를 먼저 표시하고 대리점명 클릭 시 코드/전용 링크/계약/정산/회원 상세 확인
-- Admin 대리점 등록: 상단 대리점 추가 버튼을 눌렀을 때만 등록 폼을 표시하며 필수 계약 정보, 운영 정보, 대리점 로그인 계정을 분리해 등록/수정/삭제 관리
-- Admin/Agency 회원 리스트에서 회원명 클릭 시 기본정보, 배송지, 구매이력, 포인트 이력 상세 확인
-- 로그인 회원 결제 우회 처리: Pay now 클릭 시 주문 생성, 포인트 사용/적립, 대리점 정산 대기 장부 반영
-- 실제 데모 회원가입 처리: 일반회원가입 입력값으로 회원 생성 후 현재 로그인 회원으로 전환
-- 대리점코드 회원가입: 대리점코드 입력 또는 대리점 전용 링크 클릭 시 해당 대리점 고객으로 등록
-- 샘플 Pay now 토스트 액션
-- 반응형 레이아웃
+## 데이터 흐름
 
-## 회원 기능 안내
+앱은 하나의 store 객체를 모든 UI 모듈에 공유합니다.
 
-회원가입과 로그인은 로컬 서버 실행 시 SQLite DB 기반 데모 세션으로 처리합니다. 실제 소셜 인증은 구현하지 않았지만, 일반 회원가입/로그인은 입력한 계정과 비밀번호로 검증합니다.
+1. `scripts/app.js`가 `loadStore()`를 호출합니다.
+2. `scripts/data/demo-store.js`가 저장소를 선택합니다.
+   - 서버 API 가능: SQLite DB 사용
+   - 서버 API 없음: IndexedDB 사용
+   - 이전 백업만 있음: localStorage 사용
+3. UI 모듈이 store를 직접 갱신합니다.
+4. 변경 후 `saveStore(store)`를 호출해 SQLite 또는 fallback 저장소에 반영합니다.
 
-- 로그인: 일반 로그인과 간편 로그인을 한 화면에서 제공
-- 회원가입: 간편회원가입과 일반회원가입을 한 화면에서 제공
-- 간편회원가입: 카카오, 네이버, Apple 버튼 클릭 시 완료 화면으로 이동
-- 일반회원가입: 아이디/비밀번호 입력 UI와 배송지 조회/선택 UI 제공
-- 일반 로그인: 아이디/비밀번호 입력, 아이디 저장, 찾기 링크 제공
-- 간편 로그인: 카카오, 네이버, Apple, Google 버튼 클릭 시 완료 화면으로 이동
-- 일반 회원관리: 회원가입한 아이디만 로그인 가능하며 비밀번호가 일치하지 않으면 로그인 불가
-- 로그인 완료: 팝업을 닫고 헤더에 회원명을 표시하며 Logout 버튼으로 세션 해제
-- 내정보: 아이디는 읽기 전용이며 이름, 휴대폰, 이메일, 배송지 조회 기반 기본/추가 배송지, 기본 결제수단, 관심 카테고리, 수신 설정 수정 가능
-- 내정보 이력: 구매이력과 포인트 적립/사용 이력 확인 가능
-- 내정보 주문 상세: 구매이력의 상세 보기에서 상품별 수량/옵션, 결제금액, 배송비, 사용 포인트, 적립 포인트, 배송상태, 택배사, 송장번호 확인 가능
-- 미로그인 구매 시도: Add to cart, Buy now, Checkout, Pay now 진입을 차단하고 로그인 화면 표시
+이 구조 때문에 UI 파일은 SQL을 직접 다루지 않습니다. DB 필드를 바꿀 때는 `server/schema.sql`, `server/db.mjs`, `scripts/data/demo-store.js`, 관련 테스트를 함께 확인해야 합니다.
 
-## 로컬 서버 DB 처리
+## 주요 데이터 모델
 
-쇼핑몰에서 생성되는 회원, 로그인 세션, 주문, 포인트 장부, 대리점 정산, 개인 추천링크 데이터는 로컬 서버의 SQLite DB에 저장합니다.
+- `settings`: 포인트율, 포인트 사용 한도, 추천 보상률
+- `agencies`: 본사/대리점 계약 정보, 전용 코드/링크, 대리점 로그인 계정
+- `products`: 상품 기본정보, 가격, 재고, 배송정책, 이미지, 표시/판매상태
+- `product_variants`: 옵션 SKU, 옵션별 재고, 옵션 상태
+- `members`: 회원 계정, 권한, 포인트, 주소, 배송지 목록, 내부 메모
+- `orders`: 주문, 실결제 상품금액, 배송비, 사용/적립 포인트, 배송/송장 정보
+- `order_items`: 주문 상품 스냅샷
+- `point_ledger`: 포인트 적립/사용 장부
+- `agency_settlement_ledger`: 대리점 영업비 정산 장부
+- `personal_referral_links`: 개인 상품 추천 링크
+- `app_meta`: 현재 로그인 회원, 대리점 링크 가입 대기값
 
-- DB 파일: `data/beauty-shop.sqlite`
-- API: `GET /api/store`, `PUT /api/store`
-- 주요 테이블: `settings`, `agencies`, `products`, `product_variants`, `members`, `orders`, `order_items`, `point_ledger`, `agency_settlement_ledger`, `personal_referral_links`, `app_meta`
-- 대리점 계약 필드: `agencies.contract_start`, `contract_end`, `manager_name`, `manager_phone`, `settlement_account`
-- 대리점 로그인 필드: `agencies.login_user_id`, `login_password_hash`
-- 회원 권한 필드: `members.role` 값으로 `member`, `agency_manager`, `admin` 구분
-- 회원 배송지 필드: `members.shipping_addresses`에 기본/추가 배송지 목록 저장
-- 주문 포인트 필드: `orders.point_used`, `point_use_limit`로 사용 포인트와 결제 당시 사용 가능 한도 저장
-- 주문 배송/송장 필드: `orders.shipping_status`, `courier`, `tracking_number`, `shipped_at`, `delivered_at`, `shipping_memo`, `shipping_address`, `payment_method`
-- 정산 상태 이력 필드: `agency_settlement_ledger.updated_at`, `status_updated_by`, `status_note`, `status_history`
-- 브라우저에서 서버로 접속하면 SQLite DB가 우선 사용됨
-- 탐색기에서 `file://`로 직접 실행하거나 서버 API가 응답하지 않으면 IndexedDB fallback 사용
-- IndexedDB/localStorage는 fallback과 호환 백업용이며, 서버 실행 기준의 원본 데이터는 SQLite 파일
+## 핵심 정책
 
-## 상품 데이터 조건
+- 상품 카테고리 3개 유지: `미용기구`, `미용재료`, `화장품`
+- 상품 수 10개 유지
+- 미로그인 회원은 장바구니/구매/결제 불가
+- 회원 아이디: 영문/숫자 6자 이상
+- 비밀번호: 영문과 숫자 포함 8자 이상, 특수문자 허용
+- 포인트 적립: 배송비 제외 실결제 상품금액 기준
+- 포인트 사용: 배송비 제외 실결제 상품금액 기준 최대 50%
+- 개인 추천 링크: 같은 상품 여러 개 구매 시 링크 1개, 서로 다른 상품은 각각 1개
+- 개인 추천 링크 구매는 대리점 영업비보다 우선
+- 대리점 코드 없이 가입하면 본사 대리점 고객
+- 대리점 고객 소속은 내부 관리용이며 개인회원 화면에는 노출하지 않음
 
-- 카테고리 3개 유지: 미용기구, 미용재료, 화장품
-- 상품 총 10개 유지
-- `scripts/ui/shop.js`의 `validateCatalog()`에서 기본 데이터 조건을 확인합니다.
+## 회원 기능
 
-## 관리 기능 1단계 안내
+- 일반 로그인/회원가입
+- 간편 로그인/간편 가입 UI 데모
+- 회원가입 시 대리점 코드 입력
+- 배송지 조회 샘플 UI: 주소 선택 시 우편번호/주소 자동 입력
+- 로그인 후 헤더에 회원명 표시
+- 회원명 클릭 시 내정보 팝업
+- 내정보 상단 탭:
+  - 계정/배송지
+  - 구매 내역
+  - 포인트 관리
+  - 추천 링크
+  - 보안
+- 기존 비밀번호 검증 후 비밀번호 변경
+- 보유 포인트, 구매이력, 포인트 이력, 추천 링크 확인
+- 주문 상세에서 배송상태, 택배사, 송장번호, 배송지 확인
 
-관리자/대리점/회원 기능은 1단계 기반 화면입니다. 포인트 계산, 대리점 정산 생성, 회원/주문/추천링크 저장은 로컬 SQLite DB에 반영됩니다. 상품 옵션 관리와 실제 PG 결제 연동은 다음 단계에서 확장합니다.
+## 쇼핑/결제 기능
 
-- 추천 링크 정책: 상품 1개당 개인 추천 링크 1개
-- 계산 기준: 배송비를 제외한 실결제 상품금액
-- 대리점 고객 소속: 내부 관리용으로만 유지하고 회원 화면에는 노출하지 않음
-- 대리점 없는 가입: 본사 대리점 고객으로 처리하는 설계 기준
-- 개인 추천 링크 구매: 대리점 영업비보다 우선 처리하는 설계 기준
+- 상품 목록과 카테고리 필터
+- 상품 상세 페이지
+- 상품 옵션 SKU 선택
+- Add to cart, Buy now
+- 장바구니 드로어, 수량 조절
+- Checkout 화면
+- 저장 배송지 선택 또는 배송지 조회 선택
+- 포인트 사용 입력
+- `Pay now` 클릭 시 PG 결제는 bypass하고 주문 성공 처리
+- 주문 성공 시 처리:
+  - 주문 생성
+  - 상품/옵션 재고 차감
+  - 포인트 사용 장부 생성
+  - 포인트 적립 장부 생성
+  - 개인 추천 링크 생성
+  - 대리점 정산 대기 장부 생성
+  - 배송지/결제수단 스냅샷 저장
 
-## 결제/포인트 데모 처리
+## Admin 기능
 
-로그인한 회원만 구매할 수 있습니다. Checkout 화면에서 `Pay now`를 누르면 실제 PG 결제 없이 결제 성공으로 우회 처리합니다.
+Admin 로그인:
 
-- 주문 생성: `paid` 상태의 주문을 생성
-- 포인트 적립: 배송비를 제외한 실결제 상품금액의 5% 적립
-- 포인트 사용: 결제 시 보유 포인트를 사용할 수 있으며, 배송비 제외 상품금액 기준 최대 50%까지 사용 가능
-- 포인트 장부: 사용 포인트는 음수 이력, 적립 포인트는 양수 이력으로 `point_ledger`에 저장
-- 대리점 처리: 개인 추천링크 구매가 아니면 대리점 정산 대기 장부에 영업비 반영
-- 개인 추천링크: 구매한 상품 종류별로 개인 추천링크 1개 생성
-- 화면 반영: 결제 완료 화면, Admin 처리 내역, Agency 정산 큐, Member 포인트 내역에서 확인 가능
+```text
+ID: adminChang
+PW: Chang$0909
+```
 
-## 대리점 가입/매출 데모 처리
+주요 기능:
 
-회원가입 화면에서 대리점코드를 입력하면 해당 대리점 고객으로 등록됩니다. Admin 또는 Agency 상세 팝업의 대리점 전용 링크를 클릭하면 회원가입 화면으로 이동하며 대리점코드가 자동 입력됩니다.
+- Admin settings 수정
+- 대리점 리스트/상세
+- 대리점 등록/수정/삭제
+- 대리점별 로그인 계정 발급
+- 회원 리스트와 회원 상세
+- 관리자/대리점 내부 메모
+- 상품관리
+- 상품 이미지/상세 이미지 최대 5개
+- 상품 표시/숨김, 판매상태, 가격, 재고, 배송정책, 공급사, 옵션 SKU 관리
+- 이달의 주문/포인트/정산 상세
+- 주문별 배송상태, 택배사, 송장번호, 출고일, 배송완료일, 배송 메모 관리
 
-- Admin 클릭 시 관리자 전용 로그인 화면 표시: `adminChang` / `Chang$0909`
-- Agency 클릭 시 대리점 전용 로그인 화면 표시: Admin 대리점관리에서 대리점별 아이디/비밀번호 발급
-- 기본 대리점 데모 로그인: `gangnam01` / `agency123`
-- 대리점코드 일치: 해당 대리점 고객으로 등록
-- 대리점코드 없음/불일치: 본사 대리점 고객으로 등록
-- 가입 후 결제: 현재 로그인 회원의 대리점 기준으로 주문 매출과 영업비 예정액 반영
-- 링크 성과: 대리점 귀속 회원 수, 구매 전환 회원 수, 정산 대상 주문 수 표시
-- 최근 6개월 정산: Agency 정산매출/영업비 통합 카드에서 월별 요약 확인, 월 클릭 시 주문과 정산 장부 상세 표시
-- 정산 상태: Admin은 정산 장부를 대기/확정/지급완료/보류로 변경 가능, 변경일/변경자/상태 이력 저장
-- Agency 권한: `agency_manager` 또는 `admin` 역할만 Agency 화면 접근 가능, 일반 회원은 차단
-- 정산 제외 주문: 개인 추천링크 구매는 월별 상세에서 정산 제외 사유로 표시
-- 대리점 삭제: 기존 대리점 고객은 본사 대리점 고객으로 이동
+## Agency 기능
+
+기본 대리점 로그인:
+
+```text
+ID: gangnam01
+PW: agency123
+```
+
+주요 기능:
+
+- 대리점 전용 코드/링크 확인
+- 전용 링크 복사
+- 소속 고객 리스트
+- 고객 상세와 내부 메모
+- 최근 6개월 정산매출/영업비 확인
+- 월 클릭 시 세부 주문과 정산 장부 확인
+- Agency 화면에서는 Admin 전용 정산 상태 변경 버튼을 노출하지 않음
+
+## 배송/송장 처리
+
+배송 데이터는 주문에 스냅샷으로 저장됩니다. 회원이 내정보에서 주소를 바꿔도 기존 주문의 배송지는 바뀌지 않습니다.
+
+주문 배송 필드:
+
+- `shipping_status`
+- `courier`
+- `tracking_number`
+- `shipped_at`
+- `delivered_at`
+- `shipping_memo`
+- `shipping_address`
+- `payment_method`
+
+Admin의 `이달의 주문` 상세에서 송장 정보를 저장하면 개인회원의 주문 상세에도 바로 반영됩니다.
+
+## DB 작업 시 주의
+
+- 기존 로컬 데이터가 있으므로 마이그레이션은 additive 방식으로 유지합니다.
+- `server/db.mjs`의 `migrateDatabase()`는 새 컬럼만 추가합니다.
+- 테이블 삭제, 전체 DB 초기화, 강제 reset은 사용자 데이터 유실 위험이 있습니다.
+- DB 구조를 바꾸면 아래 파일을 함께 점검합니다.
+  - `server/schema.sql`
+  - `server/db.mjs`
+  - `scripts/data/demo-store.js`
+  - `tests/server-db.test.mjs`
+  - `tests/stage1-management.test.cjs`
+
+## 개발자가 먼저 볼 코드
+
+1. `scripts/app.js`
+   - 앱 시작, store 공유, 컨트롤러 연결
+2. `scripts/data/demo-store.js`
+   - 전체 데이터 shape와 저장소 fallback
+3. `scripts/domain/order-processing.js`
+   - 주문 생성과 포인트/정산/추천 링크 핵심 로직
+4. `scripts/ui/shop.js`
+   - 쇼핑과 결제 화면
+5. `scripts/ui/auth.js`
+   - 회원가입, 로그인, 내정보
+6. `scripts/ui/management.js`
+   - Admin/Agency 관리 화면
+7. `server/db.mjs`
+   - SQLite 저장/조회/마이그레이션
+
+## 검증 기준
+
+작업 후 아래 순서로 확인합니다.
+
+```bash
+npm run build
+node tests/server-db.test.mjs
+node tests/stage1-management.test.cjs
+```
+
+필요하면 추가로 주요 파일 문법 검사를 실행합니다.
+
+```bash
+node --check scripts/app.js
+node --check scripts/ui/auth.js
+node --check scripts/ui/shop.js
+node --check scripts/ui/management.js
+node --check scripts/domain/order-processing.js
+node --check server/db.mjs
+```

@@ -1,4 +1,7 @@
 export function completeBypassPayment({ cart, store, payment }) {
+  // Central order transaction for the demo checkout.
+  // The PG step is bypassed, but business side effects are real in the store:
+  // order creation, stock decrement, point use/earn, referral links, and agency settlement.
   const member = store.members.find((item) => item.id === payment.memberId);
   if (!member) {
     throw new Error("결제 처리 대상 회원을 찾을 수 없습니다.");
@@ -119,6 +122,8 @@ export function completeBypassPayment({ cart, store, payment }) {
 }
 
 function normalizeShippingSnapshot(snapshot = {}, member = {}) {
+  // Persist a point-in-time shipping snapshot on the order.
+  // Member addresses can change later, but past orders should keep the original recipient/address.
   const fallback = member.address || {};
 
   return {
@@ -159,6 +164,8 @@ function createPurchasedProductReferralLinks({
   orderId,
   store,
 }) {
+  // Referral policy: one personal referral link per unique product in an order.
+  // Buying the same product multiple times still creates only one product link.
   const links = [];
   const nextNumber = store.personalReferralLinks.length + 1;
   const uniqueProducts = new Map();
@@ -184,6 +191,8 @@ function createPurchasedProductReferralLinks({
 }
 
 function createAgencyProcessing({ order, store }) {
+  // Personal product referral purchases bypass agency commission.
+  // All other paid product amounts become agency settlement ledger candidates.
   if (order.referralSourceType === "personal_product") return null;
 
   const agency = store.agencies.find(

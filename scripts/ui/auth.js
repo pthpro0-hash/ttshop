@@ -10,6 +10,8 @@ export function createAuthController({
   showToast,
 }) {
   migrateMemberAuthDefaults();
+  // Demo-only address lookup data. Replace this list with a postcode API adapter
+  // when connecting to a real shipping address service.
   const ADDRESS_LOOKUP_PRESETS = [
     {
       label: "강남 쇼룸",
@@ -47,6 +49,8 @@ export function createAuthController({
   }
 
   function openProfile() {
+    // Member self-service is opened from the header member name.
+    // Admin/Agency management links are reserved for back-office roles only.
     const member = getCurrentMember();
     if (!member) {
       openAuth("login");
@@ -198,6 +202,8 @@ export function createAuthController({
   }
 
   function createManagementAccess() {
+    // Keep this footer limited to back-office entry points.
+    // The old Member shortcut was removed to avoid duplicate member navigation.
     return `
     <div class="auth-management" aria-label="관리 메뉴">
       <a href="#admin" data-management-link="admin">Admin</a>
@@ -1054,6 +1060,8 @@ export function createAuthController({
   }
 
   function bindAddressLookupEvents() {
+    // Shared address lookup behavior for signup and profile forms.
+    // data-address-prefix maps one result list to either default or extra address fields.
     document.querySelectorAll("[data-address-search]").forEach((button) => {
       button.addEventListener("click", () => {
         const container =
@@ -1101,6 +1109,8 @@ export function createAuthController({
   }
 
   function registerMember(form) {
+    // General signup creates a real local member. Social buttons are UI-only
+    // shortcuts that create a quick demo member without external provider logic.
     clearFormError(form);
     const userId = normalizeUserId(getFormValue(form, "userId"));
     const password = getFormValue(form, "password");

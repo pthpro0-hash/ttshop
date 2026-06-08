@@ -6,6 +6,9 @@ const DB_VERSION = 1;
 const DB_STORE = "app-state";
 const DB_STATE_KEY = "store";
 
+// Canonical in-memory shape for the whole demo.
+// Server mode persists this object into SQLite. File:// mode stores the same
+// shape in IndexedDB/localStorage so the UI can run without a backend.
 export const defaultStore = {
   currentMemberId: "",
   settings: {
@@ -217,6 +220,12 @@ function getStorage() {
 }
 
 export async function loadStore() {
+  // Priority:
+  // 1. Local server SQLite API when the app is opened through localhost.
+  // 2. IndexedDB snapshot for file:// or offline fallback.
+  // 3. localStorage legacy backup.
+  // Local product edits may be merged into a fresh server seed so admin-created
+  // products are not lost when switching between file and server preview.
   const serverStore = await loadStoreFromServer();
   if (serverStore) {
     const localStore = await getBestLocalStore();
@@ -253,6 +262,8 @@ export async function loadStore() {
 }
 
 export async function saveStore(store) {
+  // Keep localStorage as a lightweight compatibility backup even when the
+  // SQLite API is available. Tests and file preview use this same fallback path.
   const snapshot = normalizeStore(store);
   getStorage()?.setItem(STORE_KEY, JSON.stringify(snapshot));
 

@@ -3,6 +3,10 @@ import { createAuthController } from "./ui/auth.js";
 import { createManagementController } from "./ui/management.js";
 import { createShopController } from "./ui/shop.js";
 
+// App entry point.
+// - Loads one shared store object from SQLite API or browser fallback storage.
+// - Wires the three UI controllers: shop, auth/profile, admin/agency management.
+// - Keeps session state in store.currentMemberId so every module reads the same member.
 const appReady = initializeApp();
 window.__beautyAppReady = appReady;
 
@@ -23,6 +27,8 @@ async function initializeApp() {
     logoutButton: document.querySelector("#logoutButton"),
   };
 
+  // The store is intentionally passed by reference to every controller.
+  // After each mutation, controllers call saveStore() so SQLite and fallback storage stay synced.
   const store = await loadStore();
   await saveStore(store);
 
@@ -42,6 +48,8 @@ async function initializeApp() {
   }
 
   function requireLogin() {
+    // Purchase actions share this guard. It prevents cart/checkout/pay flows
+    // from progressing when there is no active member session.
     const member = getCurrentMember();
     if (member?.status === "active") return true;
     if (member) {
@@ -107,6 +115,8 @@ async function initializeApp() {
   });
 
   document.addEventListener("click", (event) => {
+    // Management links are rendered inside auth modals and dashboard content.
+    // A single delegated handler keeps Admin/Agency entry behavior consistent.
     const agencyJoinLink = event.target.closest("[data-agency-join-link]");
     if (agencyJoinLink) {
       event.preventDefault();

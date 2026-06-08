@@ -5164,6 +5164,7 @@
       },
     ];
     const state = {
+      // UI-only cart state. Persisted business records are created only after Pay now.
       activeCategory: "all",
       cart: [],
       pointToUse: 0,

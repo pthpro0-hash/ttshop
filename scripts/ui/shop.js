@@ -12,6 +12,8 @@ export function createShopController({
   persistStore,
   requireLogin = () => true,
 }) {
+  // Demo-only address lookup used on checkout. The profile/signup module has
+  // the same shape so a real postcode API can replace both with one adapter later.
   const ADDRESS_LOOKUP_PRESETS = [
     {
       label: "기본 배송지",
@@ -35,6 +37,7 @@ export function createShopController({
     },
   ];
   const state = {
+    // UI-only cart state. Persisted business records are created only after Pay now.
     activeCategory: "all",
     cart: [],
     pointToUse: 0,
@@ -62,6 +65,8 @@ export function createShopController({
     (store.products || []).find((product) => product.id === id);
 
   function getTotals() {
+    // All point calculations use product amount only.
+    // Shipping fee is included in paidAmount but excluded from point earn/use limits.
     const subtotal = state.cart.reduce(
       (sum, item) => sum + item.sale * item.qty,
       0,
@@ -460,6 +465,8 @@ export function createShopController({
   }
 
   function openCheckout() {
+    // Checkout reads the current member's default shipping address once and
+    // lets the user override it before completeBypassPayment stores an order snapshot.
     if (!requireLogin()) return;
 
     closeCart();
@@ -543,6 +550,8 @@ export function createShopController({
   }
 
   function completeCheckoutBypass() {
+    // This bypasses PG only. The resulting order, points, stock, referrals,
+    // agency settlement, and shipping snapshot are persisted through the domain layer.
     if (!requireLogin()) return;
 
     if (!state.cart.length) {
@@ -618,6 +627,8 @@ export function createShopController({
   }
 
   function bindCheckoutAddressEvents() {
+    // Saved address buttons and lookup result buttons both write to the same
+    // checkout fields, keeping the order snapshot source simple.
     document
       .querySelector("[data-checkout-address-search]")
       ?.addEventListener("click", () => {

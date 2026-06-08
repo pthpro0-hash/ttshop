@@ -11,6 +11,8 @@ const defaultDbPath = join(dataDir, "beauty-shop.sqlite");
 const schemaPath = join(currentDir, "schema.sql");
 
 export function openShopDatabase(dbPath = defaultDbPath) {
+  // Opens the local SQLite DB, applies the base schema, then runs additive
+  // migrations so older demo databases keep working after new fields are added.
   mkdirSync(dirname(dbPath), { recursive: true });
   const database = new DatabaseSync(dbPath);
   database.exec("PRAGMA foreign_keys = ON");
@@ -25,6 +27,8 @@ export function openShopDatabase(dbPath = defaultDbPath) {
 }
 
 function migrateDatabase(database) {
+  // Keep migrations additive. This project stores demo data locally, so dropping
+  // or recreating tables would erase the user's accounts/orders during development.
   ensureColumn(database, "products", "detail_images", "TEXT");
   ensureColumn(database, "agencies", "contract_start", "TEXT");
   ensureColumn(database, "agencies", "contract_end", "TEXT");
@@ -73,6 +77,8 @@ function ensureColumn(database, table, column, definition) {
 }
 
 export function readStore(database) {
+  // Convert normalized SQL rows back into the single store object consumed by
+  // browser modules. UI code should not query tables directly.
   const store = cloneDefaultStore();
   const meta = Object.fromEntries(
     database
@@ -140,6 +146,8 @@ export function readStore(database) {
 }
 
 export function writeStore(database, store) {
+  // Full snapshot write: the app mutates one store object, then this layer
+  // rewrites relational tables from that snapshot for deterministic local demos.
   const snapshot = normalizeStore(store);
   database.exec("BEGIN IMMEDIATE");
   try {
