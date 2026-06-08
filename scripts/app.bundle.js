@@ -2157,6 +2157,24 @@
     origin: "Korea",
     brand: "BEAUTY REF.",
   };
+  var SHIPMENT_STATUS_OPTIONS = [
+    ["preparing", "\uC0C1\uD488\uC900\uBE44"],
+    ["paid", "\uACB0\uC81C\uC644\uB8CC"],
+    ["shipping", "\uBC30\uC1A1\uC911"],
+    ["delivered", "\uBC30\uC1A1\uC644\uB8CC"],
+    ["returned", "\uCDE8\uC18C/\uBC18\uD488"],
+  ];
+  var COURIER_OPTIONS = [
+    ["", "\uC120\uD0DD"],
+    ["CJ\uB300\uD55C\uD1B5\uC6B4", "CJ\uB300\uD55C\uD1B5\uC6B4"],
+    ["\uB86F\uB370\uD0DD\uBC30", "\uB86F\uB370\uD0DD\uBC30"],
+    ["\uD55C\uC9C4\uD0DD\uBC30", "\uD55C\uC9C4\uD0DD\uBC30"],
+    ["\uC6B0\uCCB4\uAD6D\uD0DD\uBC30", "\uC6B0\uCCB4\uAD6D\uD0DD\uBC30"],
+    ["\uB85C\uC820\uD0DD\uBC30", "\uB85C\uC820\uD0DD\uBC30"],
+    ["\uACBD\uB3D9\uD0DD\uBC30", "\uACBD\uB3D9\uD0DD\uBC30"],
+    ["\uB300\uC2E0\uD0DD\uBC30", "\uB300\uC2E0\uD0DD\uBC30"],
+    ["\uC9C1\uC811\uBC30\uC1A1", "\uC9C1\uC811\uBC30\uC1A1"],
+  ];
   function createManagementController({
     dom,
     store,
@@ -2354,8 +2372,20 @@
         const shipmentForm = event.target.closest("[data-shipment-form]");
         if (shipmentForm) {
           event.preventDefault();
-          updateShipmentInfo(shipmentForm);
+          if (!updateShipmentInfo(shipmentForm)) return;
           persistStore(store);
+          if (shipmentForm.dataset.shipmentMember) {
+            openDetailModal(
+              modal,
+              createMemberProfileDetail(
+                shipmentForm.dataset.shipmentMember,
+                store,
+                scope,
+                shipmentForm.dataset.shipmentBack || "members",
+              ),
+            );
+            return;
+          }
           openDetailModal(modal, createContent("orders"));
           return;
         }
@@ -2423,14 +2453,27 @@
       const order = store.orders.find(
         (item) => item.id === form.dataset.shipmentForm,
       );
-      if (!order) return;
-      order.shippingStatus = form.querySelector(
-        '[name="shippingStatus"]',
-      ).value;
-      order.courier = form.querySelector('[name="courier"]').value.trim();
-      order.trackingNumber = form
+      if (!order) return false;
+      const status = form.querySelector('[name="shippingStatus"]').value;
+      const courier = form.querySelector('[name="courier"]').value.trim();
+      const trackingNumber = form
         .querySelector('[name="trackingNumber"]')
         .value.trim();
+      const message = form.querySelector("[data-shipment-message]");
+      if (message) message.textContent = "";
+      if (
+        (status === "shipping" || status === "delivered") &&
+        (!courier || !trackingNumber)
+      ) {
+        if (message) {
+          message.textContent =
+            "\uBC30\uC1A1\uC911 \uB610\uB294 \uBC30\uC1A1\uC644\uB8CC \uC0C1\uD0DC\uB294 \uD0DD\uBC30\uC0AC\uC640 \uC1A1\uC7A5\uBC88\uD638\uB97C \uC785\uB825\uD574\uC57C \uC800\uC7A5\uB429\uB2C8\uB2E4.";
+        }
+        return false;
+      }
+      order.shippingStatus = status;
+      order.courier = courier;
+      order.trackingNumber = trackingNumber;
       order.shippedAt = form.querySelector('[name="shippedAt"]').value;
       order.deliveredAt = form.querySelector('[name="deliveredAt"]').value;
       order.shippingMemo = form.querySelector('[name="shippingMemo"]').value;
@@ -2442,6 +2485,7 @@
           .toISOString()
           .slice(0, 10);
       }
+      return true;
     }
     function bindAgencyAdminForm(modal) {
       var _a;
@@ -3595,7 +3639,18 @@
       <section>
         <div class="product-category">\uAD6C\uB9E4\uC774\uB825</div>
         <div class="process-list">
-          ${orders.map(createMemberOrderRow).join("") || '<div class="admin-detail-empty">\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+          ${
+            orders
+              .map((order) =>
+                createMemberOrderRow(order, {
+                  allowShipmentEdit: isAdmin,
+                  memberId: member.id,
+                  backType,
+                }),
+              )
+              .join("") ||
+            '<div class="admin-detail-empty">\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'
+          }
         </div>
       </section>
       <section>
@@ -3615,16 +3670,42 @@
     </form>
   `;
   }
-  function createMemberOrderRow(order) {
+  function createMemberOrderRow(order, options = {}) {
     var _a;
     const firstItem = (_a = order.items) == null ? void 0 : _a[0];
+    const shipmentStatus = getShipmentStatusLabel(order.shippingStatus);
     return `
     <article class="process-row member-history-row">
-      <div><strong>${order.id}</strong><span>${order.paidAt} \xB7 ${order.status}</span></div>
+      <div><strong>${order.id}</strong><span>${order.paidAt} \xB7 ${shipmentStatus}</span></div>
       <div><span>\uB300\uD45C \uC0C1\uD488</span><strong>${(firstItem == null ? void 0 : firstItem.productKo) || "\uC0C1\uD488"}</strong></div>
       <div><span>\uC0C1\uD488 \uC2E4\uACB0\uC81C</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>\uBC30\uC1A1\uBE44</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "\uBB34\uB8CC"}</strong></div>
+      <div><span>\uD0DD\uBC30\uC0AC</span><strong>${order.courier || "\uCD9C\uACE0 \uC804"}</strong></div>
+      <div><span>\uC1A1\uC7A5\uBC88\uD638</span><strong>${order.trackingNumber || "\uB4F1\uB85D \uB300\uAE30"}</strong></div>
+      ${options.allowShipmentEdit ? createMemberShipmentEditor(order, options) : ""}
     </article>
+  `;
+  }
+  function createMemberShipmentEditor(order, options = {}) {
+    return `
+    <form class="shipment-row shipment-row-compact" data-shipment-form="${order.id}" data-shipment-member="${options.memberId || ""}" data-shipment-back="${options.backType || "members"}">
+      <label>\uBC30\uC1A1\uC0C1\uD0DC
+        <select class="option-select" name="shippingStatus">
+          ${createShipmentStatusOptions(order.shippingStatus)}
+        </select>
+      </label>
+      <label>\uD0DD\uBC30\uC0AC
+        <select class="option-select" name="courier">
+          ${createCourierOptions(order.courier)}
+        </select>
+      </label>
+      <label>\uC1A1\uC7A5\uBC88\uD638<input class="quantity-input" name="trackingNumber" value="${escapeAttribute(order.trackingNumber)}" placeholder="\uC1A1\uC7A5\uBC88\uD638 \uC785\uB825" /></label>
+      <label>\uCD9C\uACE0\uC77C<input class="quantity-input" name="shippedAt" type="date" value="${escapeAttribute(order.shippedAt)}" /></label>
+      <label>\uC644\uB8CC\uC77C<input class="quantity-input" name="deliveredAt" type="date" value="${escapeAttribute(order.deliveredAt)}" /></label>
+      <label class="shipment-memo">\uBC30\uC1A1 \uBA54\uBAA8<input class="quantity-input" name="shippingMemo" value="${escapeAttribute(order.shippingMemo)}" placeholder="\uBC30\uC1A1 \uC694\uCCAD/\uD2B9\uC774\uC0AC\uD56D" /></label>
+      <p class="shipment-message" data-shipment-message aria-live="polite"></p>
+      <button class="buy-button mini-button" type="submit">\uBC30\uC1A1 \uC800\uC7A5</button>
+    </form>
   `;
   }
   function createMemberPointRow(point) {
@@ -3788,29 +3869,43 @@
       </div>
       <label>\uBC30\uC1A1\uC0C1\uD0DC
         <select class="option-select" name="shippingStatus">
-          ${createOption("preparing", "\uC0C1\uD488\uC900\uBE44", order.shippingStatus)}
-          ${createOption("paid", "\uACB0\uC81C\uC644\uB8CC", order.shippingStatus)}
-          ${createOption("shipping", "\uBC30\uC1A1\uC911", order.shippingStatus)}
-          ${createOption("delivered", "\uBC30\uC1A1\uC644\uB8CC", order.shippingStatus)}
-          ${createOption("returned", "\uCDE8\uC18C/\uBC18\uD488", order.shippingStatus)}
+          ${createShipmentStatusOptions(order.shippingStatus)}
         </select>
       </label>
       <label>\uD0DD\uBC30\uC0AC
         <select class="option-select" name="courier">
-          ${createOption("", "\uC120\uD0DD", order.courier)}
-          ${createOption("CJ\uB300\uD55C\uD1B5\uC6B4", "CJ\uB300\uD55C\uD1B5\uC6B4", order.courier)}
-          ${createOption("\uB86F\uB370\uD0DD\uBC30", "\uB86F\uB370\uD0DD\uBC30", order.courier)}
-          ${createOption("\uD55C\uC9C4\uD0DD\uBC30", "\uD55C\uC9C4\uD0DD\uBC30", order.courier)}
-          ${createOption("\uC6B0\uCCB4\uAD6D\uD0DD\uBC30", "\uC6B0\uCCB4\uAD6D\uD0DD\uBC30", order.courier)}
+          ${createCourierOptions(order.courier)}
         </select>
       </label>
       <label>\uC1A1\uC7A5\uBC88\uD638<input class="quantity-input" name="trackingNumber" value="${escapeAttribute(order.trackingNumber)}" placeholder="\uC1A1\uC7A5\uBC88\uD638 \uC785\uB825" /></label>
       <label>\uCD9C\uACE0\uC77C<input class="quantity-input" name="shippedAt" type="date" value="${escapeAttribute(order.shippedAt)}" /></label>
       <label>\uC644\uB8CC\uC77C<input class="quantity-input" name="deliveredAt" type="date" value="${escapeAttribute(order.deliveredAt)}" /></label>
       <label class="shipment-memo">\uBC30\uC1A1 \uBA54\uBAA8<input class="quantity-input" name="shippingMemo" value="${escapeAttribute(order.shippingMemo)}" placeholder="\uBC30\uC1A1 \uC694\uCCAD/\uD2B9\uC774\uC0AC\uD56D" /></label>
+      <p class="shipment-message" data-shipment-message aria-live="polite"></p>
       <button class="buy-button mini-button" type="submit">\uBC30\uC1A1 \uC800\uC7A5</button>
     </form>
   `;
+  }
+  function createShipmentStatusOptions(selectedValue) {
+    return SHIPMENT_STATUS_OPTIONS.map(([value, label]) =>
+      createOption(value, label, selectedValue),
+    ).join("");
+  }
+  function createCourierOptions(selectedValue) {
+    return COURIER_OPTIONS.map(([value, label]) =>
+      createOption(value, label, selectedValue),
+    ).join("");
+  }
+  function getShipmentStatusLabel(status) {
+    var _a;
+    return (
+      ((_a = SHIPMENT_STATUS_OPTIONS.find(([value]) => value === status)) ==
+      null
+        ? void 0
+        : _a[1]) ||
+      status ||
+      "\uC0C1\uD488\uC900\uBE44"
+    );
   }
   function createOption(value, label, selectedValue) {
     return `<option value="${escapeAttribute(value)}" ${String(value) === String(selectedValue || "") ? "selected" : ""}>${label}</option>`;
@@ -6245,6 +6340,24 @@
       dom.logoutButton.classList.toggle("is-hidden", !member);
       dom.sessionUser.textContent = member ? `${member.name}\uB2D8` : "";
     }
+    function getCurrentManagementRole() {
+      var _a;
+      const member = getCurrentMember2();
+      if (
+        activeManagementRole === "admin" ||
+        activeManagementRole === "agency"
+      ) {
+        return activeManagementRole;
+      }
+      if ((member == null ? void 0 : member.role) === "admin") return "admin";
+      if (
+        (_a = member == null ? void 0 : member.id) == null
+          ? void 0
+          : _a.startsWith("member-agency-")
+      )
+        return "agency";
+      return "";
+    }
     function requireLogin() {
       const member = getCurrentMember2();
       if ((member == null ? void 0 : member.status) === "active") return true;
@@ -6294,6 +6407,13 @@
       auth.openAuth("login");
     });
     dom.sessionUser.addEventListener("click", () => {
+      const managementRole = getCurrentManagementRole();
+      if (managementRole) {
+        auth.closeAuth();
+        activeManagementRole = managementRole;
+        management.openManagement(managementRole);
+        return;
+      }
       auth.openProfile();
     });
     dom.logoutButton.addEventListener("click", () => {

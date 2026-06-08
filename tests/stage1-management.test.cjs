@@ -684,6 +684,23 @@ function submitManagementLogin(window, role, userId, password) {
     /상품 수\s*10|이달의 주문|76,000원|이달의 적립금|3,800P/,
     "admin dashboard should show monthly order and point totals",
   );
+  click(dom.window, document.querySelector("#logoHome"));
+  assert.equal(
+    document.querySelector("#homeView").classList.contains("is-hidden"),
+    false,
+    "admin can leave the management view for the shop screen",
+  );
+  click(dom.window, document.querySelector("#sessionUser"));
+  assert.equal(
+    document.querySelector("#managementView").classList.contains("is-hidden"),
+    false,
+    "clicking admin name should reopen the admin dashboard instead of member profile",
+  );
+  assert.match(
+    document.querySelector("#managementView").textContent,
+    /Admin Control|Admin settings/,
+    "admin name click should route back to admin management",
+  );
   const settingsForm = document.querySelector("[data-admin-settings-form]");
   input(settingsForm.querySelector('[name="purchasePointRate"]'), "7");
   input(settingsForm.querySelector('[name="maxPointUseRate"]'), "45");
@@ -789,6 +806,35 @@ function submitManagementLogin(window, role, userId, password) {
     document.querySelector("#adminModalContent").textContent,
     /내부 대리점|강남 뷰티 대리점/,
     "admin member detail should include internal agency ownership",
+  );
+  const memberShipmentForm = document.querySelector(
+    '[data-shipment-member="member-a"]',
+  );
+  assert.ok(
+    memberShipmentForm,
+    "admin member detail should expose shipment update controls",
+  );
+  input(
+    memberShipmentForm.querySelector('[name="shippingStatus"]'),
+    "shipping",
+  );
+  input(memberShipmentForm.querySelector('[name="courier"]'), "");
+  input(memberShipmentForm.querySelector('[name="trackingNumber"]'), "");
+  click(dom.window, memberShipmentForm.querySelector('[type="submit"]'));
+  assert.match(
+    memberShipmentForm.querySelector("[data-shipment-message]").textContent,
+    /택배사와 송장번호/,
+    "shipment update should require courier and tracking for shipping status",
+  );
+  input(memberShipmentForm.querySelector('[name="courier"]'), "롯데택배");
+  input(memberShipmentForm.querySelector('[name="trackingNumber"]'), "5551234");
+  click(dom.window, memberShipmentForm.querySelector('[type="submit"]'));
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).orders.find(
+      (order) => order.id === "order-001",
+    ).trackingNumber,
+    "5551234",
+    "admin member detail shipment form should persist tracking number",
   );
   const adminMemoForm = document.querySelector("[data-member-memo-form]");
   input(
@@ -1335,11 +1381,10 @@ function submitManagementLogin(window, role, userId, password) {
   );
   click(dom.window, document.querySelector("#sessionUser"));
   assert.match(
-    document.querySelector("#authView").textContent,
-    /3,800P|포인트 관리/,
-    "member profile should show updated points after payment",
+    document.querySelector("#managementView").textContent,
+    /Agency desk|강남 뷰티 대리점|정산매출/,
+    "clicking agency manager name should reopen agency management instead of member profile",
   );
-  click(dom.window, document.querySelector("#profileClose"));
   submitManagementLogin(dom.window, "agency", "gangnam01", "agency123");
   click(dom.window, document.querySelector('[data-agency-detail="link"]'));
   assert.ok(

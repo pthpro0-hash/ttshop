@@ -1591,6 +1591,14 @@ h1 {
   border: 1px solid var(--line);
   background: #fbfaf7;
 }
+.shipment-row-compact {
+  grid-column: 1 / -1;
+  grid-template-columns:
+    repeat(2, minmax(130px, 0.8fr)) minmax(160px, 1fr)
+    repeat(2, minmax(130px, 0.8fr)) minmax(180px, 1fr) auto;
+  margin-top: 10px;
+  background: #fff;
+}
 .shipment-row label {
   display: grid;
   gap: 7px;
@@ -1621,6 +1629,15 @@ h1 {
   font-style: normal;
   font-weight: 800;
   line-height: 1.4;
+}
+.shipment-message {
+  grid-column: 1 / -1;
+  min-height: 18px;
+  margin: 0;
+  color: #bd2626;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.45;
 }
 .profile-order-detail {
   padding: 24px;

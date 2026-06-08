@@ -12,6 +12,24 @@ const PRODUCT_OPERATION_DEFAULTS = {
   origin: "Korea",
   brand: "BEAUTY REF.",
 };
+const SHIPMENT_STATUS_OPTIONS = [
+  ["preparing", "상품준비"],
+  ["paid", "결제완료"],
+  ["shipping", "배송중"],
+  ["delivered", "배송완료"],
+  ["returned", "취소/반품"],
+];
+const COURIER_OPTIONS = [
+  ["", "선택"],
+  ["CJ대한통운", "CJ대한통운"],
+  ["롯데택배", "롯데택배"],
+  ["한진택배", "한진택배"],
+  ["우체국택배", "우체국택배"],
+  ["로젠택배", "로젠택배"],
+  ["경동택배", "경동택배"],
+  ["대신택배", "대신택배"],
+  ["직접배송", "직접배송"],
+];
 
 export function createManagementController({
   dom,
@@ -223,8 +241,20 @@ export function createManagementController({
       const shipmentForm = event.target.closest("[data-shipment-form]");
       if (shipmentForm) {
         event.preventDefault();
-        updateShipmentInfo(shipmentForm);
+        if (!updateShipmentInfo(shipmentForm)) return;
         persistStore(store);
+        if (shipmentForm.dataset.shipmentMember) {
+          openDetailModal(
+            modal,
+            createMemberProfileDetail(
+              shipmentForm.dataset.shipmentMember,
+              store,
+              scope,
+              shipmentForm.dataset.shipmentBack || "members",
+            ),
+          );
+          return;
+        }
         openDetailModal(modal, createContent("orders"));
         return;
       }
@@ -298,13 +328,29 @@ export function createManagementController({
     const order = store.orders.find(
       (item) => item.id === form.dataset.shipmentForm,
     );
-    if (!order) return;
+    if (!order) return false;
 
-    order.shippingStatus = form.querySelector('[name="shippingStatus"]').value;
-    order.courier = form.querySelector('[name="courier"]').value.trim();
-    order.trackingNumber = form
+    const status = form.querySelector('[name="shippingStatus"]').value;
+    const courier = form.querySelector('[name="courier"]').value.trim();
+    const trackingNumber = form
       .querySelector('[name="trackingNumber"]')
       .value.trim();
+    const message = form.querySelector("[data-shipment-message]");
+    if (message) message.textContent = "";
+    if (
+      (status === "shipping" || status === "delivered") &&
+      (!courier || !trackingNumber)
+    ) {
+      if (message) {
+        message.textContent =
+          "배송중 또는 배송완료 상태는 택배사와 송장번호를 입력해야 저장됩니다.";
+      }
+      return false;
+    }
+
+    order.shippingStatus = status;
+    order.courier = courier;
+    order.trackingNumber = trackingNumber;
     order.shippedAt = form.querySelector('[name="shippedAt"]').value;
     order.deliveredAt = form.querySelector('[name="deliveredAt"]').value;
     order.shippingMemo = form.querySelector('[name="shippingMemo"]').value;
@@ -314,6 +360,7 @@ export function createManagementController({
     if (order.shippingStatus === "delivered" && !order.deliveredAt) {
       order.deliveredAt = new Date().toISOString().slice(0, 10);
     }
+    return true;
   }
 
   function bindAgencyAdminForm(modal) {
@@ -1510,7 +1557,18 @@ function createMemberProfileDetail(memberId, store, scope, backType) {
       <section>
         <div class="product-category">구매이력</div>
         <div class="process-list">
-          ${orders.map(createMemberOrderRow).join("") || '<div class="admin-detail-empty">구매이력이 없습니다.</div>'}
+          ${
+            orders
+              .map((order) =>
+                createMemberOrderRow(order, {
+                  allowShipmentEdit: isAdmin,
+                  memberId: member.id,
+                  backType,
+                }),
+              )
+              .join("") ||
+            '<div class="admin-detail-empty">구매이력이 없습니다.</div>'
+          }
         </div>
       </section>
       <section>
@@ -1531,16 +1589,43 @@ function createMemberProfileDetail(memberId, store, scope, backType) {
   `;
 }
 
-function createMemberOrderRow(order) {
+function createMemberOrderRow(order, options = {}) {
   const firstItem = order.items?.[0];
+  const shipmentStatus = getShipmentStatusLabel(order.shippingStatus);
 
   return `
     <article class="process-row member-history-row">
-      <div><strong>${order.id}</strong><span>${order.paidAt} · ${order.status}</span></div>
+      <div><strong>${order.id}</strong><span>${order.paidAt} · ${shipmentStatus}</span></div>
       <div><span>대표 상품</span><strong>${firstItem?.productKo || "상품"}</strong></div>
       <div><span>상품 실결제</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>배송비</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "무료"}</strong></div>
+      <div><span>택배사</span><strong>${order.courier || "출고 전"}</strong></div>
+      <div><span>송장번호</span><strong>${order.trackingNumber || "등록 대기"}</strong></div>
+      ${options.allowShipmentEdit ? createMemberShipmentEditor(order, options) : ""}
     </article>
+  `;
+}
+
+function createMemberShipmentEditor(order, options = {}) {
+  return `
+    <form class="shipment-row shipment-row-compact" data-shipment-form="${order.id}" data-shipment-member="${options.memberId || ""}" data-shipment-back="${options.backType || "members"}">
+      <label>배송상태
+        <select class="option-select" name="shippingStatus">
+          ${createShipmentStatusOptions(order.shippingStatus)}
+        </select>
+      </label>
+      <label>택배사
+        <select class="option-select" name="courier">
+          ${createCourierOptions(order.courier)}
+        </select>
+      </label>
+      <label>송장번호<input class="quantity-input" name="trackingNumber" value="${escapeAttribute(order.trackingNumber)}" placeholder="송장번호 입력" /></label>
+      <label>출고일<input class="quantity-input" name="shippedAt" type="date" value="${escapeAttribute(order.shippedAt)}" /></label>
+      <label>완료일<input class="quantity-input" name="deliveredAt" type="date" value="${escapeAttribute(order.deliveredAt)}" /></label>
+      <label class="shipment-memo">배송 메모<input class="quantity-input" name="shippingMemo" value="${escapeAttribute(order.shippingMemo)}" placeholder="배송 요청/특이사항" /></label>
+      <p class="shipment-message" data-shipment-message aria-live="polite"></p>
+      <button class="buy-button mini-button" type="submit">배송 저장</button>
+    </form>
   `;
 }
 
@@ -1725,29 +1810,42 @@ function createAdminShipmentRow(order, store) {
       </div>
       <label>배송상태
         <select class="option-select" name="shippingStatus">
-          ${createOption("preparing", "상품준비", order.shippingStatus)}
-          ${createOption("paid", "결제완료", order.shippingStatus)}
-          ${createOption("shipping", "배송중", order.shippingStatus)}
-          ${createOption("delivered", "배송완료", order.shippingStatus)}
-          ${createOption("returned", "취소/반품", order.shippingStatus)}
+          ${createShipmentStatusOptions(order.shippingStatus)}
         </select>
       </label>
       <label>택배사
         <select class="option-select" name="courier">
-          ${createOption("", "선택", order.courier)}
-          ${createOption("CJ대한통운", "CJ대한통운", order.courier)}
-          ${createOption("롯데택배", "롯데택배", order.courier)}
-          ${createOption("한진택배", "한진택배", order.courier)}
-          ${createOption("우체국택배", "우체국택배", order.courier)}
+          ${createCourierOptions(order.courier)}
         </select>
       </label>
       <label>송장번호<input class="quantity-input" name="trackingNumber" value="${escapeAttribute(order.trackingNumber)}" placeholder="송장번호 입력" /></label>
       <label>출고일<input class="quantity-input" name="shippedAt" type="date" value="${escapeAttribute(order.shippedAt)}" /></label>
       <label>완료일<input class="quantity-input" name="deliveredAt" type="date" value="${escapeAttribute(order.deliveredAt)}" /></label>
       <label class="shipment-memo">배송 메모<input class="quantity-input" name="shippingMemo" value="${escapeAttribute(order.shippingMemo)}" placeholder="배송 요청/특이사항" /></label>
+      <p class="shipment-message" data-shipment-message aria-live="polite"></p>
       <button class="buy-button mini-button" type="submit">배송 저장</button>
     </form>
   `;
+}
+
+function createShipmentStatusOptions(selectedValue) {
+  return SHIPMENT_STATUS_OPTIONS.map(([value, label]) =>
+    createOption(value, label, selectedValue),
+  ).join("");
+}
+
+function createCourierOptions(selectedValue) {
+  return COURIER_OPTIONS.map(([value, label]) =>
+    createOption(value, label, selectedValue),
+  ).join("");
+}
+
+function getShipmentStatusLabel(status) {
+  return (
+    SHIPMENT_STATUS_OPTIONS.find(([value]) => value === status)?.[1] ||
+    status ||
+    "상품준비"
+  );
 }
 
 function createOption(value, label, selectedValue) {

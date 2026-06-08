@@ -47,6 +47,16 @@ async function initializeApp() {
     dom.sessionUser.textContent = member ? `${member.name}님` : "";
   }
 
+  function getCurrentManagementRole() {
+    const member = getCurrentMember();
+    if (activeManagementRole === "admin" || activeManagementRole === "agency") {
+      return activeManagementRole;
+    }
+    if (member?.role === "admin") return "admin";
+    if (member?.id?.startsWith("member-agency-")) return "agency";
+    return "";
+  }
+
   function requireLogin() {
     // Purchase actions share this guard. It prevents cart/checkout/pay flows
     // from progressing when there is no active member session.
@@ -98,6 +108,14 @@ async function initializeApp() {
     auth.openAuth("login");
   });
   dom.sessionUser.addEventListener("click", () => {
+    const managementRole = getCurrentManagementRole();
+    if (managementRole) {
+      auth.closeAuth();
+      activeManagementRole = managementRole;
+      management.openManagement(managementRole);
+      return;
+    }
+
     auth.openProfile();
   });
   dom.logoutButton.addEventListener("click", () => {
