@@ -1,4 +1,5 @@
 import { loadStore, saveStore } from "./data/demo-store.js";
+import { autoConfirmEligibleOrders } from "./domain/order-processing.js";
 import { createAuthController } from "./ui/auth.js";
 import { createManagementController } from "./ui/management.js";
 import { createShopController } from "./ui/shop.js";
@@ -30,6 +31,7 @@ async function initializeApp() {
   // The store is intentionally passed by reference to every controller.
   // After each mutation, controllers call saveStore() so SQLite and fallback storage stay synced.
   const store = await loadStore();
+  autoConfirmEligibleOrders(store);
   await saveStore(store);
 
   const getCurrentMember = () =>

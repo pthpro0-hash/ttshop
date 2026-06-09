@@ -1555,6 +1555,30 @@ h1 {
 .shipment-summary-list {
   margin-bottom: 4px;
 }
+.shipment-operation-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.shipment-operation-summary article {
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: #f7f9fb;
+}
+.shipment-operation-summary span,
+.shipment-operation-summary strong {
+  display: block;
+}
+.shipment-operation-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.shipment-operation-summary strong {
+  margin-top: 10px;
+  font-size: 24px;
+  line-height: 1;
+}
 .shipment-head {
   display: flex;
   justify-content: space-between;
@@ -1579,6 +1603,75 @@ h1 {
 .shipment-list {
   display: grid;
   gap: 12px;
+}
+.shipment-filter-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.shipment-filter-panel strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 1000;
+}
+.shipment-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.shipment-filter-buttons .cart-button {
+  min-height: 38px;
+  padding-inline: 14px;
+  background: #fff;
+}
+.shipment-filter-buttons .cart-button.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.shipment-day-group {
+  display: grid;
+  gap: 12px;
+}
+.shipment-day-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.shipment-day-head strong,
+.shipment-day-head span {
+  display: block;
+}
+.shipment-day-head strong {
+  font-size: 24px;
+  line-height: 1;
+}
+.shipment-day-head span {
+  margin-top: 6px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.76;
+}
+.shipment-day-head > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.shipment-day-head > div:last-child span {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
 }
 .shipment-row {
   display: grid;
@@ -1831,6 +1924,52 @@ h1 {
 .point-input-item .quantity-input {
   min-height: 44px;
   margin: 0;
+}
+.point-input-item em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.45;
+}
+.checkout-address-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.checkout-address-actions .cart-button,
+.checkout-address-actions .buy-button {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+.checkout-address-register {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 18px;
+  border: 1px solid #ded8ce;
+  background: #f7f9fb;
+}
+.checkout-register-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.checkout-register-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.checkout-register-grid .quantity-input {
+  min-height: 48px;
+  margin: 0;
+  background: #fff;
+}
+.checkout-register-wide {
+  grid-column: span 2;
 }
 .auth-check {
   display: flex !important;
@@ -3106,6 +3245,27 @@ body.cart-open .cart-drawer {
   line-height: 1.35;
   text-transform: uppercase;
 }
+.cart-item-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.cart-remove-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--soft);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+.cart-remove-button:hover {
+  border-color: #cf3d35;
+  background: #cf3d35;
+  color: #fff;
+}
 .cart-item p {
   margin: 0;
   color: var(--muted);
@@ -3381,13 +3541,20 @@ footer {
   .product-image-editor,
   .product-image-fields,
   .product-management-shell,
+  .checkout-register-grid,
+  .shipment-operation-summary,
+  .shipment-filter-panel,
   .product-list-summary {
     grid-template-columns: 1fr;
+  }
+  .checkout-register-wide {
+    grid-column: auto;
   }
   .shipment-row {
     grid-template-columns: 1fr;
   }
   .shipment-head,
+  .shipment-day-head,
   .address-lookup-head {
     align-items: flex-start;
     flex-direction: column;
@@ -3395,6 +3562,9 @@ footer {
   .shipment-head span,
   .address-lookup-head span {
     text-align: left;
+  }
+  .shipment-day-head > div:last-child {
+    justify-content: flex-start;
   }
   .profile-top-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));

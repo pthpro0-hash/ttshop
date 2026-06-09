@@ -37,6 +37,11 @@ export function createManagementController({
   closeCart,
   persistStore = () => {},
 }) {
+  const adminShipmentFilters = {
+    date: "all",
+    status: "all",
+  };
+
   // Back-office controller for both Admin and Agency views.
   // It renders dashboards first, then loads detailed workspaces inside modals.
   function openManagement(role = "admin") {
@@ -57,7 +62,8 @@ export function createManagementController({
         "[data-admin-detail]",
         "#adminDetailModal",
         "admin",
-        (type) => createAdminDetailContent(type, store),
+        (type) =>
+          createAdminDetailContent(type, store, { adminShipmentFilters }),
       );
     }
 
@@ -161,6 +167,25 @@ export function createManagementController({
           modal,
           createContent(modal.dataset.currentDetail || "settlements"),
         );
+        return;
+      }
+
+      const shipmentFilter = event.target.closest(
+        "[data-admin-shipment-filter]",
+      );
+      if (shipmentFilter) {
+        adminShipmentFilters.status =
+          shipmentFilter.dataset.adminShipmentFilter;
+        modal.dataset.currentDetail = "orders";
+        openDetailModal(modal, createContent("orders"));
+        return;
+      }
+
+      const shipmentDate = event.target.closest("[data-admin-shipment-date]");
+      if (shipmentDate) {
+        adminShipmentFilters.date = shipmentDate.dataset.adminShipmentDate;
+        modal.dataset.currentDetail = "orders";
+        openDetailModal(modal, createContent("orders"));
         return;
       }
 
@@ -1293,10 +1318,10 @@ function closeDetailModal(modal) {
   document.body.classList.remove("modal-open");
 }
 
-function createAdminDetailContent(type, store) {
+function createAdminDetailContent(type, store, options = {}) {
   // Admin detail content is routed by metric type. Large management surfaces
   // return an `extra` workspace instead of simple process rows.
-  const detail = getAdminDetail(type, store);
+  const detail = getAdminDetail(type, store, options);
 
   return `
     <div class="detail-panel-head">
@@ -1313,7 +1338,7 @@ function createAdminDetailContent(type, store) {
   `;
 }
 
-function getAdminDetail(type, store) {
+function getAdminDetail(type, store, options = {}) {
   const detailMap = {
     headquarters: {
       label: "Headquarters",
@@ -1349,10 +1374,13 @@ function getAdminDetail(type, store) {
     },
     orders: {
       label: "Orders",
-      title: "이달의 주문 / 배송 관리",
+      title: "일자별 주문 / 송장 관리",
       description:
-        "대리점별 이달 누적 금액을 확인하고, 주문별 배송상태와 송장 정보를 관리합니다.",
-      extra: createAdminOrderShippingWorkspace(store),
+        "결제일 기준으로 주문을 묶고, 송장 미등록/배송중/배송완료 상태를 빠르게 필터링해 송장 정보를 관리합니다.",
+      extra: createAdminOrderShippingWorkspace(
+        store,
+        options.adminShipmentFilters,
+      ),
       rows: [],
     },
     points: {
@@ -1688,7 +1716,9 @@ function isMonthDate(value, monthKey) {
 
 function getCurrentMonthOrders(store) {
   return store.orders.filter(
-    (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
+    (order) =>
+      ["paid", "completed"].includes(order.status) &&
+      isCurrentMonthDate(order.paidAt),
   );
 }
 
@@ -1703,17 +1733,23 @@ function isPointUse(point) {
   return point.amount < 0 || String(point.type || "").includes("use");
 }
 
+function isPendingPoint(point) {
+  return point.type === "purchase_pending";
+}
+
 function getCurrentMonthPointSummary(store) {
   return getCurrentMonthPoints(store).reduce(
     (summary, point) => {
       if (isPointUse(point)) {
         summary.used += Math.abs(point.amount);
+      } else if (isPendingPoint(point)) {
+        summary.pending += Math.max(0, point.amount);
       } else {
         summary.earned += Math.max(0, point.amount);
       }
       return summary;
     },
-    { earned: 0, used: 0 },
+    { earned: 0, pending: 0, used: 0 },
   );
 }
 
@@ -1727,7 +1763,7 @@ function createOrderDetailRow(order, store) {
     <article class="process-row">
       <div><strong>${order.id}</strong><span>${order.status} · ${order.paidAt}</span></div>
       <div><span>상품 실결제</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
-      <div><span>포인트 적립</span><strong>${(point?.amount || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>${isPendingPoint(point || {}) ? "포인트 예정" : "포인트 적립"}</span><strong>${(point?.amount || 0).toLocaleString("ko-KR")}P</strong></div>
       <div><span>대리점 영업비</span><strong>${formatMoney(settlement?.commissionAmount || 0)}</strong></div>
     </article>
   `;
@@ -1739,7 +1775,7 @@ function createPointDetailRow(point) {
       <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
       <div><span>기준 금액</span><strong>${formatMoney(point.baseAmount)}</strong></div>
       <div><span>적립률</span><strong>${point.rate}%</strong></div>
-      <div><span>포인트</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+      <div><span>${isPendingPoint(point) ? "예정 포인트" : "포인트"}</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
     </article>
   `;
 }
@@ -1769,12 +1805,18 @@ function createMonthlyAgencySalesRows(store) {
   });
 }
 
-function createAdminOrderShippingWorkspace(store) {
-  // Combines monthly agency sales with operational shipment controls.
-  // Sales stay grouped by agency, while each order can be updated individually.
+function createAdminOrderShippingWorkspace(store, filters = {}) {
+  // Combines monthly agency sales with a daily shipment operation board.
+  // Admins can filter by paid date and delivery state without leaving the modal.
   const orders = [...(store.orders || [])].sort((a, b) =>
     String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
   );
+  const normalizedFilters = {
+    date: filters.date || "all",
+    status: filters.status || "all",
+  };
+  const filteredOrders = filterShipmentOrders(orders, normalizedFilters);
+  const dailyGroups = groupOrdersByPaidDate(filteredOrders);
 
   return `
     <section class="shipment-workspace">
@@ -1782,18 +1824,161 @@ function createAdminOrderShippingWorkspace(store) {
       <div class="process-list shipment-summary-list">
         ${createMonthlyAgencySalesRows(store).join("")}
       </div>
+      ${createAdminShipmentSummaryBoard(orders)}
       <div class="shipment-head">
         <div>
-          <div class="product-category">Shipment control</div>
-          <strong>주문별 배송 / 송장 관리</strong>
+          <div class="product-category">Daily shipment control</div>
+          <strong>결제일별 송장 관리</strong>
         </div>
-        <span>송장번호 저장 시 고객 주문 상세에도 바로 반영됩니다.</span>
+        <span>송장번호 저장 시 고객 주문 상세에도 바로 반영됩니다. 배송중/배송완료는 택배사와 송장번호가 필요합니다.</span>
+      </div>
+      ${createAdminShipmentFilters(orders, normalizedFilters)}
+      ${
+        dailyGroups.length
+          ? dailyGroups
+              .map(([date, dateOrders]) =>
+                createAdminShipmentDayGroup(date, dateOrders, store),
+              )
+              .join("")
+          : '<div class="admin-detail-empty">현재 필터에 해당하는 주문이 없습니다.</div>'
+      }
+    </section>
+  `;
+}
+
+function createAdminShipmentSummaryBoard(orders) {
+  const summary = getShipmentOperationSummary(orders);
+
+  return `
+    <div class="shipment-operation-summary">
+      <article><span>전체 주문</span><strong>${summary.total}건</strong></article>
+      <article><span>송장 미등록</span><strong>${summary.missingTracking}건</strong></article>
+      <article><span>상품준비/결제완료</span><strong>${summary.ready}건</strong></article>
+      <article><span>배송중</span><strong>${summary.shipping}건</strong></article>
+      <article><span>배송완료</span><strong>${summary.delivered}건</strong></article>
+    </div>
+  `;
+}
+
+function createAdminShipmentFilters(orders, filters) {
+  const dateKeys = getShipmentDateKeys(orders);
+  const filterButtons = [
+    ["all", "전체"],
+    ["missing_tracking", "송장 미등록"],
+    ["ready", "상품준비"],
+    ["shipping", "배송중"],
+    ["delivered", "배송완료"],
+    ["returned", "취소/반품"],
+  ];
+
+  return `
+    <div class="shipment-filter-panel">
+      <div>
+        <strong>상태 소팅</strong>
+        <div class="shipment-filter-buttons">
+          ${filterButtons
+            .map(
+              ([value, label]) => `
+              <button class="cart-button ${filters.status === value ? "is-active" : ""}" type="button" data-admin-shipment-filter="${value}">${label}</button>
+            `,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div>
+        <strong>결제일</strong>
+        <div class="shipment-filter-buttons">
+          <button class="cart-button ${filters.date === "all" ? "is-active" : ""}" type="button" data-admin-shipment-date="all">전체</button>
+          ${dateKeys
+            .map(
+              (date) => `
+              <button class="cart-button ${filters.date === date ? "is-active" : ""}" type="button" data-admin-shipment-date="${date}">${date}</button>
+            `,
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function createAdminShipmentDayGroup(date, orders, store) {
+  const summary = getShipmentOperationSummary(orders);
+  const sales = orders.reduce((sum, order) => sum + order.paidProductAmount, 0);
+
+  return `
+    <section class="shipment-day-group">
+      <div class="shipment-day-head">
+        <div>
+          <strong>${date}</strong>
+          <span>${orders.length}건 · 상품금액 ${formatMoney(sales)}</span>
+        </div>
+        <div>
+          <span>미등록 ${summary.missingTracking}건</span>
+          <span>배송중 ${summary.shipping}건</span>
+          <span>완료 ${summary.delivered}건</span>
+        </div>
       </div>
       <div class="shipment-list">
-        ${orders.map((order) => createAdminShipmentRow(order, store)).join("") || '<div class="admin-detail-empty">관리할 주문이 없습니다.</div>'}
+        ${orders.map((order) => createAdminShipmentRow(order, store)).join("")}
       </div>
     </section>
   `;
+}
+
+function filterShipmentOrders(orders, filters) {
+  return orders.filter((order) => {
+    if (filters.date !== "all" && order.paidAt !== filters.date) return false;
+    if (filters.status === "all") return true;
+    if (filters.status === "missing_tracking") {
+      return !order.trackingNumber && order.shippingStatus !== "returned";
+    }
+    if (filters.status === "ready") {
+      return ["preparing", "paid", ""].includes(order.shippingStatus || "");
+    }
+    return order.shippingStatus === filters.status;
+  });
+}
+
+function groupOrdersByPaidDate(orders) {
+  const groups = new Map();
+  orders.forEach((order) => {
+    const date = order.paidAt || "날짜 없음";
+    if (!groups.has(date)) groups.set(date, []);
+    groups.get(date).push(order);
+  });
+  return [...groups.entries()];
+}
+
+function getShipmentDateKeys(orders) {
+  return [...new Set(orders.map((order) => order.paidAt).filter(Boolean))]
+    .sort((a, b) => String(b).localeCompare(String(a)))
+    .slice(0, 14);
+}
+
+function getShipmentOperationSummary(orders) {
+  return orders.reduce(
+    (summary, order) => {
+      const status = order.shippingStatus || "preparing";
+      summary.total += 1;
+      if (!order.trackingNumber && status !== "returned") {
+        summary.missingTracking += 1;
+      }
+      if (["preparing", "paid", ""].includes(status)) summary.ready += 1;
+      if (status === "shipping") summary.shipping += 1;
+      if (status === "delivered") summary.delivered += 1;
+      if (status === "returned") summary.returned += 1;
+      return summary;
+    },
+    {
+      total: 0,
+      missingTracking: 0,
+      ready: 0,
+      shipping: 0,
+      delivered: 0,
+      returned: 0,
+    },
+  );
 }
 
 function createAdminShipmentRow(order, store) {
@@ -1866,6 +2051,7 @@ function createMonthlyPointSummary(store) {
   return `
     <div class="management-grid compact monthly-point-summary">
       <article><span>이달 적립포인트</span><strong>${summary.earned.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>이달 적립예정</span><strong>${summary.pending.toLocaleString("ko-KR")}P</strong></article>
       <article><span>이달 사용포인트</span><strong>${summary.used.toLocaleString("ko-KR")}P</strong></article>
       <article><span>순증감</span><strong>${(summary.earned - summary.used).toLocaleString("ko-KR")}P</strong></article>
     </div>

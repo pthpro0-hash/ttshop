@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS orders (
   point_use_limit INTEGER NOT NULL DEFAULT 0,
   point_earned INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'paid',
+  confirmed_at TEXT,
   shipping_status TEXT NOT NULL DEFAULT 'preparing',
   courier TEXT,
   tracking_number TEXT,

@@ -52,6 +52,7 @@ function migrateDatabase(database) {
     "shipping_status",
     "TEXT NOT NULL DEFAULT 'preparing'",
   );
+  ensureColumn(database, "orders", "confirmed_at", "TEXT");
   ensureColumn(database, "orders", "courier", "TEXT");
   ensureColumn(database, "orders", "tracking_number", "TEXT");
   ensureColumn(database, "orders", "shipped_at", "TEXT");
@@ -383,9 +384,9 @@ function insertOrder(database, order) {
         (id, member_id, agency_id_at_order, referral_source_type,
          paid_product_amount, shipping_amount, paid_amount, point_used,
          point_use_limit, point_earned,
-         status, shipping_status, courier, tracking_number, shipped_at,
+         status, confirmed_at, shipping_status, courier, tracking_number, shipped_at,
          delivered_at, shipping_memo, shipping_address, payment_method, paid_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     )
     .run(
@@ -400,6 +401,7 @@ function insertOrder(database, order) {
       Number(order.pointUseLimit) || 0,
       Number(order.pointEarned) || 0,
       order.status || "paid",
+      order.confirmedAt || "",
       order.shippingStatus || "preparing",
       order.courier || "",
       order.trackingNumber || "",
@@ -705,6 +707,7 @@ function mapOrder(row) {
     pointUseLimit: row.point_use_limit || 0,
     pointEarned: row.point_earned,
     status: row.status,
+    confirmedAt: row.confirmed_at || "",
     shippingStatus: row.shipping_status || "preparing",
     courier: row.courier || "",
     trackingNumber: row.tracking_number || "",

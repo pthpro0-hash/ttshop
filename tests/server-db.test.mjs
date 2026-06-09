@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { cloneDefaultStore } from "../scripts/data/demo-store.js";
 import { openShopDatabase, readStore, writeStore } from "../server/db.mjs";
-import { completeBypassPayment } from "../scripts/domain/order-processing.js";
+import {
+  completeBypassPayment,
+  confirmPurchase,
+} from "../scripts/domain/order-processing.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "beauty-shop-db-"));
 let database;
@@ -171,10 +174,11 @@ try {
   assert.equal(order.pointUsed, 6000);
   assert.equal(order.paidAmount, 44000);
   assert.equal(order.pointEarned, 2500);
+  assert.equal(order.confirmedAt, "");
   assert.equal(order.shippingStatus, "preparing");
   assert.equal(order.shippingAddress.addressDetail, "테스트 3층");
   assert.equal(order.paymentMethod, "신용카드");
-  assert.equal(member.points, 6500);
+  assert.equal(member.points, 4000);
   assert.equal(order.items[0].qty, 2);
   assert.equal(
     reloaded.pointLedger.some(
@@ -188,7 +192,13 @@ try {
       (point) => point.memberId === member.id && point.amount === 2500,
     ),
     true,
-    "point ledger should survive SQLite reload",
+    "pending point ledger should survive SQLite reload",
+  );
+  assert.equal(
+    reloaded.pointLedger.find(
+      (point) => point.memberId === member.id && point.amount === 2500,
+    ).type,
+    "purchase_pending",
   );
   assert.equal(
     reloaded.agencySettlementLedger.some(
@@ -218,6 +228,7 @@ try {
   order.trackingNumber = "1234567890";
   order.shippedAt = "2026-06-16";
   order.shippingMemo = "문 앞 배송";
+  assert.equal(confirmPurchase(reloaded, order.id, "member"), true);
   writeStore(database, reloaded);
   const reloadedAgain = readStore(database);
   const confirmedSettlement = reloadedAgain.agencySettlementLedger.find(
@@ -233,6 +244,17 @@ try {
   assert.equal(shippedOrder.courier, "CJ대한통운");
   assert.equal(shippedOrder.trackingNumber, "1234567890");
   assert.equal(shippedOrder.shippingMemo, "문 앞 배송");
+  assert.ok(shippedOrder.confirmedAt);
+  assert.equal(
+    reloadedAgain.members.find((item) => item.id === member.id).points,
+    6500,
+  );
+  assert.equal(
+    reloadedAgain.pointLedger.find(
+      (point) => point.orderId === order.id && point.amount === 2500,
+    ).type,
+    "purchase_earn",
+  );
 
   console.log("Server SQLite database test passed");
 } finally {

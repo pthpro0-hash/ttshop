@@ -192,9 +192,9 @@ export function createShopController({
 
     showDetailView();
     document.querySelector("#backToShop").addEventListener("click", showHome);
-    document
-      .querySelector("#addCart")
-      .addEventListener("click", () => addToCart(product));
+    document.querySelector("#addCart").addEventListener("click", () => {
+      if (addToCart(product)) openCart();
+    });
     ["input", "change"].forEach((eventName) => {
       document
         .querySelector("#optionSelect")
@@ -420,7 +420,10 @@ export function createShopController({
     <div class="cart-item">
       <img src="${item.image}" alt="${item.ko}" />
       <div>
-        <h3>${item.name}<br />ㅣ${item.ko}</h3>
+        <div class="cart-item-head">
+          <h3>${item.name}<br />ㅣ${item.ko}</h3>
+          <button class="cart-remove-button" type="button" data-remove-key="${escapeAttribute(item.cartKey)}" aria-label="${item.ko} 삭제">삭제</button>
+        </div>
         <p>${item.category} / ${item.type}</p>
         <p>${item.option}</p>
         <div class="cart-item-bottom">
@@ -500,8 +503,13 @@ export function createShopController({
               </div>
             </div>
           </div>
+          <div class="checkout-address-actions">
+            <button class="cart-button" type="button" data-checkout-saved-toggle>배송지 목록</button>
+            <button class="cart-button" type="button" data-checkout-address-register-toggle>배송지 등록</button>
+          </div>
           ${createCheckoutAddressLookup()}
           ${createCheckoutSavedAddresses(member)}
+          ${createCheckoutAddressRegister(member)}
           <label class="option-label" for="address">배송지</label>
           <input class="quantity-input" id="address" value="${escapeAttribute(defaultAddress.address || "")}" />
           <label class="option-label" for="addressDetail">상세주소</label>
@@ -575,7 +583,7 @@ export function createShopController({
     updateCart();
     openPaymentResult(result);
     showToast(
-      `결제 완료: ${result.earnedPoints.toLocaleString("ko-KR")} 포인트가 적립되었습니다.`,
+      `결제 완료: ${result.earnedPoints.toLocaleString("ko-KR")} 포인트가 적립 예정입니다.`,
     );
   }
 
@@ -605,7 +613,7 @@ export function createShopController({
     if (!addresses.length) return "";
 
     return `
-    <div class="checkout-saved-addresses">
+    <div class="checkout-saved-addresses is-hidden" data-checkout-saved-panel>
       <div class="address-lookup-head">
         <strong>저장 배송지</strong>
         <span>주문에 사용할 배송지를 선택하세요.</span>
@@ -626,6 +634,45 @@ export function createShopController({
   `;
   }
 
+  function createCheckoutAddressRegister(member) {
+    return `
+    <div class="checkout-address-register is-hidden" data-checkout-address-register-panel>
+      <div class="address-lookup-head">
+        <strong>배송지 등록</strong>
+        <span>자주 쓰는 배송지를 저장하고 현재 주문에 바로 적용합니다.</span>
+      </div>
+      <div class="checkout-register-grid">
+        <label>배송지명<input class="quantity-input" id="newAddressLabel" value="추가 배송지" /></label>
+        <label>수령인<input class="quantity-input" id="newAddressRecipient" value="${escapeAttribute(member?.name || "")}" /></label>
+        <label>연락처<input class="quantity-input" id="newAddressPhone" value="${escapeAttribute(member?.phone || "")}" /></label>
+        <label>우편번호<input class="quantity-input" id="newAddressPostcode" /></label>
+        <label class="checkout-register-wide">배송지<input class="quantity-input" id="newAddressAddress" /></label>
+        <label class="checkout-register-wide">상세주소<input class="quantity-input" id="newAddressDetail" /></label>
+      </div>
+      <div class="checkout-address-actions">
+        <button class="cart-button" type="button" data-checkout-register-lookup>등록 주소 조회</button>
+        <button class="buy-button" type="button" data-checkout-save-address>배송지 저장</button>
+      </div>
+      <div class="address-lookup-panel checkout-register-lookup is-hidden" data-checkout-register-lookup-panel>
+        <div class="address-lookup-head">
+          <strong>등록 주소 조회 결과</strong>
+          <span>선택하면 등록 폼에 우편번호와 주소가 입력됩니다.</span>
+        </div>
+        <div class="address-lookup-list">
+          ${ADDRESS_LOOKUP_PRESETS.map(
+            (item) => `
+            <button class="address-result-button" type="button" data-checkout-register-result data-postcode="${item.postcode}" data-address="${escapeAttribute(item.address)}">
+              <strong>${item.label}</strong>
+              <span>${item.postcode} ${item.address}</span>
+            </button>
+          `,
+          ).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+  }
+
   function bindCheckoutAddressEvents() {
     // Saved address buttons and lookup result buttons both write to the same
     // checkout fields, keeping the order snapshot source simple.
@@ -634,6 +681,30 @@ export function createShopController({
       ?.addEventListener("click", () => {
         document
           .querySelector("[data-checkout-address-panel]")
+          ?.classList.toggle("is-hidden");
+      });
+
+    document
+      .querySelector("[data-checkout-saved-toggle]")
+      ?.addEventListener("click", () => {
+        document
+          .querySelector("[data-checkout-saved-panel]")
+          ?.classList.toggle("is-hidden");
+      });
+
+    document
+      .querySelector("[data-checkout-address-register-toggle]")
+      ?.addEventListener("click", () => {
+        document
+          .querySelector("[data-checkout-address-register-panel]")
+          ?.classList.toggle("is-hidden");
+      });
+
+    document
+      .querySelector("[data-checkout-register-lookup]")
+      ?.addEventListener("click", () => {
+        document
+          .querySelector("[data-checkout-register-lookup-panel]")
           ?.classList.toggle("is-hidden");
       });
 
@@ -661,6 +732,68 @@ export function createShopController({
           setCheckoutField("#addressDetail", button.dataset.addressDetail);
         });
       });
+
+    document
+      .querySelectorAll("[data-checkout-register-result]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          setCheckoutField("#newAddressPostcode", button.dataset.postcode);
+          setCheckoutField("#newAddressAddress", button.dataset.address);
+          document
+            .querySelector("[data-checkout-register-lookup-panel]")
+            ?.classList.add("is-hidden");
+          document.querySelector("#newAddressDetail")?.focus();
+        });
+      });
+
+    document
+      .querySelector("[data-checkout-save-address]")
+      ?.addEventListener("click", saveCheckoutAddress);
+  }
+
+  function saveCheckoutAddress() {
+    const member = getCurrentMember();
+    if (!member) return;
+
+    const address = {
+      id: `addr-${Date.now()}`,
+      label:
+        document.querySelector("#newAddressLabel")?.value.trim() ||
+        "추가 배송지",
+      recipient:
+        document.querySelector("#newAddressRecipient")?.value.trim() ||
+        member.name ||
+        "",
+      phone:
+        document.querySelector("#newAddressPhone")?.value.trim() ||
+        member.phone ||
+        "",
+      postcode:
+        document.querySelector("#newAddressPostcode")?.value.trim() || "",
+      address: document.querySelector("#newAddressAddress")?.value.trim() || "",
+      addressDetail:
+        document.querySelector("#newAddressDetail")?.value.trim() || "",
+      isDefault: false,
+    };
+
+    if (!address.postcode || !address.address) {
+      showToast("배송지 조회 후 우편번호와 배송지를 입력해주세요.");
+      return;
+    }
+
+    member.shippingAddresses = normalizeShippingAddresses(member);
+    member.shippingAddresses.push(address);
+    persistStore(store);
+    setCheckoutField("#customerName", address.recipient);
+    setCheckoutField("#customerPhone", address.phone);
+    setCheckoutField("#zipCode", address.postcode);
+    setCheckoutField("#address", address.address);
+    setCheckoutField("#addressDetail", address.addressDetail);
+    showToast("배송지를 등록하고 주문 배송지에 적용했습니다.");
+    openCheckout();
+    document
+      .querySelector("[data-checkout-saved-panel]")
+      ?.classList.remove("is-hidden");
   }
 
   function setCheckoutField(selector, value = "") {
@@ -736,13 +869,13 @@ export function createShopController({
         <article><span>실결제 상품금액</span><strong>${formatMoney(result.totals.paidProductAmount)}</strong></article>
         <article><span>배송비</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "무료"}</strong></article>
         <article><span>포인트 사용</span><strong>${result.totals.pointUsed ? `-${result.totals.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></article>
-        <article><span>적립 포인트</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
+        <article><span>적립 예정 포인트</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
         <article><span>추천 링크 생성</span><strong>${result.referralLinks.length}개</strong></article>
         <article><span>처리 상태</span><strong>완료</strong></article>
       </div>
       <div class="payment-process">
         <div><strong>01 주문 생성</strong><span>${result.order.id} 주문을 paid 상태로 저장했습니다.</span></div>
-        <div><strong>02 포인트 적립</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}원 × ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
+        <div><strong>02 적립 예정</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}원 × ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P, 구매확정 후 실제 적립됩니다.</span></div>
         <div><strong>03 개인 추천링크</strong><span>구매 상품 종류 기준으로 ${result.referralLinks.length}개 링크를 생성했습니다.</span></div>
       </div>
       ${createReferralCopyPanel(result.referralLinks)}
@@ -940,6 +1073,7 @@ export function createShopController({
       <div class="detail-price-item point-input-item">
         <span>포인트 사용</span>
         <input class="quantity-input" id="checkoutPointUse" type="number" min="0" step="100" max="${pointUseLimit}" value="${pointUsed}" ${pointUseLimit ? "" : "disabled"} />
+        <em>보유 ${formatPoints(pointBalance)} 중 최대 ${formatPoints(pointUseLimit)}까지 사용할 수 있습니다.</em>
       </div>
       <div class="detail-price-item"><span>적립 예정</span><strong>${formatPoints(reward)}</strong></div>
       <div class="detail-price-item"><span>결제예정금액</span><strong>${formatMoney(total)}</strong></div>
@@ -1004,6 +1138,17 @@ export function createShopController({
     });
 
     dom.cartList.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("button[data-remove-key]");
+      if (removeButton) {
+        state.cart = state.cart.filter(
+          (cartItem) => cartItem.cartKey !== removeButton.dataset.removeKey,
+        );
+        if (!state.cart.length) state.pointToUse = 0;
+        updateCart();
+        showToast("상품을 구매 목록에서 삭제했습니다.");
+        return;
+      }
+
       const button = event.target.closest("button[data-key]");
       if (!button) return;
 

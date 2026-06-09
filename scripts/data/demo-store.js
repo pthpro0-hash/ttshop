@@ -129,6 +129,7 @@ export const defaultStore = {
       pointUseLimit: 18000,
       pointEarned: 3800,
       status: "paid",
+      confirmedAt: "2026-05-29",
       shippingStatus: "preparing",
       courier: "",
       trackingNumber: "",

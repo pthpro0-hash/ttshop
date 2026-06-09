@@ -1,4 +1,5 @@
 import { formatMoney } from "../utils/format.js";
+import { confirmPurchase } from "../domain/order-processing.js";
 
 export function createAuthController({
   dom,
@@ -335,7 +336,7 @@ export function createAuthController({
           <div class="profile-wallet-main">
             <span>사용 가능 포인트</span>
             <strong>${member.points.toLocaleString("ko-KR")}P</strong>
-            <em>이번달 적립 ${stats.monthEarned.toLocaleString("ko-KR")}P · 사용 ${stats.monthUsed.toLocaleString("ko-KR")}P</em>
+            <em>예정 ${stats.pendingPoints.toLocaleString("ko-KR")}P · 이번달 적립 ${stats.monthEarned.toLocaleString("ko-KR")}P · 사용 ${stats.monthUsed.toLocaleString("ko-KR")}P</em>
           </div>
           <div class="profile-next-action">
             <span>최근 주문</span>
@@ -352,7 +353,7 @@ export function createAuthController({
         </nav>
         <div class="profile-summary-grid">
           <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>주문</span><strong>${orders.length}건</strong><em>누적 ${formatMoney(stats.totalPaid)}</em></button>
-          <button type="button" data-profile-section="points" data-profile-tab="points"><span>포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>총 사용 ${stats.usedPoints.toLocaleString("ko-KR")}P</em></button>
+          <button type="button" data-profile-section="points" data-profile-tab="points"><span>포인트</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>예정 ${stats.pendingPoints.toLocaleString("ko-KR")}P</em></button>
           <button type="button" data-profile-section="links" data-profile-tab="links"><span>추천</span><strong>${links.length}개</strong><em>활성 ${stats.activeLinks}개</em></button>
           <div class="profile-status-card"><span>이번달</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}건 결제</em></div>
         </div>
@@ -503,7 +504,10 @@ export function createAuthController({
       String(order.paidAt || "").startsWith(monthPrefix),
     );
     const earnedPoints = points
-      .filter((point) => Number(point.amount) > 0)
+      .filter((point) => Number(point.amount) > 0 && !isPendingPoint(point))
+      .reduce((sum, point) => sum + Number(point.amount || 0), 0);
+    const pendingPoints = points
+      .filter(isPendingPoint)
       .reduce((sum, point) => sum + Number(point.amount || 0), 0);
     const usedPoints = points
       .filter((point) => Number(point.amount) < 0)
@@ -512,6 +516,7 @@ export function createAuthController({
       .filter(
         (point) =>
           Number(point.amount) > 0 &&
+          !isPendingPoint(point) &&
           String(point.createdAt || "").startsWith(monthPrefix),
       )
       .reduce((sum, point) => sum + Number(point.amount || 0), 0);
@@ -535,6 +540,7 @@ export function createAuthController({
         0,
       ),
       monthUsed,
+      pendingPoints,
       totalPaid: orders.reduce(
         (sum, order) => sum + Number(order.paidAmount || 0),
         0,
@@ -595,10 +601,11 @@ export function createAuthController({
         <div class="product-category">Points</div>
         <h3>포인트 관리</h3>
       </div>
-      <p>구매 적립, 결제 사용, 월별 누적을 분리해 확인합니다. 포인트 적립/사용 이력은 최근 10개부터 표시됩니다.</p>
+      <p>구매확정 전에는 예정 포인트로 표시하고, 구매확정 후 실제 보유 포인트에 반영합니다.</p>
     </div>
     <div class="profile-point-ledger-summary">
       <article><span>총 적립</span><strong>${stats.earnedPoints.toLocaleString("ko-KR")}P</strong><em>이번달 ${stats.monthEarned.toLocaleString("ko-KR")}P</em></article>
+      <article><span>적립 예정</span><strong>${stats.pendingPoints.toLocaleString("ko-KR")}P</strong><em>구매확정 대기</em></article>
       <article><span>총 사용</span><strong>${stats.usedPoints.toLocaleString("ko-KR")}P</strong><em>이번달 ${stats.monthUsed.toLocaleString("ko-KR")}P</em></article>
       <article><span>최근 변동</span><strong>${points[0] ? `${Number(points[0].amount).toLocaleString("ko-KR")}P` : "0P"}</strong><em>${points[0]?.createdAt || "이력 없음"}</em></article>
     </div>
@@ -671,7 +678,7 @@ export function createAuthController({
       </div>
       <div>
         <strong>${formatMoney(order.paidAmount || order.paidProductAmount)}</strong>
-        <span>사용 ${Math.abs(order.pointUsed || 0).toLocaleString("ko-KR")}P · 적립 ${(order.pointEarned || 0).toLocaleString("ko-KR")}P</span>
+        <span>사용 ${Math.abs(order.pointUsed || 0).toLocaleString("ko-KR")}P · ${order.confirmedAt ? "적립" : "적립 예정"} ${(order.pointEarned || 0).toLocaleString("ko-KR")}P</span>
       </div>
       <div class="profile-row-actions">
         <button class="buy-button mini-button" type="button" data-profile-order-detail="${order.id}">주문 상세</button>
@@ -701,9 +708,15 @@ export function createAuthController({
       <div><span>상품금액</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>배송비</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "무료"}</strong></div>
       <div><span>포인트 사용</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
-      <div><span>적립 포인트</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>${order.confirmedAt ? "적립 포인트" : "적립 예정"}</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>구매확정</span><strong>${order.confirmedAt || "확정 대기"}</strong></div>
       <div><span>결제금액</span><strong>${formatMoney(order.paidAmount)}</strong></div>
     </div>
+    ${
+      order.confirmedAt
+        ? ""
+        : `<div class="buy-actions profile-actions"><button class="buy-button" type="button" data-confirm-order="${order.id}">구매확정</button></div>`
+    }
     <div class="profile-list">
       ${(order.items || [])
         .map(
@@ -741,7 +754,11 @@ export function createAuthController({
   }
 
   function createProfilePointRow(point) {
-    const typeLabel = point.amount >= 0 ? "적립" : "사용";
+    const typeLabel = isPendingPoint(point)
+      ? "적립 예정"
+      : point.amount >= 0
+        ? "적립"
+        : "사용";
     const sign = point.amount >= 0 ? "+" : "-";
 
     return `
@@ -752,6 +769,10 @@ export function createAuthController({
       <div><span>주문번호</span><strong>${point.orderId || "-"}</strong></div>
     </article>
   `;
+  }
+
+  function isPendingPoint(point) {
+    return point.type === "purchase_pending";
   }
 
   function createProfileLinkRow(link) {
@@ -894,6 +915,17 @@ export function createAuthController({
             ?.addEventListener("click", () =>
               detail.classList.add("is-hidden"),
             );
+          detail
+            .querySelector("[data-confirm-order]")
+            ?.addEventListener("click", (event) => {
+              const orderId = event.currentTarget.dataset.confirmOrder;
+              if (!confirmPurchase(store, orderId, "member")) return;
+              persistStore(store);
+              updateSessionUi();
+              showToast("구매확정이 완료되어 포인트가 적립되었습니다.");
+              openProfile();
+              activateProfileTab("orders");
+            });
         });
       });
   }

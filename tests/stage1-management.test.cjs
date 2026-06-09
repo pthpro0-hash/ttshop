@@ -234,7 +234,7 @@ function submitManagementLogin(window, role, userId, password) {
     pathToFileURL(path.join(root, "scripts", "data", "demo-store.js")).href +
       `?domain=${Date.now()}`
   );
-  const { completeBypassPayment } = await import(
+  const { autoConfirmEligibleOrders, completeBypassPayment } = await import(
     pathToFileURL(path.join(root, "scripts", "domain", "order-processing.js"))
       .href + `?domain=${Date.now()}`
   );
@@ -269,6 +269,26 @@ function submitManagementLogin(window, role, userId, password) {
   assert.deepEqual(
     domainResult.referralLinks.map((link) => link.productId).sort(),
     ["cosmetic-serum", "device-led"],
+  );
+  assert.equal(
+    domainStore.pointLedger[0].type,
+    "purchase_pending",
+    "domain checkout should keep purchase points pending before confirmation",
+  );
+  domainResult.order.paidAt = "2026-05-20";
+  assert.equal(
+    autoConfirmEligibleOrders(domainStore, new Date("2026-06-04T00:00:00")),
+    true,
+    "orders should auto-confirm 14 days after purchase date",
+  );
+  assert.equal(domainResult.order.status, "completed");
+  assert.ok(domainResult.order.confirmedAt);
+  assert.equal(
+    domainStore.pointLedger.find(
+      (point) => point.orderId === domainResult.order.id,
+    ).type,
+    "purchase_earn",
+    "auto confirmation should convert pending points to earned points",
   );
 
   const originalIndexedDb = global.indexedDB;
@@ -647,8 +667,8 @@ function submitManagementLogin(window, role, userId, password) {
   );
   assert.match(
     document.querySelector("#paymentResult").textContent,
-    /적립 포인트\s*3,800P/,
-    "payment result should show purchase points",
+    /적립 예정 포인트\s*3,800P/,
+    "payment result should show pending purchase points",
   );
   assert.match(
     document.querySelector("#paymentResult").textContent,
@@ -671,6 +691,39 @@ function submitManagementLogin(window, role, userId, password) {
     latestOrder.shippingAddress.addressDetail,
     "테스트 101호",
     "payment should persist checkout shipping detail",
+  );
+  assert.equal(
+    latestOrder.confirmedAt,
+    "",
+    "newly paid order should wait for purchase confirmation",
+  );
+  assert.equal(
+    JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1")).pointLedger[0]
+      .type,
+    "purchase_pending",
+    "checkout should create pending point ledger before confirmation",
+  );
+  click(dom.window, document.querySelector("#sessionUser"));
+  click(dom.window, document.querySelector('[data-profile-section="orders"]'));
+  click(dom.window, document.querySelector("[data-profile-order-detail]"));
+  assert.match(
+    document.querySelector("#profileOrderDetail").textContent,
+    /적립 예정|구매확정/,
+    "member order detail should show pending point and confirm button",
+  );
+  click(dom.window, document.querySelector("[data-confirm-order]"));
+  const confirmedStore = JSON.parse(
+    localStorage.getItem("beauty-ref-demo-store-v1"),
+  );
+  assert.ok(
+    confirmedStore.orders[0].confirmedAt,
+    "purchase confirmation should set confirmed date",
+  );
+  assert.equal(
+    confirmedStore.pointLedger.find((point) => point.orderId === latestOrder.id)
+      .type,
+    "purchase_earn",
+    "purchase confirmation should convert pending points into earned points",
   );
 
   submitManagementLogin(dom.window, "admin", "adminChang", "Chang$0909");
@@ -741,8 +794,17 @@ function submitManagementLogin(window, role, userId, password) {
   );
   assert.match(
     document.querySelector("#adminModalContent").textContent,
-    /이달의 주문 \/ 배송 관리|강남 뷰티 대리점|누적 상품금액|76,000원|주문별 배송 \/ 송장 관리/,
-    "admin should show monthly agency sales totals and shipment controls",
+    /일자별 주문 \/ 송장 관리|강남 뷰티 대리점|누적 상품금액|76,000원|상태 소팅|송장 미등록|결제일별 송장 관리/,
+    "admin should show monthly agency sales totals and daily shipment controls",
+  );
+  click(
+    dom.window,
+    document.querySelector('[data-admin-shipment-filter="missing_tracking"]'),
+  );
+  assert.match(
+    document.querySelector("#adminModalContent").textContent,
+    /송장 미등록|결제일|2026-/,
+    "admin shipment controls should support missing tracking filtering by paid date",
   );
   const shipmentForm = document.querySelector("[data-shipment-form]");
   input(shipmentForm.querySelector('[name="shippingStatus"]'), "shipping");

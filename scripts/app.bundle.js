@@ -338,6 +338,7 @@
         pointUseLimit: 18e3,
         pointEarned: 3800,
         status: "paid",
+        confirmedAt: "2026-05-29",
         shippingStatus: "preparing",
         courier: "",
         trackingNumber: "",
@@ -647,6 +648,306 @@
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => resolve(null);
     });
+  }
+
+  // scripts/domain/order-processing.js
+  function completeBypassPayment({ cart, store, payment }) {
+    var _a;
+    const member = store.members.find((item) => item.id === payment.memberId);
+    if (!member) {
+      throw new Error(
+        "\uACB0\uC81C \uCC98\uB9AC \uB300\uC0C1 \uD68C\uC6D0\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      );
+    }
+    const paidProductAmount = cart.reduce(
+      (sum, item) => sum + item.sale * item.qty,
+      0,
+    );
+    const shippingAmount =
+      paidProductAmount > 0 && paidProductAmount < 5e4 ? 3e3 : 0;
+    const pointUseLimit = calculatePointUseLimit({
+      paidProductAmount,
+      memberPoints: member.points,
+      maxPointUseRate: store.settings.maxPointUseRate,
+    });
+    const pointUsed = normalizePointUsed(payment.pointUsed, pointUseLimit);
+    const paidAmount = paidProductAmount + shippingAmount - pointUsed;
+    const pointRate = store.settings.purchasePointRate;
+    const earnedPoints = calculatePurchasePoints(paidProductAmount, pointRate);
+    const orderId = createId("order", store.orders.length + 1);
+    const paidAt = /* @__PURE__ */ new Date().toISOString().slice(0, 10);
+    const agencyIdAtOrder =
+      member.agencyId ||
+      ((_a = getHeadquartersAgency(store)) == null ? void 0 : _a.id);
+    const referralSourceType = payment.referralSourceType || "none";
+    const shippingSnapshot = normalizeShippingSnapshot(
+      payment.shippingSnapshot,
+      member,
+    );
+    const order = {
+      id: orderId,
+      memberId: member.id,
+      agencyIdAtOrder,
+      referralSourceType,
+      paidProductAmount,
+      shippingAmount,
+      paidAmount,
+      pointUsed,
+      pointUseLimit,
+      pointEarned: earnedPoints,
+      status: "paid",
+      confirmedAt: "",
+      shippingStatus: "preparing",
+      courier: "",
+      trackingNumber: "",
+      shippedAt: "",
+      deliveredAt: "",
+      shippingMemo: "",
+      shippingAddress: shippingSnapshot,
+      paymentMethod: shippingSnapshot.paymentMethod || "",
+      paidAt,
+      items: cart.map((item) => ({
+        productId: item.id,
+        productName: item.name,
+        productKo: item.ko,
+        sale: item.sale,
+        qty: item.qty,
+        option: item.option,
+        variantSku: item.variantSku || "",
+      })),
+    };
+    store.orders.unshift(order);
+    decrementProductStock(store, cart);
+    member.points = Math.max(0, Number(member.points || 0) - pointUsed);
+    if (pointUsed > 0) {
+      store.pointLedger.unshift({
+        id: createId("point", store.pointLedger.length + 1),
+        memberId: member.id,
+        orderId,
+        type: "purchase_use",
+        amount: -pointUsed,
+        baseAmount: paidProductAmount,
+        rate: store.settings.maxPointUseRate,
+        note: "\uACB0\uC81C \uC2DC \uBCF4\uC720 \uD3EC\uC778\uD2B8 \uC0AC\uC6A9",
+        createdAt: paidAt,
+      });
+    }
+    store.pointLedger.unshift({
+      id: createId("point", store.pointLedger.length + 1),
+      memberId: member.id,
+      orderId,
+      type: "purchase_pending",
+      amount: earnedPoints,
+      baseAmount: paidProductAmount,
+      rate: pointRate,
+      note: "\uAD6C\uB9E4\uD655\uC815 \uD6C4 \uC801\uB9BD \uC608\uC815",
+      createdAt: paidAt,
+    });
+    const referralLinks = createPurchasedProductReferralLinks({
+      cart,
+      memberId: member.id,
+      orderId,
+      store,
+    });
+    store.personalReferralLinks.unshift(...referralLinks);
+    const agencyProcessing = createAgencyProcessing({ order, store });
+    if (agencyProcessing) {
+      store.agencySettlementLedger.unshift(agencyProcessing);
+    }
+    return {
+      order,
+      member,
+      earnedPoints,
+      referralLinks,
+      agencyProcessing,
+      totals: {
+        paidProductAmount,
+        shippingAmount,
+        paidAmount,
+        pointUsed,
+        pointUseLimit,
+      },
+    };
+  }
+  function confirmPurchase(store, orderId, confirmedBy = "member") {
+    const order = store.orders.find((item) => item.id === orderId);
+    if (!order || order.confirmedAt) return false;
+    const member = store.members.find((item) => item.id === order.memberId);
+    if (!member) return false;
+    const confirmedAt = /* @__PURE__ */ new Date().toISOString().slice(0, 10);
+    order.confirmedAt = confirmedAt;
+    order.status = "completed";
+    const alreadyEarnedPoint = store.pointLedger.find(
+      (point) => point.orderId === order.id && point.type === "purchase_earn",
+    );
+    if (alreadyEarnedPoint) {
+      alreadyEarnedPoint.note =
+        alreadyEarnedPoint.note ||
+        "\uAD6C\uB9E4\uD655\uC815 \uC644\uB8CC \uC801\uB9BD";
+      return true;
+    }
+    let pendingPoint = store.pointLedger.find(
+      (point) =>
+        point.orderId === order.id && point.type === "purchase_pending",
+    );
+    if (!pendingPoint && Number(order.pointEarned || 0) > 0) {
+      pendingPoint = {
+        id: createId("point", store.pointLedger.length + 1),
+        memberId: member.id,
+        orderId: order.id,
+        type: "purchase_pending",
+        amount: Number(order.pointEarned || 0),
+        baseAmount: Number(order.paidProductAmount || 0),
+        rate: store.settings.purchasePointRate,
+        note: "\uAD6C\uB9E4\uD655\uC815 \uD6C4 \uC801\uB9BD \uC608\uC815",
+        createdAt: order.paidAt || confirmedAt,
+      };
+      store.pointLedger.unshift(pendingPoint);
+    }
+    if (pendingPoint && pendingPoint.type === "purchase_pending") {
+      pendingPoint.type = "purchase_earn";
+      pendingPoint.note =
+        confirmedBy === "auto"
+          ? "\uAD6C\uB9E4\uC77C 14\uC77C \uACBD\uACFC \uC790\uB3D9 \uAD6C\uB9E4\uD655\uC815 \uC801\uB9BD"
+          : "\uAD6C\uB9E4\uD655\uC815 \uC644\uB8CC \uC801\uB9BD";
+      pendingPoint.createdAt = confirmedAt;
+      member.points += Number(pendingPoint.amount || 0);
+    }
+    return true;
+  }
+  function autoConfirmEligibleOrders(
+    store,
+    today = /* @__PURE__ */ new Date(),
+  ) {
+    let changed = false;
+    (store.orders || []).forEach((order) => {
+      if (order.confirmedAt || !order.paidAt) return;
+      const baseDate = /* @__PURE__ */ new Date(`${order.paidAt}T00:00:00`);
+      const elapsedDays = Math.floor(
+        (today.getTime() - baseDate.getTime()) / (1e3 * 60 * 60 * 24),
+      );
+      if (elapsedDays >= 14) {
+        changed = confirmPurchase(store, order.id, "auto") || changed;
+      }
+    });
+    return changed;
+  }
+  function normalizeShippingSnapshot(snapshot = {}, member = {}) {
+    const fallback = member.address || {};
+    return {
+      recipient: snapshot.recipient || member.name || "",
+      phone: snapshot.phone || member.phone || "",
+      postcode: snapshot.postcode || fallback.postcode || "",
+      address: snapshot.address || fallback.address || "",
+      addressDetail: snapshot.addressDetail || fallback.addressDetail || "",
+      paymentMethod: snapshot.paymentMethod || member.paymentMethod || "",
+    };
+  }
+  function decrementProductStock(store, cart) {
+    cart.forEach((item) => {
+      var _a;
+      const product = (store.products || []).find(
+        (productItem) => productItem.id === item.id,
+      );
+      if (!product) return;
+      product.stock = Math.max(0, Number(product.stock || 0) - item.qty);
+      const variant =
+        (product.variants || []).find(
+          (variantItem) =>
+            variantItem.sku === item.variantSku ||
+            variantItem.optionName === item.option,
+        ) || ((_a = product.variants) == null ? void 0 : _a[0]);
+      if (variant) {
+        variant.stock = Math.max(0, Number(variant.stock || 0) - item.qty);
+      }
+      if (product.stock <= 0) product.status = "soldout";
+    });
+  }
+  function createPurchasedProductReferralLinks({
+    cart,
+    memberId,
+    orderId,
+    store,
+  }) {
+    const links = [];
+    const nextNumber = store.personalReferralLinks.length + 1;
+    const uniqueProducts = /* @__PURE__ */ new Map();
+    cart.forEach((item) => {
+      if (!uniqueProducts.has(item.id)) uniqueProducts.set(item.id, item);
+    });
+    uniqueProducts.forEach((item) => {
+      const sequence = nextNumber + links.length;
+      links.push({
+        id: createId("ref", sequence),
+        ownerMemberId: memberId,
+        productId: item.id,
+        orderId,
+        unitIndex: 1,
+        code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
+        status: "active",
+      });
+    });
+    return links;
+  }
+  function createAgencyProcessing({ order, store }) {
+    if (order.referralSourceType === "personal_product") return null;
+    const agency = store.agencies.find(
+      (item) => item.id === order.agencyIdAtOrder,
+    );
+    if (!agency) return null;
+    const commissionAmount = Math.floor(
+      (order.paidProductAmount * agency.commissionRate) / 100,
+    );
+    return {
+      id: createId(
+        "agency-settlement",
+        store.agencySettlementLedger.length + 1,
+      ),
+      agencyId: agency.id,
+      orderId: order.id,
+      baseAmount: order.paidProductAmount,
+      commissionRate: agency.commissionRate,
+      commissionAmount,
+      status: "pending_next_month_15",
+      updatedAt: "",
+      statusUpdatedBy: "",
+      statusNote: "",
+      statusHistory: [],
+      note: "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C \uB300\uB9AC\uC810 \uC804\uC6D4 \uB9E4\uCD9C \uC815\uC0B0 \uB300\uC0C1",
+      createdAt: order.paidAt,
+    };
+  }
+  function getHeadquartersAgency(store) {
+    return store.agencies.find((agency) => agency.isHeadquarters);
+  }
+  function calculatePurchasePoints(amount, rate) {
+    return Math.floor(
+      (Math.max(0, Number(amount) || 0) * getPercent(rate)) / 100,
+    );
+  }
+  function calculatePointUseLimit({
+    paidProductAmount,
+    memberPoints,
+    maxPointUseRate,
+  }) {
+    const productLimit = Math.floor(
+      (Math.max(0, Number(paidProductAmount) || 0) *
+        getPercent(maxPointUseRate)) /
+        100,
+    );
+    return Math.min(productLimit, Math.max(0, Number(memberPoints) || 0));
+  }
+  function normalizePointUsed(pointUsed, pointUseLimit) {
+    return Math.min(
+      Math.max(0, Math.floor(Number(pointUsed) || 0)),
+      Math.max(0, Number(pointUseLimit) || 0),
+    );
+  }
+  function getPercent(value) {
+    return Math.min(100, Math.max(0, Number(value) || 0));
+  }
+  function createId(prefix, sequence) {
+    return `${prefix}-${sequence.toString().padStart(3, "0")}`;
   }
 
   // scripts/utils/format.js
@@ -966,7 +1267,7 @@
           <div class="profile-wallet-main">
             <span>\uC0AC\uC6A9 \uAC00\uB2A5 \uD3EC\uC778\uD2B8</span>
             <strong>${member.points.toLocaleString("ko-KR")}P</strong>
-            <em>\uC774\uBC88\uB2EC \uC801\uB9BD ${stats.monthEarned.toLocaleString("ko-KR")}P \xB7 \uC0AC\uC6A9 ${stats.monthUsed.toLocaleString("ko-KR")}P</em>
+            <em>\uC608\uC815 ${stats.pendingPoints.toLocaleString("ko-KR")}P \xB7 \uC774\uBC88\uB2EC \uC801\uB9BD ${stats.monthEarned.toLocaleString("ko-KR")}P \xB7 \uC0AC\uC6A9 ${stats.monthUsed.toLocaleString("ko-KR")}P</em>
           </div>
           <div class="profile-next-action">
             <span>\uCD5C\uADFC \uC8FC\uBB38</span>
@@ -983,7 +1284,7 @@
         </nav>
         <div class="profile-summary-grid">
           <button type="button" data-profile-section="orders" data-profile-tab="orders"><span>\uC8FC\uBB38</span><strong>${orders.length}\uAC74</strong><em>\uB204\uC801 ${formatMoney(stats.totalPaid)}</em></button>
-          <button type="button" data-profile-section="points" data-profile-tab="points"><span>\uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>\uCD1D \uC0AC\uC6A9 ${stats.usedPoints.toLocaleString("ko-KR")}P</em></button>
+          <button type="button" data-profile-section="points" data-profile-tab="points"><span>\uD3EC\uC778\uD2B8</span><strong>${member.points.toLocaleString("ko-KR")}P</strong><em>\uC608\uC815 ${stats.pendingPoints.toLocaleString("ko-KR")}P</em></button>
           <button type="button" data-profile-section="links" data-profile-tab="links"><span>\uCD94\uCC9C</span><strong>${links.length}\uAC1C</strong><em>\uD65C\uC131 ${stats.activeLinks}\uAC1C</em></button>
           <div class="profile-status-card"><span>\uC774\uBC88\uB2EC</span><strong>${formatMoney(stats.monthPaid)}</strong><em>${stats.monthOrderCount}\uAC74 \uACB0\uC81C</em></div>
         </div>
@@ -1133,7 +1434,10 @@
         String(order.paidAt || "").startsWith(monthPrefix),
       );
       const earnedPoints = points
-        .filter((point) => Number(point.amount) > 0)
+        .filter((point) => Number(point.amount) > 0 && !isPendingPoint2(point))
+        .reduce((sum, point) => sum + Number(point.amount || 0), 0);
+      const pendingPoints = points
+        .filter(isPendingPoint2)
         .reduce((sum, point) => sum + Number(point.amount || 0), 0);
       const usedPoints = points
         .filter((point) => Number(point.amount) < 0)
@@ -1142,6 +1446,7 @@
         .filter(
           (point) =>
             Number(point.amount) > 0 &&
+            !isPendingPoint2(point) &&
             String(point.createdAt || "").startsWith(monthPrefix),
         )
         .reduce((sum, point) => sum + Number(point.amount || 0), 0);
@@ -1164,6 +1469,7 @@
           0,
         ),
         monthUsed,
+        pendingPoints,
         totalPaid: orders.reduce(
           (sum, order) => sum + Number(order.paidAmount || 0),
           0,
@@ -1220,10 +1526,11 @@
         <div class="product-category">Points</div>
         <h3>\uD3EC\uC778\uD2B8 \uAD00\uB9AC</h3>
       </div>
-      <p>\uAD6C\uB9E4 \uC801\uB9BD, \uACB0\uC81C \uC0AC\uC6A9, \uC6D4\uBCC4 \uB204\uC801\uC744 \uBD84\uB9AC\uD574 \uD655\uC778\uD569\uB2C8\uB2E4. \uD3EC\uC778\uD2B8 \uC801\uB9BD/\uC0AC\uC6A9 \uC774\uB825\uC740 \uCD5C\uADFC 10\uAC1C\uBD80\uD130 \uD45C\uC2DC\uB429\uB2C8\uB2E4.</p>
+      <p>\uAD6C\uB9E4\uD655\uC815 \uC804\uC5D0\uB294 \uC608\uC815 \uD3EC\uC778\uD2B8\uB85C \uD45C\uC2DC\uD558\uACE0, \uAD6C\uB9E4\uD655\uC815 \uD6C4 \uC2E4\uC81C \uBCF4\uC720 \uD3EC\uC778\uD2B8\uC5D0 \uBC18\uC601\uD569\uB2C8\uB2E4.</p>
     </div>
     <div class="profile-point-ledger-summary">
       <article><span>\uCD1D \uC801\uB9BD</span><strong>${stats.earnedPoints.toLocaleString("ko-KR")}P</strong><em>\uC774\uBC88\uB2EC ${stats.monthEarned.toLocaleString("ko-KR")}P</em></article>
+      <article><span>\uC801\uB9BD \uC608\uC815</span><strong>${stats.pendingPoints.toLocaleString("ko-KR")}P</strong><em>\uAD6C\uB9E4\uD655\uC815 \uB300\uAE30</em></article>
       <article><span>\uCD1D \uC0AC\uC6A9</span><strong>${stats.usedPoints.toLocaleString("ko-KR")}P</strong><em>\uC774\uBC88\uB2EC ${stats.monthUsed.toLocaleString("ko-KR")}P</em></article>
       <article><span>\uCD5C\uADFC \uBCC0\uB3D9</span><strong>${points[0] ? `${Number(points[0].amount).toLocaleString("ko-KR")}P` : "0P"}</strong><em>${((_a = points[0]) == null ? void 0 : _a.createdAt) || "\uC774\uB825 \uC5C6\uC74C"}</em></article>
     </div>
@@ -1291,7 +1598,7 @@
       </div>
       <div>
         <strong>${formatMoney(order.paidAmount || order.paidProductAmount)}</strong>
-        <span>\uC0AC\uC6A9 ${Math.abs(order.pointUsed || 0).toLocaleString("ko-KR")}P \xB7 \uC801\uB9BD ${(order.pointEarned || 0).toLocaleString("ko-KR")}P</span>
+        <span>\uC0AC\uC6A9 ${Math.abs(order.pointUsed || 0).toLocaleString("ko-KR")}P \xB7 ${order.confirmedAt ? "\uC801\uB9BD" : "\uC801\uB9BD \uC608\uC815"} ${(order.pointEarned || 0).toLocaleString("ko-KR")}P</span>
       </div>
       <div class="profile-row-actions">
         <button class="buy-button mini-button" type="button" data-profile-order-detail="${order.id}">\uC8FC\uBB38 \uC0C1\uC138</button>
@@ -1319,9 +1626,11 @@
       <div><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>\uBC30\uC1A1\uBE44</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "\uBB34\uB8CC"}</strong></div>
       <div><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
-      <div><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>${order.confirmedAt ? "\uC801\uB9BD \uD3EC\uC778\uD2B8" : "\uC801\uB9BD \uC608\uC815"}</span><strong>${(order.pointEarned || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>\uAD6C\uB9E4\uD655\uC815</span><strong>${order.confirmedAt || "\uD655\uC815 \uB300\uAE30"}</strong></div>
       <div><span>\uACB0\uC81C\uAE08\uC561</span><strong>${formatMoney(order.paidAmount)}</strong></div>
     </div>
+    ${order.confirmedAt ? "" : `<div class="buy-actions profile-actions"><button class="buy-button" type="button" data-confirm-order="${order.id}">\uAD6C\uB9E4\uD655\uC815</button></div>`}
     <div class="profile-list">
       ${(order.items || [])
         .map(
@@ -1360,7 +1669,11 @@
       return [recipient, location].filter(Boolean).join(" \xB7 ") || "-";
     }
     function createProfilePointRow(point) {
-      const typeLabel = point.amount >= 0 ? "\uC801\uB9BD" : "\uC0AC\uC6A9";
+      const typeLabel = isPendingPoint2(point)
+        ? "\uC801\uB9BD \uC608\uC815"
+        : point.amount >= 0
+          ? "\uC801\uB9BD"
+          : "\uC0AC\uC6A9";
       const sign = point.amount >= 0 ? "+" : "-";
       return `
     <article class="profile-row profile-point-row ${point.amount >= 0 ? "is-earned" : "is-used"}">
@@ -1370,6 +1683,9 @@
       <div><span>\uC8FC\uBB38\uBC88\uD638</span><strong>${point.orderId || "-"}</strong></div>
     </article>
   `;
+    }
+    function isPendingPoint2(point) {
+      return point.type === "purchase_pending";
     }
     function createProfileLinkRow(link) {
       const url = createReferralUrl(link.code);
@@ -1497,7 +1813,7 @@
         .querySelectorAll("[data-profile-order-detail]")
         .forEach((button) => {
           button.addEventListener("click", () => {
-            var _a2;
+            var _a2, _b2;
             const order = store.orders.find(
               (item) => item.id === button.dataset.profileOrderDetail,
             );
@@ -1511,6 +1827,19 @@
               : _a2.addEventListener("click", () =>
                   detail.classList.add("is-hidden"),
                 );
+            (_b2 = detail.querySelector("[data-confirm-order]")) == null
+              ? void 0
+              : _b2.addEventListener("click", (event) => {
+                  const orderId = event.currentTarget.dataset.confirmOrder;
+                  if (!confirmPurchase(store, orderId, "member")) return;
+                  persistStore(store);
+                  updateSessionUi();
+                  showToast(
+                    "\uAD6C\uB9E4\uD655\uC815\uC774 \uC644\uB8CC\uB418\uC5B4 \uD3EC\uC778\uD2B8\uAC00 \uC801\uB9BD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+                  );
+                  openProfile();
+                  activateProfileTab("orders");
+                });
           });
         });
     }
@@ -2181,6 +2510,10 @@
     closeCart,
     persistStore = () => {},
   }) {
+    const adminShipmentFilters = {
+      date: "all",
+      status: "all",
+    };
     function openManagement(role = "admin") {
       closeCart();
       dom.management.innerHTML = createManagementView(role, store);
@@ -2198,7 +2531,8 @@
           "[data-admin-detail]",
           "#adminDetailModal",
           "admin",
-          (type) => createAdminDetailContent(type, store),
+          (type) =>
+            createAdminDetailContent(type, store, { adminShipmentFilters }),
         );
       }
       if (role === "agency") {
@@ -2298,6 +2632,23 @@
             modal,
             createContent(modal.dataset.currentDetail || "settlements"),
           );
+          return;
+        }
+        const shipmentFilter = event.target.closest(
+          "[data-admin-shipment-filter]",
+        );
+        if (shipmentFilter) {
+          adminShipmentFilters.status =
+            shipmentFilter.dataset.adminShipmentFilter;
+          modal.dataset.currentDetail = "orders";
+          openDetailModal(modal, createContent("orders"));
+          return;
+        }
+        const shipmentDate = event.target.closest("[data-admin-shipment-date]");
+        if (shipmentDate) {
+          adminShipmentFilters.date = shipmentDate.dataset.adminShipmentDate;
+          modal.dataset.currentDetail = "orders";
+          openDetailModal(modal, createContent("orders"));
           return;
         }
         const agencyMonthButton = event.target.closest("[data-agency-month]");
@@ -3389,8 +3740,8 @@
     modal.hidden = true;
     document.body.classList.remove("modal-open");
   }
-  function createAdminDetailContent(type, store) {
-    const detail = getAdminDetail(type, store);
+  function createAdminDetailContent(type, store, options = {}) {
+    const detail = getAdminDetail(type, store, options);
     return `
     <div class="detail-panel-head">
       <div>
@@ -3405,7 +3756,7 @@
     </div>
   `;
   }
-  function getAdminDetail(type, store) {
+  function getAdminDetail(type, store, options = {}) {
     const detailMap = {
       headquarters: {
         label: "Headquarters",
@@ -3443,10 +3794,13 @@
       },
       orders: {
         label: "Orders",
-        title: "\uC774\uB2EC\uC758 \uC8FC\uBB38 / \uBC30\uC1A1 \uAD00\uB9AC",
+        title: "\uC77C\uC790\uBCC4 \uC8FC\uBB38 / \uC1A1\uC7A5 \uAD00\uB9AC",
         description:
-          "\uB300\uB9AC\uC810\uBCC4 \uC774\uB2EC \uB204\uC801 \uAE08\uC561\uC744 \uD655\uC778\uD558\uACE0, \uC8FC\uBB38\uBCC4 \uBC30\uC1A1\uC0C1\uD0DC\uC640 \uC1A1\uC7A5 \uC815\uBCF4\uB97C \uAD00\uB9AC\uD569\uB2C8\uB2E4.",
-        extra: createAdminOrderShippingWorkspace(store),
+          "\uACB0\uC81C\uC77C \uAE30\uC900\uC73C\uB85C \uC8FC\uBB38\uC744 \uBB36\uACE0, \uC1A1\uC7A5 \uBBF8\uB4F1\uB85D/\uBC30\uC1A1\uC911/\uBC30\uC1A1\uC644\uB8CC \uC0C1\uD0DC\uB97C \uBE60\uB974\uAC8C \uD544\uD130\uB9C1\uD574 \uC1A1\uC7A5 \uC815\uBCF4\uB97C \uAD00\uB9AC\uD569\uB2C8\uB2E4.",
+        extra: createAdminOrderShippingWorkspace(
+          store,
+          options.adminShipmentFilters,
+        ),
         rows: [],
       },
       points: {
@@ -3760,7 +4114,9 @@
   }
   function getCurrentMonthOrders(store) {
     return store.orders.filter(
-      (order) => order.status === "paid" && isCurrentMonthDate(order.paidAt),
+      (order) =>
+        ["paid", "completed"].includes(order.status) &&
+        isCurrentMonthDate(order.paidAt),
     );
   }
   function getCurrentMonthPoints(store) {
@@ -3772,17 +4128,22 @@
   function isPointUse(point) {
     return point.amount < 0 || String(point.type || "").includes("use");
   }
+  function isPendingPoint(point) {
+    return point.type === "purchase_pending";
+  }
   function getCurrentMonthPointSummary(store) {
     return getCurrentMonthPoints(store).reduce(
       (summary, point) => {
         if (isPointUse(point)) {
           summary.used += Math.abs(point.amount);
+        } else if (isPendingPoint(point)) {
+          summary.pending += Math.max(0, point.amount);
         } else {
           summary.earned += Math.max(0, point.amount);
         }
         return summary;
       },
-      { earned: 0, used: 0 },
+      { earned: 0, pending: 0, used: 0 },
     );
   }
   function createOrderDetailRow(order, store) {
@@ -3794,7 +4155,7 @@
     <article class="process-row">
       <div><strong>${order.id}</strong><span>${order.status} \xB7 ${order.paidAt}</span></div>
       <div><span>\uC0C1\uD488 \uC2E4\uACB0\uC81C</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
-      <div><span>\uD3EC\uC778\uD2B8 \uC801\uB9BD</span><strong>${((point == null ? void 0 : point.amount) || 0).toLocaleString("ko-KR")}P</strong></div>
+      <div><span>${isPendingPoint(point || {}) ? "\uD3EC\uC778\uD2B8 \uC608\uC815" : "\uD3EC\uC778\uD2B8 \uC801\uB9BD"}</span><strong>${((point == null ? void 0 : point.amount) || 0).toLocaleString("ko-KR")}P</strong></div>
       <div><span>\uB300\uB9AC\uC810 \uC601\uC5C5\uBE44</span><strong>${formatMoney((settlement == null ? void 0 : settlement.commissionAmount) || 0)}</strong></div>
     </article>
   `;
@@ -3805,7 +4166,7 @@
       <div><strong>${point.orderId}</strong><span>${point.note}</span></div>
       <div><span>\uAE30\uC900 \uAE08\uC561</span><strong>${formatMoney(point.baseAmount)}</strong></div>
       <div><span>\uC801\uB9BD\uB960</span><strong>${point.rate}%</strong></div>
-      <div><span>\uD3EC\uC778\uD2B8</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
+      <div><span>${isPendingPoint(point) ? "\uC608\uC815 \uD3EC\uC778\uD2B8" : "\uD3EC\uC778\uD2B8"}</span><strong>${point.amount.toLocaleString("ko-KR")}P</strong></div>
     </article>
   `;
   }
@@ -3831,28 +4192,170 @@
     `;
     });
   }
-  function createAdminOrderShippingWorkspace(store) {
+  function createAdminOrderShippingWorkspace(store, filters = {}) {
     const orders = [...(store.orders || [])].sort((a, b) =>
       String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
     );
+    const normalizedFilters = {
+      date: filters.date || "all",
+      status: filters.status || "all",
+    };
+    const filteredOrders = filterShipmentOrders(orders, normalizedFilters);
+    const dailyGroups = groupOrdersByPaidDate(filteredOrders);
     return `
     <section class="shipment-workspace">
       <div class="product-category">Agency monthly summary</div>
       <div class="process-list shipment-summary-list">
         ${createMonthlyAgencySalesRows(store).join("")}
       </div>
+      ${createAdminShipmentSummaryBoard(orders)}
       <div class="shipment-head">
         <div>
-          <div class="product-category">Shipment control</div>
-          <strong>\uC8FC\uBB38\uBCC4 \uBC30\uC1A1 / \uC1A1\uC7A5 \uAD00\uB9AC</strong>
+          <div class="product-category">Daily shipment control</div>
+          <strong>\uACB0\uC81C\uC77C\uBCC4 \uC1A1\uC7A5 \uAD00\uB9AC</strong>
         </div>
-        <span>\uC1A1\uC7A5\uBC88\uD638 \uC800\uC7A5 \uC2DC \uACE0\uAC1D \uC8FC\uBB38 \uC0C1\uC138\uC5D0\uB3C4 \uBC14\uB85C \uBC18\uC601\uB429\uB2C8\uB2E4.</span>
+        <span>\uC1A1\uC7A5\uBC88\uD638 \uC800\uC7A5 \uC2DC \uACE0\uAC1D \uC8FC\uBB38 \uC0C1\uC138\uC5D0\uB3C4 \uBC14\uB85C \uBC18\uC601\uB429\uB2C8\uB2E4. \uBC30\uC1A1\uC911/\uBC30\uC1A1\uC644\uB8CC\uB294 \uD0DD\uBC30\uC0AC\uC640 \uC1A1\uC7A5\uBC88\uD638\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.</span>
+      </div>
+      ${createAdminShipmentFilters(orders, normalizedFilters)}
+      ${
+        dailyGroups.length
+          ? dailyGroups
+              .map(([date, dateOrders]) =>
+                createAdminShipmentDayGroup(date, dateOrders, store),
+              )
+              .join("")
+          : '<div class="admin-detail-empty">\uD604\uC7AC \uD544\uD130\uC5D0 \uD574\uB2F9\uD558\uB294 \uC8FC\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'
+      }
+    </section>
+  `;
+  }
+  function createAdminShipmentSummaryBoard(orders) {
+    const summary = getShipmentOperationSummary(orders);
+    return `
+    <div class="shipment-operation-summary">
+      <article><span>\uC804\uCCB4 \uC8FC\uBB38</span><strong>${summary.total}\uAC74</strong></article>
+      <article><span>\uC1A1\uC7A5 \uBBF8\uB4F1\uB85D</span><strong>${summary.missingTracking}\uAC74</strong></article>
+      <article><span>\uC0C1\uD488\uC900\uBE44/\uACB0\uC81C\uC644\uB8CC</span><strong>${summary.ready}\uAC74</strong></article>
+      <article><span>\uBC30\uC1A1\uC911</span><strong>${summary.shipping}\uAC74</strong></article>
+      <article><span>\uBC30\uC1A1\uC644\uB8CC</span><strong>${summary.delivered}\uAC74</strong></article>
+    </div>
+  `;
+  }
+  function createAdminShipmentFilters(orders, filters) {
+    const dateKeys = getShipmentDateKeys(orders);
+    const filterButtons = [
+      ["all", "\uC804\uCCB4"],
+      ["missing_tracking", "\uC1A1\uC7A5 \uBBF8\uB4F1\uB85D"],
+      ["ready", "\uC0C1\uD488\uC900\uBE44"],
+      ["shipping", "\uBC30\uC1A1\uC911"],
+      ["delivered", "\uBC30\uC1A1\uC644\uB8CC"],
+      ["returned", "\uCDE8\uC18C/\uBC18\uD488"],
+    ];
+    return `
+    <div class="shipment-filter-panel">
+      <div>
+        <strong>\uC0C1\uD0DC \uC18C\uD305</strong>
+        <div class="shipment-filter-buttons">
+          ${filterButtons
+            .map(
+              ([value, label]) => `
+              <button class="cart-button ${filters.status === value ? "is-active" : ""}" type="button" data-admin-shipment-filter="${value}">${label}</button>
+            `,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div>
+        <strong>\uACB0\uC81C\uC77C</strong>
+        <div class="shipment-filter-buttons">
+          <button class="cart-button ${filters.date === "all" ? "is-active" : ""}" type="button" data-admin-shipment-date="all">\uC804\uCCB4</button>
+          ${dateKeys
+            .map(
+              (date) => `
+              <button class="cart-button ${filters.date === date ? "is-active" : ""}" type="button" data-admin-shipment-date="${date}">${date}</button>
+            `,
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>
+  `;
+  }
+  function createAdminShipmentDayGroup(date, orders, store) {
+    const summary = getShipmentOperationSummary(orders);
+    const sales = orders.reduce(
+      (sum, order) => sum + order.paidProductAmount,
+      0,
+    );
+    return `
+    <section class="shipment-day-group">
+      <div class="shipment-day-head">
+        <div>
+          <strong>${date}</strong>
+          <span>${orders.length}\uAC74 \xB7 \uC0C1\uD488\uAE08\uC561 ${formatMoney(sales)}</span>
+        </div>
+        <div>
+          <span>\uBBF8\uB4F1\uB85D ${summary.missingTracking}\uAC74</span>
+          <span>\uBC30\uC1A1\uC911 ${summary.shipping}\uAC74</span>
+          <span>\uC644\uB8CC ${summary.delivered}\uAC74</span>
+        </div>
       </div>
       <div class="shipment-list">
-        ${orders.map((order) => createAdminShipmentRow(order, store)).join("") || '<div class="admin-detail-empty">\uAD00\uB9AC\uD560 \uC8FC\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+        ${orders.map((order) => createAdminShipmentRow(order, store)).join("")}
       </div>
     </section>
   `;
+  }
+  function filterShipmentOrders(orders, filters) {
+    return orders.filter((order) => {
+      if (filters.date !== "all" && order.paidAt !== filters.date) return false;
+      if (filters.status === "all") return true;
+      if (filters.status === "missing_tracking") {
+        return !order.trackingNumber && order.shippingStatus !== "returned";
+      }
+      if (filters.status === "ready") {
+        return ["preparing", "paid", ""].includes(order.shippingStatus || "");
+      }
+      return order.shippingStatus === filters.status;
+    });
+  }
+  function groupOrdersByPaidDate(orders) {
+    const groups = /* @__PURE__ */ new Map();
+    orders.forEach((order) => {
+      const date = order.paidAt || "\uB0A0\uC9DC \uC5C6\uC74C";
+      if (!groups.has(date)) groups.set(date, []);
+      groups.get(date).push(order);
+    });
+    return [...groups.entries()];
+  }
+  function getShipmentDateKeys(orders) {
+    return [...new Set(orders.map((order) => order.paidAt).filter(Boolean))]
+      .sort((a, b) => String(b).localeCompare(String(a)))
+      .slice(0, 14);
+  }
+  function getShipmentOperationSummary(orders) {
+    return orders.reduce(
+      (summary, order) => {
+        const status = order.shippingStatus || "preparing";
+        summary.total += 1;
+        if (!order.trackingNumber && status !== "returned") {
+          summary.missingTracking += 1;
+        }
+        if (["preparing", "paid", ""].includes(status)) summary.ready += 1;
+        if (status === "shipping") summary.shipping += 1;
+        if (status === "delivered") summary.delivered += 1;
+        if (status === "returned") summary.returned += 1;
+        return summary;
+      },
+      {
+        total: 0,
+        missingTracking: 0,
+        ready: 0,
+        shipping: 0,
+        delivered: 0,
+        returned: 0,
+      },
+    );
   }
   function createAdminShipmentRow(order, store) {
     var _a;
@@ -3922,6 +4425,7 @@
     return `
     <div class="management-grid compact monthly-point-summary">
       <article><span>\uC774\uB2EC \uC801\uB9BD\uD3EC\uC778\uD2B8</span><strong>${summary.earned.toLocaleString("ko-KR")}P</strong></article>
+      <article><span>\uC774\uB2EC \uC801\uB9BD\uC608\uC815</span><strong>${summary.pending.toLocaleString("ko-KR")}P</strong></article>
       <article><span>\uC774\uB2EC \uC0AC\uC6A9\uD3EC\uC778\uD2B8</span><strong>${summary.used.toLocaleString("ko-KR")}P</strong></article>
       <article><span>\uC21C\uC99D\uAC10</span><strong>${(summary.earned - summary.used).toLocaleString("ko-KR")}P</strong></article>
     </div>
@@ -4989,243 +5493,6 @@
   `;
   }
 
-  // scripts/domain/order-processing.js
-  function completeBypassPayment({ cart, store, payment }) {
-    var _a;
-    const member = store.members.find((item) => item.id === payment.memberId);
-    if (!member) {
-      throw new Error(
-        "\uACB0\uC81C \uCC98\uB9AC \uB300\uC0C1 \uD68C\uC6D0\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      );
-    }
-    const paidProductAmount = cart.reduce(
-      (sum, item) => sum + item.sale * item.qty,
-      0,
-    );
-    const shippingAmount =
-      paidProductAmount > 0 && paidProductAmount < 5e4 ? 3e3 : 0;
-    const pointUseLimit = calculatePointUseLimit({
-      paidProductAmount,
-      memberPoints: member.points,
-      maxPointUseRate: store.settings.maxPointUseRate,
-    });
-    const pointUsed = normalizePointUsed(payment.pointUsed, pointUseLimit);
-    const paidAmount = paidProductAmount + shippingAmount - pointUsed;
-    const pointRate = store.settings.purchasePointRate;
-    const earnedPoints = calculatePurchasePoints(paidProductAmount, pointRate);
-    const orderId = createId("order", store.orders.length + 1);
-    const paidAt = /* @__PURE__ */ new Date().toISOString().slice(0, 10);
-    const agencyIdAtOrder =
-      member.agencyId ||
-      ((_a = getHeadquartersAgency(store)) == null ? void 0 : _a.id);
-    const referralSourceType = payment.referralSourceType || "none";
-    const shippingSnapshot = normalizeShippingSnapshot(
-      payment.shippingSnapshot,
-      member,
-    );
-    const order = {
-      id: orderId,
-      memberId: member.id,
-      agencyIdAtOrder,
-      referralSourceType,
-      paidProductAmount,
-      shippingAmount,
-      paidAmount,
-      pointUsed,
-      pointUseLimit,
-      pointEarned: earnedPoints,
-      status: "paid",
-      shippingStatus: "preparing",
-      courier: "",
-      trackingNumber: "",
-      shippedAt: "",
-      deliveredAt: "",
-      shippingMemo: "",
-      shippingAddress: shippingSnapshot,
-      paymentMethod: shippingSnapshot.paymentMethod || "",
-      paidAt,
-      items: cart.map((item) => ({
-        productId: item.id,
-        productName: item.name,
-        productKo: item.ko,
-        sale: item.sale,
-        qty: item.qty,
-        option: item.option,
-        variantSku: item.variantSku || "",
-      })),
-    };
-    store.orders.unshift(order);
-    decrementProductStock(store, cart);
-    member.points = Math.max(0, Number(member.points || 0) - pointUsed);
-    if (pointUsed > 0) {
-      store.pointLedger.unshift({
-        id: createId("point", store.pointLedger.length + 1),
-        memberId: member.id,
-        orderId,
-        type: "purchase_use",
-        amount: -pointUsed,
-        baseAmount: paidProductAmount,
-        rate: store.settings.maxPointUseRate,
-        note: "\uACB0\uC81C \uC2DC \uBCF4\uC720 \uD3EC\uC778\uD2B8 \uC0AC\uC6A9",
-        createdAt: paidAt,
-      });
-    }
-    member.points += earnedPoints;
-    store.pointLedger.unshift({
-      id: createId("point", store.pointLedger.length + 1),
-      memberId: member.id,
-      orderId,
-      type: "purchase_earn",
-      amount: earnedPoints,
-      baseAmount: paidProductAmount,
-      rate: pointRate,
-      note: "\uBC30\uC1A1\uBE44 \uC81C\uC678 \uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561 \uAE30\uC900 \uAD6C\uB9E4 \uC801\uB9BD",
-      createdAt: paidAt,
-    });
-    const referralLinks = createPurchasedProductReferralLinks({
-      cart,
-      memberId: member.id,
-      orderId,
-      store,
-    });
-    store.personalReferralLinks.unshift(...referralLinks);
-    const agencyProcessing = createAgencyProcessing({ order, store });
-    if (agencyProcessing) {
-      store.agencySettlementLedger.unshift(agencyProcessing);
-    }
-    return {
-      order,
-      member,
-      earnedPoints,
-      referralLinks,
-      agencyProcessing,
-      totals: {
-        paidProductAmount,
-        shippingAmount,
-        paidAmount,
-        pointUsed,
-        pointUseLimit,
-      },
-    };
-  }
-  function normalizeShippingSnapshot(snapshot = {}, member = {}) {
-    const fallback = member.address || {};
-    return {
-      recipient: snapshot.recipient || member.name || "",
-      phone: snapshot.phone || member.phone || "",
-      postcode: snapshot.postcode || fallback.postcode || "",
-      address: snapshot.address || fallback.address || "",
-      addressDetail: snapshot.addressDetail || fallback.addressDetail || "",
-      paymentMethod: snapshot.paymentMethod || member.paymentMethod || "",
-    };
-  }
-  function decrementProductStock(store, cart) {
-    cart.forEach((item) => {
-      var _a;
-      const product = (store.products || []).find(
-        (productItem) => productItem.id === item.id,
-      );
-      if (!product) return;
-      product.stock = Math.max(0, Number(product.stock || 0) - item.qty);
-      const variant =
-        (product.variants || []).find(
-          (variantItem) =>
-            variantItem.sku === item.variantSku ||
-            variantItem.optionName === item.option,
-        ) || ((_a = product.variants) == null ? void 0 : _a[0]);
-      if (variant) {
-        variant.stock = Math.max(0, Number(variant.stock || 0) - item.qty);
-      }
-      if (product.stock <= 0) product.status = "soldout";
-    });
-  }
-  function createPurchasedProductReferralLinks({
-    cart,
-    memberId,
-    orderId,
-    store,
-  }) {
-    const links = [];
-    const nextNumber = store.personalReferralLinks.length + 1;
-    const uniqueProducts = /* @__PURE__ */ new Map();
-    cart.forEach((item) => {
-      if (!uniqueProducts.has(item.id)) uniqueProducts.set(item.id, item);
-    });
-    uniqueProducts.forEach((item) => {
-      const sequence = nextNumber + links.length;
-      links.push({
-        id: createId("ref", sequence),
-        ownerMemberId: memberId,
-        productId: item.id,
-        orderId,
-        unitIndex: 1,
-        code: `${item.id.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-${sequence.toString().padStart(3, "0")}`,
-        status: "active",
-      });
-    });
-    return links;
-  }
-  function createAgencyProcessing({ order, store }) {
-    if (order.referralSourceType === "personal_product") return null;
-    const agency = store.agencies.find(
-      (item) => item.id === order.agencyIdAtOrder,
-    );
-    if (!agency) return null;
-    const commissionAmount = Math.floor(
-      (order.paidProductAmount * agency.commissionRate) / 100,
-    );
-    return {
-      id: createId(
-        "agency-settlement",
-        store.agencySettlementLedger.length + 1,
-      ),
-      agencyId: agency.id,
-      orderId: order.id,
-      baseAmount: order.paidProductAmount,
-      commissionRate: agency.commissionRate,
-      commissionAmount,
-      status: "pending_next_month_15",
-      updatedAt: "",
-      statusUpdatedBy: "",
-      statusNote: "",
-      statusHistory: [],
-      note: "\uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C \uAD6C\uB9E4\uAC00 \uC544\uB2C8\uBBC0\uB85C \uB300\uB9AC\uC810 \uC804\uC6D4 \uB9E4\uCD9C \uC815\uC0B0 \uB300\uC0C1",
-      createdAt: order.paidAt,
-    };
-  }
-  function getHeadquartersAgency(store) {
-    return store.agencies.find((agency) => agency.isHeadquarters);
-  }
-  function calculatePurchasePoints(amount, rate) {
-    return Math.floor(
-      (Math.max(0, Number(amount) || 0) * getPercent(rate)) / 100,
-    );
-  }
-  function calculatePointUseLimit({
-    paidProductAmount,
-    memberPoints,
-    maxPointUseRate,
-  }) {
-    const productLimit = Math.floor(
-      (Math.max(0, Number(paidProductAmount) || 0) *
-        getPercent(maxPointUseRate)) /
-        100,
-    );
-    return Math.min(productLimit, Math.max(0, Number(memberPoints) || 0));
-  }
-  function normalizePointUsed(pointUsed, pointUseLimit) {
-    return Math.min(
-      Math.max(0, Math.floor(Number(pointUsed) || 0)),
-      Math.max(0, Number(pointUseLimit) || 0),
-    );
-  }
-  function getPercent(value) {
-    return Math.min(100, Math.max(0, Number(value) || 0));
-  }
-  function createId(prefix, sequence) {
-    return `${prefix}-${sequence.toString().padStart(3, "0")}`;
-  }
-
   // scripts/ui/shop.js
   function createShopController({
     dom,
@@ -5407,9 +5674,9 @@
   `;
       showDetailView();
       document.querySelector("#backToShop").addEventListener("click", showHome);
-      document
-        .querySelector("#addCart")
-        .addEventListener("click", () => addToCart(product));
+      document.querySelector("#addCart").addEventListener("click", () => {
+        if (addToCart(product)) openCart();
+      });
       ["input", "change"].forEach((eventName) => {
         var _a;
         (_a = document.querySelector("#optionSelect")) == null
@@ -5630,7 +5897,10 @@
     <div class="cart-item">
       <img src="${item.image}" alt="${item.ko}" />
       <div>
-        <h3>${item.name}<br />\u3163${item.ko}</h3>
+        <div class="cart-item-head">
+          <h3>${item.name}<br />\u3163${item.ko}</h3>
+          <button class="cart-remove-button" type="button" data-remove-key="${escapeAttribute2(item.cartKey)}" aria-label="${item.ko} \uC0AD\uC81C">\uC0AD\uC81C</button>
+        </div>
         <p>${item.category} / ${item.type}</p>
         <p>${item.option}</p>
         <div class="cart-item-bottom">
@@ -5704,8 +5974,13 @@
               </div>
             </div>
           </div>
+          <div class="checkout-address-actions">
+            <button class="cart-button" type="button" data-checkout-saved-toggle>\uBC30\uC1A1\uC9C0 \uBAA9\uB85D</button>
+            <button class="cart-button" type="button" data-checkout-address-register-toggle>\uBC30\uC1A1\uC9C0 \uB4F1\uB85D</button>
+          </div>
           ${createCheckoutAddressLookup()}
           ${createCheckoutSavedAddresses(member)}
+          ${createCheckoutAddressRegister(member)}
           <label class="option-label" for="address">\uBC30\uC1A1\uC9C0</label>
           <input class="quantity-input" id="address" value="${escapeAttribute2(defaultAddress.address || "")}" />
           <label class="option-label" for="addressDetail">\uC0C1\uC138\uC8FC\uC18C</label>
@@ -5775,7 +6050,7 @@
       updateCart();
       openPaymentResult(result);
       showToast(
-        `\uACB0\uC81C \uC644\uB8CC: ${result.earnedPoints.toLocaleString("ko-KR")} \uD3EC\uC778\uD2B8\uAC00 \uC801\uB9BD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
+        `\uACB0\uC81C \uC644\uB8CC: ${result.earnedPoints.toLocaleString("ko-KR")} \uD3EC\uC778\uD2B8\uAC00 \uC801\uB9BD \uC608\uC815\uC785\uB2C8\uB2E4.`,
       );
     }
     function createCheckoutAddressLookup() {
@@ -5802,7 +6077,7 @@
       const addresses = normalizeShippingAddresses(member);
       if (!addresses.length) return "";
       return `
-    <div class="checkout-saved-addresses">
+    <div class="checkout-saved-addresses is-hidden" data-checkout-saved-panel>
       <div class="address-lookup-head">
         <strong>\uC800\uC7A5 \uBC30\uC1A1\uC9C0</strong>
         <span>\uC8FC\uBB38\uC5D0 \uC0AC\uC6A9\uD560 \uBC30\uC1A1\uC9C0\uB97C \uC120\uD0DD\uD558\uC138\uC694.</span>
@@ -5822,8 +6097,46 @@
     </div>
   `;
     }
+    function createCheckoutAddressRegister(member) {
+      return `
+    <div class="checkout-address-register is-hidden" data-checkout-address-register-panel>
+      <div class="address-lookup-head">
+        <strong>\uBC30\uC1A1\uC9C0 \uB4F1\uB85D</strong>
+        <span>\uC790\uC8FC \uC4F0\uB294 \uBC30\uC1A1\uC9C0\uB97C \uC800\uC7A5\uD558\uACE0 \uD604\uC7AC \uC8FC\uBB38\uC5D0 \uBC14\uB85C \uC801\uC6A9\uD569\uB2C8\uB2E4.</span>
+      </div>
+      <div class="checkout-register-grid">
+        <label>\uBC30\uC1A1\uC9C0\uBA85<input class="quantity-input" id="newAddressLabel" value="\uCD94\uAC00 \uBC30\uC1A1\uC9C0" /></label>
+        <label>\uC218\uB839\uC778<input class="quantity-input" id="newAddressRecipient" value="${escapeAttribute2((member == null ? void 0 : member.name) || "")}" /></label>
+        <label>\uC5F0\uB77D\uCC98<input class="quantity-input" id="newAddressPhone" value="${escapeAttribute2((member == null ? void 0 : member.phone) || "")}" /></label>
+        <label>\uC6B0\uD3B8\uBC88\uD638<input class="quantity-input" id="newAddressPostcode" /></label>
+        <label class="checkout-register-wide">\uBC30\uC1A1\uC9C0<input class="quantity-input" id="newAddressAddress" /></label>
+        <label class="checkout-register-wide">\uC0C1\uC138\uC8FC\uC18C<input class="quantity-input" id="newAddressDetail" /></label>
+      </div>
+      <div class="checkout-address-actions">
+        <button class="cart-button" type="button" data-checkout-register-lookup>\uB4F1\uB85D \uC8FC\uC18C \uC870\uD68C</button>
+        <button class="buy-button" type="button" data-checkout-save-address>\uBC30\uC1A1\uC9C0 \uC800\uC7A5</button>
+      </div>
+      <div class="address-lookup-panel checkout-register-lookup is-hidden" data-checkout-register-lookup-panel>
+        <div class="address-lookup-head">
+          <strong>\uB4F1\uB85D \uC8FC\uC18C \uC870\uD68C \uACB0\uACFC</strong>
+          <span>\uC120\uD0DD\uD558\uBA74 \uB4F1\uB85D \uD3FC\uC5D0 \uC6B0\uD3B8\uBC88\uD638\uC640 \uC8FC\uC18C\uAC00 \uC785\uB825\uB429\uB2C8\uB2E4.</span>
+        </div>
+        <div class="address-lookup-list">
+          ${ADDRESS_LOOKUP_PRESETS.map(
+            (item) => `
+            <button class="address-result-button" type="button" data-checkout-register-result data-postcode="${item.postcode}" data-address="${escapeAttribute2(item.address)}">
+              <strong>${item.label}</strong>
+              <span>${item.postcode} ${item.address}</span>
+            </button>
+          `,
+          ).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+    }
     function bindCheckoutAddressEvents() {
-      var _a;
+      var _a, _b, _c, _d, _e;
       (_a = document.querySelector("[data-checkout-address-search]")) == null
         ? void 0
         : _a.addEventListener("click", () => {
@@ -5833,20 +6146,51 @@
               ? void 0
               : _a2.classList.toggle("is-hidden");
           });
+      (_b = document.querySelector("[data-checkout-saved-toggle]")) == null
+        ? void 0
+        : _b.addEventListener("click", () => {
+            var _a2;
+            (_a2 = document.querySelector("[data-checkout-saved-panel]")) ==
+            null
+              ? void 0
+              : _a2.classList.toggle("is-hidden");
+          });
+      (_c = document.querySelector(
+        "[data-checkout-address-register-toggle]",
+      )) == null
+        ? void 0
+        : _c.addEventListener("click", () => {
+            var _a2;
+            (_a2 = document.querySelector(
+              "[data-checkout-address-register-panel]",
+            )) == null
+              ? void 0
+              : _a2.classList.toggle("is-hidden");
+          });
+      (_d = document.querySelector("[data-checkout-register-lookup]")) == null
+        ? void 0
+        : _d.addEventListener("click", () => {
+            var _a2;
+            (_a2 = document.querySelector(
+              "[data-checkout-register-lookup-panel]",
+            )) == null
+              ? void 0
+              : _a2.classList.toggle("is-hidden");
+          });
       document
         .querySelectorAll("[data-checkout-address-result]")
         .forEach((button) => {
           button.addEventListener("click", () => {
-            var _a2, _b;
+            var _a2, _b2;
             setCheckoutField("#zipCode", button.dataset.postcode);
             setCheckoutField("#address", button.dataset.address);
             (_a2 = document.querySelector("[data-checkout-address-panel]")) ==
             null
               ? void 0
               : _a2.classList.add("is-hidden");
-            (_b = document.querySelector("#addressDetail")) == null
+            (_b2 = document.querySelector("#addressDetail")) == null
               ? void 0
-              : _b.focus();
+              : _b2.focus();
           });
         });
       document
@@ -5860,6 +6204,84 @@
             setCheckoutField("#addressDetail", button.dataset.addressDetail);
           });
         });
+      document
+        .querySelectorAll("[data-checkout-register-result]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            var _a2, _b2;
+            setCheckoutField("#newAddressPostcode", button.dataset.postcode);
+            setCheckoutField("#newAddressAddress", button.dataset.address);
+            (_a2 = document.querySelector(
+              "[data-checkout-register-lookup-panel]",
+            )) == null
+              ? void 0
+              : _a2.classList.add("is-hidden");
+            (_b2 = document.querySelector("#newAddressDetail")) == null
+              ? void 0
+              : _b2.focus();
+          });
+        });
+      (_e = document.querySelector("[data-checkout-save-address]")) == null
+        ? void 0
+        : _e.addEventListener("click", saveCheckoutAddress);
+    }
+    function saveCheckoutAddress() {
+      var _a, _b, _c, _d, _e, _f, _g;
+      const member = getCurrentMember2();
+      if (!member) return;
+      const address = {
+        id: `addr-${Date.now()}`,
+        label:
+          ((_a = document.querySelector("#newAddressLabel")) == null
+            ? void 0
+            : _a.value.trim()) || "\uCD94\uAC00 \uBC30\uC1A1\uC9C0",
+        recipient:
+          ((_b = document.querySelector("#newAddressRecipient")) == null
+            ? void 0
+            : _b.value.trim()) ||
+          member.name ||
+          "",
+        phone:
+          ((_c = document.querySelector("#newAddressPhone")) == null
+            ? void 0
+            : _c.value.trim()) ||
+          member.phone ||
+          "",
+        postcode:
+          ((_d = document.querySelector("#newAddressPostcode")) == null
+            ? void 0
+            : _d.value.trim()) || "",
+        address:
+          ((_e = document.querySelector("#newAddressAddress")) == null
+            ? void 0
+            : _e.value.trim()) || "",
+        addressDetail:
+          ((_f = document.querySelector("#newAddressDetail")) == null
+            ? void 0
+            : _f.value.trim()) || "",
+        isDefault: false,
+      };
+      if (!address.postcode || !address.address) {
+        showToast(
+          "\uBC30\uC1A1\uC9C0 \uC870\uD68C \uD6C4 \uC6B0\uD3B8\uBC88\uD638\uC640 \uBC30\uC1A1\uC9C0\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.",
+        );
+        return;
+      }
+      member.shippingAddresses = normalizeShippingAddresses(member);
+      member.shippingAddresses.push(address);
+      persistStore(store);
+      setCheckoutField("#customerName", address.recipient);
+      setCheckoutField("#customerPhone", address.phone);
+      setCheckoutField("#zipCode", address.postcode);
+      setCheckoutField("#address", address.address);
+      setCheckoutField("#addressDetail", address.addressDetail);
+      showToast(
+        "\uBC30\uC1A1\uC9C0\uB97C \uB4F1\uB85D\uD558\uACE0 \uC8FC\uBB38 \uBC30\uC1A1\uC9C0\uC5D0 \uC801\uC6A9\uD588\uC2B5\uB2C8\uB2E4.",
+      );
+      openCheckout();
+      (_g = document.querySelector("[data-checkout-saved-panel]")) == null
+        ? void 0
+        : _g.classList.remove("is-hidden");
     }
     function setCheckoutField(selector, value = "") {
       const field = document.querySelector(selector);
@@ -5959,13 +6381,13 @@
         <article><span>\uC2E4\uACB0\uC81C \uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(result.totals.paidProductAmount)}</strong></article>
         <article><span>\uBC30\uC1A1\uBE44</span><strong>${result.totals.shippingAmount ? formatMoney(result.totals.shippingAmount) : "\uBB34\uB8CC"}</strong></article>
         <article><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9</span><strong>${result.totals.pointUsed ? `-${result.totals.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></article>
-        <article><span>\uC801\uB9BD \uD3EC\uC778\uD2B8</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
+        <article><span>\uC801\uB9BD \uC608\uC815 \uD3EC\uC778\uD2B8</span><strong>${result.earnedPoints.toLocaleString("ko-KR")}P</strong></article>
         <article><span>\uCD94\uCC9C \uB9C1\uD06C \uC0DD\uC131</span><strong>${result.referralLinks.length}\uAC1C</strong></article>
         <article><span>\uCC98\uB9AC \uC0C1\uD0DC</span><strong>\uC644\uB8CC</strong></article>
       </div>
       <div class="payment-process">
         <div><strong>01 \uC8FC\uBB38 \uC0DD\uC131</strong><span>${result.order.id} \uC8FC\uBB38\uC744 paid \uC0C1\uD0DC\uB85C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.</span></div>
-        <div><strong>02 \uD3EC\uC778\uD2B8 \uC801\uB9BD</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P</span></div>
+        <div><strong>02 \uC801\uB9BD \uC608\uC815</strong><span>${result.order.paidProductAmount.toLocaleString("ko-KR")}\uC6D0 \xD7 ${store.settings.purchasePointRate}% = ${result.earnedPoints.toLocaleString("ko-KR")}P, \uAD6C\uB9E4\uD655\uC815 \uD6C4 \uC2E4\uC81C \uC801\uB9BD\uB429\uB2C8\uB2E4.</span></div>
         <div><strong>03 \uAC1C\uC778 \uCD94\uCC9C\uB9C1\uD06C</strong><span>\uAD6C\uB9E4 \uC0C1\uD488 \uC885\uB958 \uAE30\uC900\uC73C\uB85C ${result.referralLinks.length}\uAC1C \uB9C1\uD06C\uB97C \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4.</span></div>
       </div>
       ${createReferralCopyPanel(result.referralLinks)}
@@ -6152,6 +6574,7 @@
       <div class="detail-price-item point-input-item">
         <span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9</span>
         <input class="quantity-input" id="checkoutPointUse" type="number" min="0" step="100" max="${pointUseLimit}" value="${pointUsed}" ${pointUseLimit ? "" : "disabled"} />
+        <em>\uBCF4\uC720 ${formatPoints(pointBalance)} \uC911 \uCD5C\uB300 ${formatPoints(pointUseLimit)}\uAE4C\uC9C0 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</em>
       </div>
       <div class="detail-price-item"><span>\uC801\uB9BD \uC608\uC815</span><strong>${formatPoints(reward)}</strong></div>
       <div class="detail-price-item"><span>\uACB0\uC81C\uC608\uC815\uAE08\uC561</span><strong>${formatMoney(total)}</strong></div>
@@ -6210,6 +6633,18 @@
         openDetail(getProduct(card.dataset.id));
       });
       dom.cartList.addEventListener("click", (event) => {
+        const removeButton = event.target.closest("button[data-remove-key]");
+        if (removeButton) {
+          state.cart = state.cart.filter(
+            (cartItem) => cartItem.cartKey !== removeButton.dataset.removeKey,
+          );
+          if (!state.cart.length) state.pointToUse = 0;
+          updateCart();
+          showToast(
+            "\uC0C1\uD488\uC744 \uAD6C\uB9E4 \uBAA9\uB85D\uC5D0\uC11C \uC0AD\uC81C\uD588\uC2B5\uB2C8\uB2E4.",
+          );
+          return;
+        }
         const button = event.target.closest("button[data-key]");
         if (!button) return;
         const item = state.cart.find(
@@ -6327,6 +6762,7 @@
       logoutButton: document.querySelector("#logoutButton"),
     };
     const store = await loadStore();
+    autoConfirmEligibleOrders(store);
     await saveStore(store);
     const getCurrentMember2 = () =>
       store.members.find((member) => member.id === store.currentMemberId);

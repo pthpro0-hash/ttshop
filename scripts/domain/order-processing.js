@@ -43,6 +43,7 @@ export function completeBypassPayment({ cart, store, payment }) {
     pointUseLimit,
     pointEarned: earnedPoints,
     status: "paid",
+    confirmedAt: "",
     shippingStatus: "preparing",
     courier: "",
     trackingNumber: "",
@@ -79,16 +80,15 @@ export function completeBypassPayment({ cart, store, payment }) {
       createdAt: paidAt,
     });
   }
-  member.points += earnedPoints;
   store.pointLedger.unshift({
     id: createId("point", store.pointLedger.length + 1),
     memberId: member.id,
     orderId,
-    type: "purchase_earn",
+    type: "purchase_pending",
     amount: earnedPoints,
     baseAmount: paidProductAmount,
     rate: pointRate,
-    note: "배송비 제외 실결제 상품금액 기준 구매 적립",
+    note: "구매확정 후 적립 예정",
     createdAt: paidAt,
   });
 
@@ -119,6 +119,71 @@ export function completeBypassPayment({ cart, store, payment }) {
       pointUseLimit,
     },
   };
+}
+
+export function confirmPurchase(store, orderId, confirmedBy = "member") {
+  const order = store.orders.find((item) => item.id === orderId);
+  if (!order || order.confirmedAt) return false;
+
+  const member = store.members.find((item) => item.id === order.memberId);
+  if (!member) return false;
+
+  const confirmedAt = new Date().toISOString().slice(0, 10);
+  order.confirmedAt = confirmedAt;
+  order.status = "completed";
+
+  const alreadyEarnedPoint = store.pointLedger.find(
+    (point) => point.orderId === order.id && point.type === "purchase_earn",
+  );
+  if (alreadyEarnedPoint) {
+    alreadyEarnedPoint.note = alreadyEarnedPoint.note || "구매확정 완료 적립";
+    return true;
+  }
+
+  let pendingPoint = store.pointLedger.find(
+    (point) => point.orderId === order.id && point.type === "purchase_pending",
+  );
+  if (!pendingPoint && Number(order.pointEarned || 0) > 0) {
+    pendingPoint = {
+      id: createId("point", store.pointLedger.length + 1),
+      memberId: member.id,
+      orderId: order.id,
+      type: "purchase_pending",
+      amount: Number(order.pointEarned || 0),
+      baseAmount: Number(order.paidProductAmount || 0),
+      rate: store.settings.purchasePointRate,
+      note: "구매확정 후 적립 예정",
+      createdAt: order.paidAt || confirmedAt,
+    };
+    store.pointLedger.unshift(pendingPoint);
+  }
+
+  if (pendingPoint && pendingPoint.type === "purchase_pending") {
+    pendingPoint.type = "purchase_earn";
+    pendingPoint.note =
+      confirmedBy === "auto"
+        ? "구매일 14일 경과 자동 구매확정 적립"
+        : "구매확정 완료 적립";
+    pendingPoint.createdAt = confirmedAt;
+    member.points += Number(pendingPoint.amount || 0);
+  }
+
+  return true;
+}
+
+export function autoConfirmEligibleOrders(store, today = new Date()) {
+  let changed = false;
+  (store.orders || []).forEach((order) => {
+    if (order.confirmedAt || !order.paidAt) return;
+    const baseDate = new Date(`${order.paidAt}T00:00:00`);
+    const elapsedDays = Math.floor(
+      (today.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (elapsedDays >= 14) {
+      changed = confirmPurchase(store, order.id, "auto") || changed;
+    }
+  });
+  return changed;
 }
 
 function normalizeShippingSnapshot(snapshot = {}, member = {}) {
