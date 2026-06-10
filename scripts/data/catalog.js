@@ -1,3 +1,4 @@
+// 기본 상품 카탈로그: 초기 DB 시드와 file:// fallback에서 공통으로 사용하는 샘플 상품 10개다.
 export const CATEGORIES = ["미용기구", "미용재료", "화장품"];
 
 export const products = [

@@ -1,5 +1,7 @@
 import { formatMoney } from "../utils/format.js";
 
+// Admin/Agency 백오피스 컨트롤러.
+// 대시보드 카드 클릭 → 상세 모달 → 각 관리 폼 저장 흐름을 한 파일에서 관리한다.
 const PRODUCT_OPERATION_DEFAULTS = {
   taxType: "taxable",
   status: "selling",
@@ -37,13 +39,15 @@ export function createManagementController({
   closeCart,
   persistStore = () => {},
 }) {
+  // Admin 주문/송장 모달 안에서 유지되는 필터 상태.
+  // 모달 내용을 다시 그려도 선택한 결제일/배송상태 필터를 이어간다.
   const adminShipmentFilters = {
     date: "all",
     status: "all",
   };
 
-  // Back-office controller for both Admin and Agency views.
-  // It renders dashboards first, then loads detailed workspaces inside modals.
+  // Admin과 Agency가 공유하는 관리 화면 진입점.
+  // 먼저 대시보드를 그리고, 카드 클릭 시 모달 안에 상세 작업 공간을 로드한다.
   function openManagement(role = "admin") {
     closeCart();
     dom.management.innerHTML = createManagementView(role, store);
@@ -56,6 +60,8 @@ export function createManagementController({
   }
 
   function bindManagementEvents(role) {
+    // 역할별 이벤트 연결.
+    // Admin은 설정/상품/대리점/배송 수정이 가능하고, Agency는 소속 데이터 조회 중심이다.
     if (role === "admin") {
       bindAdminSettingsForm();
       bindMetricModal(
@@ -115,8 +121,8 @@ export function createManagementController({
   }
 
   function bindMetricModal(cardSelector, modalSelector, scope, createContent) {
-    // Dashboard cards are intentionally generic. The clicked data-* value picks
-    // the detail workspace: agency list, products, monthly orders, points, etc.
+    // 대시보드 카드는 공통 컴포넌트다.
+    // 클릭한 data-* 값으로 대리점 목록, 상품관리, 주문/송장, 포인트 등 상세 작업 공간을 고른다.
     const modal = dom.management.querySelector(modalSelector);
     if (!modal) return;
 
@@ -348,8 +354,8 @@ export function createManagementController({
   }
 
   function updateShipmentInfo(form) {
-    // Admin shipment edits update the order itself. Member order detail reads
-    // these same fields, so tracking information becomes visible immediately.
+    // Admin 송장 수정은 주문 객체 자체를 갱신한다.
+    // 개인회원 주문 상세도 같은 필드를 읽으므로 저장 즉시 고객 화면에 반영된다.
     const order = store.orders.find(
       (item) => item.id === form.dataset.shipmentForm,
     );
@@ -1806,8 +1812,8 @@ function createMonthlyAgencySalesRows(store) {
 }
 
 function createAdminOrderShippingWorkspace(store, filters = {}) {
-  // Combines monthly agency sales with a daily shipment operation board.
-  // Admins can filter by paid date and delivery state without leaving the modal.
+  // Admin 주문/송장 운영 화면.
+  // 대리점 월매출 요약과 일자별 송장 작업 보드를 함께 보여주며, 상태/결제일 필터로 빠르게 좁힌다.
   const orders = [...(store.orders || [])].sort((a, b) =>
     String(b.paidAt || "").localeCompare(String(a.paidAt || "")),
   );
@@ -2663,8 +2669,8 @@ function getAgencyAdminMetrics(agency, store) {
 }
 
 function createProductManagementWorkspace(store) {
-  // Product admin follows a Cafe24-like structure: required basics first,
-  // then grouped sections for images, price/stock, shipping/supplier, and option SKUs.
+  // 상품관리는 Cafe24식 구조를 참고해 필수 기본정보를 먼저 두고,
+  // 이미지, 가격/재고, 배송/공급사, 옵션 SKU를 그룹별로 나눠 관리한다.
   const products = (store.products || []).filter(
     (product) => product.status !== "deleted",
   );

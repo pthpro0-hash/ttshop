@@ -6,14 +6,16 @@ import {
 } from "../domain/order-processing.js";
 import { formatMoney } from "../utils/format.js";
 
+// 쇼핑 화면 컨트롤러.
+// 상품 목록/상세, 장바구니, 결제 우회, 상품 리뷰 노출을 담당한다.
 export function createShopController({
   dom,
   store,
   persistStore,
   requireLogin = () => true,
 }) {
-  // Demo-only address lookup used on checkout. The profile/signup module has
-  // the same shape so a real postcode API can replace both with one adapter later.
+  // 결제 화면에서 쓰는 데모용 주소 조회 데이터.
+  // 회원가입/내정보와 같은 구조라 실제 우편번호 API를 붙일 때 공통 어댑터로 대체하기 쉽다.
   const ADDRESS_LOOKUP_PRESETS = [
     {
       label: "기본 배송지",
@@ -37,7 +39,8 @@ export function createShopController({
     },
   ];
   const state = {
-    // UI-only cart state. Persisted business records are created only after Pay now.
+    // 화면에서만 유지되는 장바구니 상태.
+    // 주문/포인트/정산 같은 영구 데이터는 Pay now 이후 도메인 로직에서 생성한다.
     activeCategory: "all",
     cart: [],
     pointToUse: 0,
@@ -65,8 +68,8 @@ export function createShopController({
     (store.products || []).find((product) => product.id === id);
 
   function getTotals() {
-    // All point calculations use product amount only.
-    // Shipping fee is included in paidAmount but excluded from point earn/use limits.
+    // 포인트 적립/사용 한도는 배송비를 제외한 상품금액 기준이다.
+    // paidAmount에는 배송비가 포함되지만 포인트 계산에는 포함하지 않는다.
     const subtotal = state.cart.reduce(
       (sum, item) => sum + item.sale * item.qty,
       0,
@@ -144,6 +147,8 @@ export function createShopController({
   }
 
   function openDetail(product) {
+    // 상품 상세 화면.
+    // 옵션/수량 선택, Add to cart, Buy now, 리뷰 요약, 상세 이미지가 모두 이곳에서 조립된다.
     if (!product) return;
 
     const copy = categoryCopy[product.category] || categoryCopy["화장품"];
@@ -209,6 +214,13 @@ export function createShopController({
         openCart();
       }
     });
+    document
+      .querySelector("[data-product-review-toggle]")
+      ?.addEventListener("click", () => {
+        document
+          .querySelector("[data-product-review-list]")
+          ?.classList.toggle("is-hidden");
+      });
   }
 
   function createPriceBox(product) {
@@ -238,18 +250,96 @@ export function createShopController({
         <p>${copy.usage}</p>
       </div>
     </section>
-    <section class="review-strip" id="review">
-      <div>
-        <div class="review-score">4.8</div>
-        <div class="small-label">Customer review</div>
-      </div>
-      <div class="review-copy">
-        “${copy.review}”<br />
-        미니멀한 상세 구조 안에서 제품 효능, 사용법, 리뷰, 구매 버튼을 한 화면에서 확인할 수 있게 구성했습니다.
-      </div>
-    </section>
+    ${createProductReviewSection(product, copy)}
     ${createProductDetailImageStack(product)}
   `;
+  }
+
+  function createProductReviewSection(product, copy) {
+    // 상품 상세 리뷰 영역.
+    // 요약에는 최근 리뷰 최대 3개와 평균 평점을 보여주고, 전체 목록은 상세 버튼으로 토글한다.
+    const reviews = getProductReviews(product.id);
+    const average = reviews.length
+      ? (
+          reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) /
+          reviews.length
+        ).toFixed(1)
+      : "0.0";
+    const latest = reviews[0];
+    const visibleReviews = reviews.slice(0, 3);
+    const hiddenReviews = reviews.slice(3);
+
+    return `
+    <section class="review-strip product-review-summary" id="review">
+      <div>
+        <div class="review-score">${reviews.length ? average : "0.0"}</div>
+        <div class="small-label">Customer review · ${reviews.length}개</div>
+      </div>
+      <div class="review-copy">
+        ${
+          latest
+            ? `평점 ${createReviewStars(Math.round(Number(average)))} · 평균 ${average} / 5<br />“${escapeHtml(latest.title)}”`
+            : `“${copy.review}”<br />구매확정 후 작성된 상품 리뷰가 이 영역에 표시됩니다.`
+        }
+        <div class="product-review-preview">
+          ${visibleReviews.map(createProductReviewPreview).join("")}
+        </div>
+        <div class="product-review-actions">
+          <button class="cart-button mini-button" type="button" data-product-review-toggle>${reviews.length ? `상세 리뷰 보기${hiddenReviews.length ? ` · 더보기 ${hiddenReviews.length}개` : ""}` : "리뷰 준비중"}</button>
+        </div>
+      </div>
+    </section>
+    <section class="product-review-list is-hidden" data-product-review-list>
+      <div class="profile-history-head">
+        <div>
+          <div class="product-category">Review detail</div>
+          <span>평점 5점 만점 · 최신순</span>
+        </div>
+      </div>
+      <div class="profile-list">
+        ${
+          reviews.length
+            ? reviews.map(createProductReviewRow).join("")
+            : '<div class="admin-detail-empty">아직 등록된 리뷰가 없습니다.</div>'
+        }
+      </div>
+    </section>
+  `;
+  }
+
+  function createProductReviewRow(review) {
+    const stars = createReviewStars(review.rating);
+
+    return `
+    <article class="product-review-row">
+      ${review.image ? `<figure><img src="${review.image}" alt="${escapeAttribute(review.title)} 리뷰 사진" /></figure>` : ""}
+      <div>
+        <strong>${escapeHtml(review.title)}</strong>
+        <span>${stars} · ${escapeHtml(review.memberName || "회원")} · ${review.createdAt || "-"}</span>
+        <p>${escapeHtml(review.content)}</p>
+      </div>
+    </article>
+  `;
+  }
+
+  function createProductReviewPreview(review) {
+    return `
+    <article>
+      <strong>${createReviewStars(review.rating)} ${escapeHtml(review.title)}</strong>
+      <span>${escapeHtml(review.memberName || "회원")} · ${review.createdAt || "-"}</span>
+    </article>
+  `;
+  }
+
+  function createReviewStars(rating) {
+    const normalized = Math.min(5, Math.max(1, Number(rating) || 5));
+    return "★".repeat(normalized) + "☆".repeat(5 - normalized);
+  }
+
+  function getProductReviews(productId) {
+    return [...(store.productReviews || [])]
+      .filter((review) => review.productId === productId)
+      .sort((a, b) => String(b.createdAt).localeCompare(a.createdAt));
   }
 
   function createProductDetailImageStack(product) {
@@ -272,6 +362,8 @@ export function createShopController({
   }
 
   function addToCart(product, message) {
+    // 상품/옵션 판매상태와 재고를 검증한 뒤 장바구니에 담는다.
+    // 같은 상품/옵션은 cartKey 기준으로 수량만 합산한다.
     if (!requireLogin()) return false;
 
     const quantity = getQuantity();
@@ -468,8 +560,8 @@ export function createShopController({
   }
 
   function openCheckout() {
-    // Checkout reads the current member's default shipping address once and
-    // lets the user override it before completeBypassPayment stores an order snapshot.
+    // 결제 화면은 회원의 기본 배송지를 먼저 채운 뒤 사용자가 저장 배송지/조회/신규 등록으로 바꿀 수 있게 한다.
+    // 최종 배송지는 completeBypassPayment에서 주문 스냅샷으로 저장된다.
     if (!requireLogin()) return;
 
     closeCart();
@@ -558,8 +650,8 @@ export function createShopController({
   }
 
   function completeCheckoutBypass() {
-    // This bypasses PG only. The resulting order, points, stock, referrals,
-    // agency settlement, and shipping snapshot are persisted through the domain layer.
+    // PG 결제창만 우회한다.
+    // 주문, 포인트, 재고, 추천 링크, 대리점 정산, 배송지 스냅샷은 도메인 로직을 통해 실제 저장된다.
     if (!requireLogin()) return;
 
     if (!state.cart.length) {
@@ -674,8 +766,8 @@ export function createShopController({
   }
 
   function bindCheckoutAddressEvents() {
-    // Saved address buttons and lookup result buttons both write to the same
-    // checkout fields, keeping the order snapshot source simple.
+    // 저장 배송지, 주소 조회 결과, 신규 배송지 등록 모두 같은 주문서 필드에 값을 쓴다.
+    // 그래서 주문 저장 시 읽어야 할 배송지 소스가 단순해진다.
     document
       .querySelector("[data-checkout-address-search]")
       ?.addEventListener("click", () => {

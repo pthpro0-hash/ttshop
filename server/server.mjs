@@ -10,6 +10,7 @@ const rootDir = dirname(currentDir);
 const port = Number(process.env.PORT || 8000);
 const database = openShopDatabase();
 
+// 로컬 개발 서버에서 정적 파일과 JSON API를 함께 제공하기 위한 최소 MIME 매핑이다.
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -26,6 +27,7 @@ const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
 
+    // 브라우저 앱은 이 API 하나로 전체 store 스냅샷을 읽고 저장한다.
     if (url.pathname === "/api/store") {
       await handleStoreApi(request, response);
       return;
@@ -44,11 +46,13 @@ server.listen(port, () => {
 
 async function handleStoreApi(request, response) {
   if (request.method === "GET") {
+    // SQLite 테이블을 UI가 쓰는 store 객체로 조립해서 반환한다.
     sendJson(response, 200, readStore(database));
     return;
   }
 
   if (request.method === "PUT") {
+    // 데모 앱 특성상 부분 업데이트 대신 전체 store 스냅샷을 DB에 반영한다.
     const body = await readBody(request);
     writeStore(database, JSON.parse(body || "{}"));
     sendJson(response, 200, { ok: true });
@@ -61,6 +65,7 @@ async function handleStoreApi(request, response) {
 async function serveStaticFile(url, response) {
   const requestPath = url.pathname === "/" ? "/index.html" : url.pathname;
   const decodedPath = decodeURIComponent(requestPath);
+  // ../ 경로 이동을 막아 프로젝트 루트 바깥 파일이 노출되지 않게 한다.
   const safePath = normalize(decodedPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = join(rootDir, safePath);
 

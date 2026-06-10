@@ -367,12 +367,16 @@ function submitManagementLogin(window, role, userId, password) {
   );
   assert.ok(
     document.querySelector(".product-detail-image-stack"),
-    "product detail page should render detail images below customer review",
+    "product detail page should render detail images below customer review area",
   );
-  assert.equal(
-    document.querySelector(".review-strip").nextElementSibling?.className,
-    "product-detail-image-stack",
-    "product detail images should be placed immediately after customer review",
+  assert.ok(
+    document.querySelector(".product-review-list"),
+    "product detail page should render expandable review detail list",
+  );
+  assert.match(
+    document.querySelector(".review-strip").textContent,
+    /Customer review|상세 리뷰 보기/,
+    "product detail page should show review summary and detail button",
   );
   click(dom.window, document.querySelector("#addCart"));
   assert.equal(
@@ -475,6 +479,14 @@ function submitManagementLogin(window, role, userId, password) {
     /내정보|구매이력|포인트 적립\/사용 이력/,
     "member name should open my information modal",
   );
+  assert.equal(
+    document
+      .querySelector('[data-profile-panel="orders"]')
+      .classList.contains("is-hidden"),
+    false,
+    "member profile should open purchase history first",
+  );
+  click(dom.window, document.querySelector('[data-profile-tab="account"]'));
   assert.ok(
     document.querySelector('[data-profile-form] [name="userId"]').readOnly,
     "profile user id should be read only",
@@ -724,6 +736,46 @@ function submitManagementLogin(window, role, userId, password) {
       .type,
     "purchase_earn",
     "purchase confirmation should convert pending points into earned points",
+  );
+  assert.match(
+    document.querySelector("#profileOrderDetail").textContent,
+    /Product review|리뷰 등록/,
+    "purchase confirmation should open the review writer in order detail",
+  );
+  const reviewForm = document.querySelector("[data-review-form]");
+  assert.ok(reviewForm, "confirmed order detail should expose review form");
+  input(reviewForm.querySelector('[name="rating"]'), "5");
+  input(reviewForm.querySelector('[name="title"]'), "테스트 리뷰");
+  input(
+    reviewForm.querySelector('[name="content"]'),
+    "구매확정 후 작성한 리뷰입니다.",
+  );
+  click(dom.window, reviewForm.querySelector('[type="submit"]'));
+  await waitFor(
+    () =>
+      JSON.parse(localStorage.getItem("beauty-ref-demo-store-v1"))
+        .productReviews?.[0]?.title === "테스트 리뷰",
+    "review should be stored after submit",
+  );
+  const reviewStore = JSON.parse(
+    localStorage.getItem("beauty-ref-demo-store-v1"),
+  );
+  assert.equal(
+    reviewStore.productReviews[0].title,
+    "테스트 리뷰",
+    "confirmed member should be able to save a product review",
+  );
+  click(dom.window, document.querySelector("#logoHome"));
+  click(
+    dom.window,
+    document.querySelector(
+      `.product-card[data-id="${latestOrder.items[0].productId}"]`,
+    ),
+  );
+  assert.match(
+    document.querySelector(".review-strip").textContent,
+    /테스트 리뷰|상세 리뷰 보기/,
+    "saved product review should appear on the product detail summary",
   );
 
   submitManagementLogin(dom.window, "admin", "adminChang", "Chang$0909");

@@ -1,6 +1,8 @@
 import { formatMoney } from "../utils/format.js";
 import { confirmPurchase } from "../domain/order-processing.js";
 
+// 회원/인증 컨트롤러.
+// 로그인/회원가입, 개인회원 내정보, 구매확정 후 리뷰 작성까지 회원이 직접 보는 화면을 담당한다.
 export function createAuthController({
   dom,
   store,
@@ -11,8 +13,8 @@ export function createAuthController({
   showToast,
 }) {
   migrateMemberAuthDefaults();
-  // Demo-only address lookup data. Replace this list with a postcode API adapter
-  // when connecting to a real shipping address service.
+  // 데모용 주소 조회 데이터.
+  // 실제 우편번호 API를 연결할 때는 이 배열을 API 어댑터로 교체하면 된다.
   const ADDRESS_LOOKUP_PRESETS = [
     {
       label: "강남 쇼룸",
@@ -50,8 +52,8 @@ export function createAuthController({
   }
 
   function openProfile() {
-    // Member self-service is opened from the header member name.
-    // Admin/Agency management links are reserved for back-office roles only.
+    // 헤더의 회원 이름을 누르면 열리는 개인회원 셀프서비스 화면.
+    // Admin/Agency 관리 화면은 별도 관리 로그인 흐름으로만 진입한다.
     const member = getCurrentMember();
     if (!member) {
       openAuth("login");
@@ -299,6 +301,8 @@ export function createAuthController({
   }
 
   function createProfileView(member) {
+    // 마이페이지 전체 HTML을 조립한다.
+    // 회원 기준 주문/포인트/추천 링크를 store에서 필터링해 각 탭에 전달한다.
     const orders = store.orders.filter((order) => order.memberId === member.id);
     const points = store.pointLedger.filter(
       (point) => point.memberId === member.id,
@@ -345,8 +349,8 @@ export function createAuthController({
           </div>
         </section>
         <nav class="profile-top-nav" aria-label="내정보 메뉴">
-          ${createProfileTabButton("account", "계정/배송지", true)}
-          ${createProfileTabButton("orders", "구매 내역", false)}
+          ${createProfileTabButton("orders", "구매 내역", true)}
+          ${createProfileTabButton("account", "계정/배송지", false)}
           ${createProfileTabButton("points", "포인트 관리", false)}
           ${createProfileTabButton("links", "추천 링크", false)}
           ${createProfileTabButton("security", "보안", false)}
@@ -359,7 +363,7 @@ export function createAuthController({
         </div>
         <div class="profile-service-layout">
           <div class="profile-tab-panels">
-            <section class="profile-tab-panel" data-profile-panel="account">
+            <section class="profile-tab-panel is-hidden" data-profile-panel="account">
               <div class="profile-section-head">
                 <div>
                   <div class="product-category">Account</div>
@@ -460,7 +464,7 @@ export function createAuthController({
                 </div>
               </form>
             </section>
-            <section class="profile-tab-panel is-hidden" data-profile-panel="orders">
+            <section class="profile-tab-panel" data-profile-panel="orders">
               ${createProfileOrderDashboard(sortOrderHistory(orders), stats)}
               ${createExpandableProfileSection("orders", "구매 내역", sortOrderHistory(orders), createProfileOrderRow, "구매이력이 없습니다.")}
               <section class="profile-order-detail is-hidden" id="profileOrderDetail" aria-live="polite"></section>
@@ -660,6 +664,8 @@ export function createAuthController({
   }
 
   function createProfileOrderRow(order) {
+    // 구매내역 한 줄.
+    // 미확정 주문은 구매확정 버튼, 확정 주문은 확정완료 상태 버튼으로 구분한다.
     const firstItem = order.items?.[0];
     const itemCount = (order.items || []).reduce(
       (sum, item) => sum + Number(item.qty || 0),
@@ -682,14 +688,27 @@ export function createAuthController({
       </div>
       <div class="profile-row-actions">
         <button class="buy-button mini-button" type="button" data-profile-order-detail="${order.id}">주문 상세</button>
-        <button class="cart-button mini-button" type="button" data-profile-tab="orders">문의 준비</button>
+        ${createOrderConfirmAction(order)}
       </div>
     </article>
   `;
   }
 
+  function createOrderConfirmAction(order) {
+    if (order.confirmedAt) {
+      return `<button class="cart-button mini-button profile-confirm-done" type="button" disabled>확정완료</button>`;
+    }
+
+    return `<button class="buy-button mini-button" type="button" data-confirm-order="${order.id}">구매확정</button>`;
+  }
+
   function createProfileOrderDetail(order) {
+    // 주문 상세.
+    // 구매확정 전에는 예정 포인트와 구매확정 버튼을 보여주고, 확정 후에는 리뷰 작성 섹션을 붙인다.
     const address = order.shippingAddress || {};
+    const reviewSection = order.confirmedAt
+      ? createOrderReviewSection(order)
+      : "";
 
     return `
     <div class="profile-history-head">
@@ -704,7 +723,7 @@ export function createAuthController({
       <div><span>배송상태</span><strong>${createShippingStatusLabel(order.shippingStatus)}</strong></div>
       <div><span>택배사</span><strong>${order.courier || "출고 전"}</strong></div>
       <div><span>송장번호</span><strong>${order.trackingNumber || "등록 대기"}</strong></div>
-      <div><span>배송지</span><strong>${formatProfileAddress(address)}</strong></div>
+      <div class="profile-address-compact"><span>배송지</span><strong>${formatProfileAddress(address)}</strong></div>
       <div><span>상품금액</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>배송비</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "무료"}</strong></div>
       <div><span>포인트 사용</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
@@ -729,7 +748,79 @@ export function createAuthController({
         )
         .join("")}
     </div>
+    ${reviewSection}
   `;
+  }
+
+  function createOrderReviewSection(order) {
+    return `
+    <section class="profile-review-writer">
+      <div class="profile-history-head">
+        <div>
+          <div class="product-category">Product review</div>
+          <span>구매확정된 상품만 리뷰를 작성할 수 있습니다. 평점은 5점 만점입니다.</span>
+        </div>
+      </div>
+      <div class="profile-list">
+        ${(order.items || [])
+          .map((item) => createOrderReviewForm(order, item))
+          .join("")}
+      </div>
+    </section>
+  `;
+  }
+
+  function createOrderReviewForm(order, item) {
+    // 리뷰는 주문/상품/회원 조합당 1개만 허용한다.
+    // 사진 첨부는 FileReader로 data URL을 만들어 store.productReviews에 저장한다.
+    const review = findProductReview(order.id, item.productId);
+    if (review) {
+      return `
+      <article class="profile-row profile-review-done">
+        <div>
+          <strong>${escapeHtml(item.productKo || item.productName)}</strong>
+          <span>작성 완료 · ${review.createdAt}</span>
+        </div>
+        <div>
+          <strong>${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}</strong>
+          <span>${escapeHtml(review.title)}</span>
+        </div>
+      </article>
+    `;
+    }
+
+    return `
+    <form class="profile-review-form" data-review-form data-review-order="${order.id}" data-review-product="${item.productId}">
+      <div class="profile-review-target">
+        <strong>${escapeHtml(item.productKo || item.productName)}</strong>
+        <span>${escapeHtml(item.option || "기본 옵션")} · ${item.qty}개</span>
+      </div>
+      <label>평점
+        <select class="option-select" name="rating">
+          <option value="5">★★★★★ 5점</option>
+          <option value="4">★★★★☆ 4점</option>
+          <option value="3">★★★☆☆ 3점</option>
+          <option value="2">★★☆☆☆ 2점</option>
+          <option value="1">★☆☆☆☆ 1점</option>
+        </select>
+      </label>
+      <label>요약 제목<input class="quantity-input" name="title" maxlength="60" placeholder="리뷰 제목을 입력하세요." /></label>
+      <label class="profile-review-wide">상세 리뷰<textarea class="quantity-input" name="content" rows="4" placeholder="사용감, 배송, 제품 만족도를 적어주세요."></textarea></label>
+      <label>사진<input class="quantity-input" name="image" type="file" accept="image/*" /></label>
+      <p class="shipment-message" data-review-message aria-live="polite"></p>
+      <button class="buy-button mini-button" type="submit">리뷰 등록</button>
+    </form>
+  `;
+  }
+
+  function findProductReview(orderId, productId) {
+    const member = getCurrentMember();
+    return (store.productReviews || []).find(
+      (review) =>
+        review.orderId === orderId &&
+        review.productId === productId &&
+        review.memberId === member?.id,
+    );
   }
 
   function createShippingStatusLabel(status) {
@@ -744,13 +835,10 @@ export function createAuthController({
   }
 
   function formatProfileAddress(address = {}) {
-    const recipient = [address.recipient, address.phone]
-      .filter(Boolean)
-      .join(" / ");
     const location = [address.postcode, address.address, address.addressDetail]
       .filter(Boolean)
       .join(" ");
-    return [recipient, location].filter(Boolean).join(" · ") || "-";
+    return location || "-";
   }
 
   function createProfilePointRow(point) {
@@ -844,6 +932,7 @@ export function createAuthController({
   }
 
   function bindProfileEvents() {
+    // 프로필 팝업 안에서 일어나는 탭 전환, 정보 저장, 구매확정, 리뷰 작성 이벤트를 연결한다.
     document
       .querySelector("#profileClose")
       ?.addEventListener("click", closeAuth);
@@ -902,32 +991,119 @@ export function createAuthController({
       .querySelectorAll("[data-profile-order-detail]")
       .forEach((button) => {
         button.addEventListener("click", () => {
-          const order = store.orders.find(
-            (item) => item.id === button.dataset.profileOrderDetail,
-          );
-          const detail = document.querySelector("#profileOrderDetail");
-          if (!order || !detail) return;
-
-          detail.innerHTML = createProfileOrderDetail(order);
-          detail.classList.remove("is-hidden");
-          detail
-            .querySelector("[data-profile-order-detail-close]")
-            ?.addEventListener("click", () =>
-              detail.classList.add("is-hidden"),
-            );
-          detail
-            .querySelector("[data-confirm-order]")
-            ?.addEventListener("click", (event) => {
-              const orderId = event.currentTarget.dataset.confirmOrder;
-              if (!confirmPurchase(store, orderId, "member")) return;
-              persistStore(store);
-              updateSessionUi();
-              showToast("구매확정이 완료되어 포인트가 적립되었습니다.");
-              openProfile();
-              activateProfileTab("orders");
-            });
+          openProfileOrderDetail(button.dataset.profileOrderDetail);
         });
       });
+    document.querySelectorAll("[data-confirm-order]").forEach((button) => {
+      button.addEventListener("click", () => {
+        confirmOrderAndOpenReview(button.dataset.confirmOrder);
+      });
+    });
+  }
+
+  function openProfileOrderDetail(orderId) {
+    const order = store.orders.find((item) => item.id === orderId);
+    const detail = document.querySelector("#profileOrderDetail");
+    if (!order || !detail) return;
+
+    detail.innerHTML = createProfileOrderDetail(order);
+    detail.classList.remove("is-hidden");
+    bindProfileOrderDetailEvents(detail, order.id);
+  }
+
+  function bindProfileOrderDetailEvents(detail, orderId) {
+    detail
+      .querySelector("[data-profile-order-detail-close]")
+      ?.addEventListener("click", () => detail.classList.add("is-hidden"));
+    detail
+      .querySelector("[data-confirm-order]")
+      ?.addEventListener("click", (event) => {
+        confirmOrderAndOpenReview(event.currentTarget.dataset.confirmOrder);
+      });
+    detail.querySelectorAll("[data-review-form]").forEach((form) => {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const saved = await saveProductReview(event.currentTarget);
+        if (!saved) return;
+        const refreshedOrder = store.orders.find((item) => item.id === orderId);
+        detail.innerHTML = createProfileOrderDetail(refreshedOrder);
+        bindProfileOrderDetailEvents(detail, orderId);
+        showToast("리뷰가 등록되었습니다.");
+      });
+    });
+  }
+
+  function confirmOrderAndOpenReview(orderId) {
+    if (!confirmPurchase(store, orderId, "member")) return;
+    persistStore(store);
+    updateSessionUi();
+    showToast("구매확정이 완료되었습니다. 리뷰를 남겨주세요.");
+    openProfile();
+    activateProfileTab("orders");
+    openProfileOrderDetail(orderId);
+  }
+
+  async function saveProductReview(form) {
+    // 구매확정된 주문만 리뷰를 저장한다.
+    // 저장된 리뷰는 상품 상세 페이지에서 productId 기준으로 모아 보여준다.
+    const member = getCurrentMember();
+    const order = store.orders.find(
+      (item) => item.id === form.dataset.reviewOrder,
+    );
+    const productId = form.dataset.reviewProduct;
+    const message = form.querySelector("[data-review-message]");
+    if (!member || !order?.confirmedAt) {
+      if (message)
+        message.textContent = "구매확정 후 리뷰를 작성할 수 있습니다.";
+      return false;
+    }
+    if (findProductReview(order.id, productId)) {
+      if (message) message.textContent = "이미 작성한 리뷰가 있습니다.";
+      return false;
+    }
+
+    const title = form.querySelector('[name="title"]').value.trim();
+    const content = form.querySelector('[name="content"]').value.trim();
+    if (!title || !content) {
+      if (message)
+        message.textContent = "요약 제목과 상세 리뷰를 입력해주세요.";
+      return false;
+    }
+
+    const imageFile = form.querySelector('[name="image"]')?.files?.[0];
+    const image = imageFile ? await readImageAsDataUrl(imageFile) : "";
+    const item = (order.items || []).find(
+      (orderItem) => orderItem.productId === productId,
+    );
+    store.productReviews = store.productReviews || [];
+    store.productReviews.unshift({
+      id: `review-${Date.now()}`,
+      productId,
+      orderId: order.id,
+      memberId: member.id,
+      memberName: member.name || member.userId || "회원",
+      rating: Math.min(
+        5,
+        Math.max(1, Number(form.querySelector('[name="rating"]').value || 5)),
+      ),
+      title,
+      content,
+      image,
+      createdAt: new Date().toISOString().slice(0, 10),
+      productName: item?.productName || "",
+      productKo: item?.productKo || "",
+    });
+    persistStore(store);
+    return true;
+  }
+
+  function readImageAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result || "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   }
 
   function activateProfileTab(tab) {

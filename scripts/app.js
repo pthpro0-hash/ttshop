@@ -4,10 +4,10 @@ import { createAuthController } from "./ui/auth.js";
 import { createManagementController } from "./ui/management.js";
 import { createShopController } from "./ui/shop.js";
 
-// App entry point.
-// - Loads one shared store object from SQLite API or browser fallback storage.
-// - Wires the three UI controllers: shop, auth/profile, admin/agency management.
-// - Keeps session state in store.currentMemberId so every module reads the same member.
+// 앱 진입점.
+// - SQLite API 또는 브라우저 fallback 저장소에서 하나의 store 객체를 읽는다.
+// - 쇼핑, 회원/내정보, Admin/Agency 관리 컨트롤러를 같은 store에 연결한다.
+// - 로그인 세션은 store.currentMemberId 하나로 관리해 모든 화면이 동일한 회원 상태를 본다.
 const appReady = initializeApp();
 window.__beautyAppReady = appReady;
 
@@ -28,8 +28,8 @@ async function initializeApp() {
     logoutButton: document.querySelector("#logoutButton"),
   };
 
-  // The store is intentionally passed by reference to every controller.
-  // After each mutation, controllers call saveStore() so SQLite and fallback storage stay synced.
+  // store는 일부러 참조로 공유한다.
+  // 각 컨트롤러가 변경 후 saveStore()를 호출하면 SQLite와 브라우저 fallback 저장소가 함께 동기화된다.
   const store = await loadStore();
   autoConfirmEligibleOrders(store);
   await saveStore(store);
@@ -60,8 +60,8 @@ async function initializeApp() {
   }
 
   function requireLogin() {
-    // Purchase actions share this guard. It prevents cart/checkout/pay flows
-    // from progressing when there is no active member session.
+    // 장바구니, 바로구매, 결제 진입이 공통으로 사용하는 로그인 가드.
+    // 활성 회원 세션이 없으면 구매 흐름을 진행하지 않고 로그인 팝업을 연다.
     const member = getCurrentMember();
     if (member?.status === "active") return true;
     if (member) {
@@ -135,8 +135,8 @@ async function initializeApp() {
   });
 
   document.addEventListener("click", (event) => {
-    // Management links are rendered inside auth modals and dashboard content.
-    // A single delegated handler keeps Admin/Agency entry behavior consistent.
+    // Admin/Agency 진입 링크는 로그인 팝업과 관리 화면 내부에 모두 렌더링될 수 있다.
+    // 문서 레벨 위임 이벤트로 묶어 어디서 눌러도 동일한 로그인/관리 화면 흐름을 유지한다.
     const agencyJoinLink = event.target.closest("[data-agency-join-link]");
     if (agencyJoinLink) {
       event.preventDefault();

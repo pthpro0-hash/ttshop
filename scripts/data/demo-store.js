@@ -6,9 +6,9 @@ const DB_VERSION = 1;
 const DB_STORE = "app-state";
 const DB_STATE_KEY = "store";
 
-// Canonical in-memory shape for the whole demo.
-// Server mode persists this object into SQLite. File:// mode stores the same
-// shape in IndexedDB/localStorage so the UI can run without a backend.
+// 데모 앱 전체에서 기준이 되는 store 구조.
+// 서버 모드는 이 객체를 SQLite에 저장하고, file:// 실행은 같은 구조를 IndexedDB/localStorage에 저장한다.
+// UI 모듈은 저장소 종류를 몰라도 항상 같은 shape를 사용한다.
 export const defaultStore = {
   currentMemberId: "",
   settings: {
@@ -198,6 +198,20 @@ export const defaultStore = {
       status: "active",
     },
   ],
+  productReviews: [
+    {
+      id: "review-001",
+      productId: "device-led",
+      orderId: "order-001",
+      memberId: "member-a",
+      memberName: "홍길동",
+      rating: 5,
+      title: "홈케어용으로 만족합니다",
+      content: "사용법이 어렵지 않고 패키지도 깔끔해서 꾸준히 쓰기 좋습니다.",
+      image: "",
+      createdAt: "2026-05-30",
+    },
+  ],
 };
 
 function normalizeDetailImages(product) {
@@ -221,12 +235,11 @@ function getStorage() {
 }
 
 export async function loadStore() {
-  // Priority:
-  // 1. Local server SQLite API when the app is opened through localhost.
-  // 2. IndexedDB snapshot for file:// or offline fallback.
-  // 3. localStorage legacy backup.
-  // Local product edits may be merged into a fresh server seed so admin-created
-  // products are not lost when switching between file and server preview.
+  // 저장소 우선순위:
+  // 1. localhost로 실행하면 로컬 서버 SQLite API 사용
+  // 2. file:// 또는 오프라인 fallback에서는 IndexedDB snapshot 사용
+  // 3. 구버전 백업이 있을 경우 localStorage 사용
+  // 서버/파일 미리보기를 오가도 Admin에서 추가한 상품이 사라지지 않도록 로컬 상품을 병합한다.
   const serverStore = await loadStoreFromServer();
   if (serverStore) {
     const localStore = await getBestLocalStore();
@@ -263,8 +276,8 @@ export async function loadStore() {
 }
 
 export async function saveStore(store) {
-  // Keep localStorage as a lightweight compatibility backup even when the
-  // SQLite API is available. Tests and file preview use this same fallback path.
+  // SQLite API가 있어도 localStorage 백업을 같이 유지한다.
+  // 테스트와 file:// 미리보기는 이 fallback 경로를 사용한다.
   const snapshot = normalizeStore(store);
   getStorage()?.setItem(STORE_KEY, JSON.stringify(snapshot));
 
@@ -302,6 +315,7 @@ function shouldMigrateLocalStoreToServer(serverStore, localStore) {
 }
 
 function mergeLocalProductsIntoServer(serverStore, localStore) {
+  // file:// 환경에서 등록한 상품이 서버 미리보기로 전환될 때 사라지지 않도록 누락 상품만 병합한다.
   if (!localStore?.products?.length) return serverStore;
 
   const serverSnapshot = normalizeStore(serverStore);
@@ -322,6 +336,8 @@ function mergeLocalProductsIntoServer(serverStore, localStore) {
 }
 
 function getStoreWeight(store) {
+  // 서버/브라우저 저장소 중 어느 쪽이 실제 사용 데이터에 가까운지 판단하는 가중치.
+  // 회원, 주문, 포인트, 리뷰처럼 유실되면 안 되는 데이터를 상품 기본값보다 높게 본다.
   if (!store) return 0;
   const snapshot = normalizeStore(store);
 
@@ -331,6 +347,7 @@ function getStoreWeight(store) {
     snapshot.pointLedger.length * 5 +
     snapshot.agencySettlementLedger.length * 4 +
     snapshot.personalReferralLinks.length * 3 +
+    snapshot.productReviews.length * 3 +
     snapshot.products.length * 2 +
     snapshot.agencies.length +
     (snapshot.currentMemberId ? 2 : 0) +
@@ -353,6 +370,7 @@ function normalizeStore(store) {
       cloneDefaultStore().agencySettlementLedger,
     personalReferralLinks:
       store?.personalReferralLinks || cloneDefaultStore().personalReferralLinks,
+    productReviews: store?.productReviews || cloneDefaultStore().productReviews,
   };
 }
 

@@ -1,7 +1,6 @@
 export function completeBypassPayment({ cart, store, payment }) {
-  // Central order transaction for the demo checkout.
-  // The PG step is bypassed, but business side effects are real in the store:
-  // order creation, stock decrement, point use/earn, referral links, and agency settlement.
+  // 데모 결제의 중심 트랜잭션.
+  // PG 결제창만 우회하고, 주문 생성/재고 차감/포인트 사용/추천 링크/대리점 정산 장부는 실제 store에 반영한다.
   const member = store.members.find((item) => item.id === payment.memberId);
   if (!member) {
     throw new Error("결제 처리 대상 회원을 찾을 수 없습니다.");
@@ -122,6 +121,8 @@ export function completeBypassPayment({ cart, store, payment }) {
 }
 
 export function confirmPurchase(store, orderId, confirmedBy = "member") {
+  // 포인트는 결제 직후 바로 적립하지 않고 purchase_pending으로 둔다.
+  // 회원 구매확정 또는 14일 자동확정 시 purchase_earn으로 전환하며 실제 보유 포인트에 더한다.
   const order = store.orders.find((item) => item.id === orderId);
   if (!order || order.confirmedAt) return false;
 
@@ -136,6 +137,7 @@ export function confirmPurchase(store, orderId, confirmedBy = "member") {
     (point) => point.orderId === order.id && point.type === "purchase_earn",
   );
   if (alreadyEarnedPoint) {
+    // 기존 DB에 이미 실제 적립된 주문이 있을 수 있어 중복 적립을 방지한다.
     alreadyEarnedPoint.note = alreadyEarnedPoint.note || "구매확정 완료 적립";
     return true;
   }
@@ -172,6 +174,7 @@ export function confirmPurchase(store, orderId, confirmedBy = "member") {
 }
 
 export function autoConfirmEligibleOrders(store, today = new Date()) {
+  // 앱 시작 시 호출되어 구매일 기준 14일이 지난 미확정 주문을 자동 구매확정한다.
   let changed = false;
   (store.orders || []).forEach((order) => {
     if (order.confirmedAt || !order.paidAt) return;
@@ -187,8 +190,8 @@ export function autoConfirmEligibleOrders(store, today = new Date()) {
 }
 
 function normalizeShippingSnapshot(snapshot = {}, member = {}) {
-  // Persist a point-in-time shipping snapshot on the order.
-  // Member addresses can change later, but past orders should keep the original recipient/address.
+  // 주문 당시 배송지를 스냅샷으로 저장한다.
+  // 회원이 나중에 주소를 바꿔도 과거 주문의 수령인/주소는 그대로 유지되어야 한다.
   const fallback = member.address || {};
 
   return {
@@ -229,8 +232,8 @@ function createPurchasedProductReferralLinks({
   orderId,
   store,
 }) {
-  // Referral policy: one personal referral link per unique product in an order.
-  // Buying the same product multiple times still creates only one product link.
+  // 개인 추천 링크 정책: 주문 안에서 상품 1종당 링크 1개만 만든다.
+  // 같은 상품을 여러 개 구매해도 링크는 1개, 서로 다른 상품이면 각각 1개다.
   const links = [];
   const nextNumber = store.personalReferralLinks.length + 1;
   const uniqueProducts = new Map();
@@ -256,8 +259,8 @@ function createPurchasedProductReferralLinks({
 }
 
 function createAgencyProcessing({ order, store }) {
-  // Personal product referral purchases bypass agency commission.
-  // All other paid product amounts become agency settlement ledger candidates.
+  // 개인 상품 추천 링크 구매가 대리점 정산보다 우선한다.
+  // 개인 추천 구매가 아닌 주문만 대리점 영업비 정산 장부에 올라간다.
   if (order.referralSourceType === "personal_product") return null;
 
   const agency = store.agencies.find(

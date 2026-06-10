@@ -11,8 +11,8 @@ const defaultDbPath = join(dataDir, "beauty-shop.sqlite");
 const schemaPath = join(currentDir, "schema.sql");
 
 export function openShopDatabase(dbPath = defaultDbPath) {
-  // Opens the local SQLite DB, applies the base schema, then runs additive
-  // migrations so older demo databases keep working after new fields are added.
+  // 로컬 SQLite DB를 열고 기본 스키마와 추가 마이그레이션을 적용한다.
+  // 기존 개발 데이터가 남아 있어야 하므로 새 필드는 additive 방식으로만 추가한다.
   mkdirSync(dirname(dbPath), { recursive: true });
   const database = new DatabaseSync(dbPath);
   database.exec("PRAGMA foreign_keys = ON");
@@ -27,8 +27,8 @@ export function openShopDatabase(dbPath = defaultDbPath) {
 }
 
 function migrateDatabase(database) {
-  // Keep migrations additive. This project stores demo data locally, so dropping
-  // or recreating tables would erase the user's accounts/orders during development.
+  // 마이그레이션은 반드시 누적 추가 방식으로 유지한다.
+  // 테이블 삭제/재생성은 로컬 회원, 주문, 리뷰, 정산 데이터를 지울 수 있다.
   ensureColumn(database, "products", "detail_images", "TEXT");
   ensureColumn(database, "agencies", "contract_start", "TEXT");
   ensureColumn(database, "agencies", "contract_end", "TEXT");
@@ -78,8 +78,8 @@ function ensureColumn(database, table, column, definition) {
 }
 
 export function readStore(database) {
-  // Convert normalized SQL rows back into the single store object consumed by
-  // browser modules. UI code should not query tables directly.
+  // 정규화된 SQL row를 브라우저 UI가 쓰는 단일 store 객체로 되돌린다.
+  // UI 코드는 SQL 테이블을 직접 몰라도 되며, 항상 store만 읽고 쓴다.
   const store = cloneDefaultStore();
   const meta = Object.fromEntries(
     database
@@ -142,13 +142,17 @@ export function readStore(database) {
     .prepare("SELECT * FROM personal_referral_links ORDER BY id DESC")
     .all()
     .map(mapReferralLink);
+  store.productReviews = database
+    .prepare("SELECT * FROM product_reviews ORDER BY created_at DESC, id DESC")
+    .all()
+    .map(mapProductReview);
 
   return store;
 }
 
 export function writeStore(database, store) {
-  // Full snapshot write: the app mutates one store object, then this layer
-  // rewrites relational tables from that snapshot for deterministic local demos.
+  // 전체 스냅샷 저장 방식.
+  // 앱은 하나의 store 객체를 변경하고, DB 계층은 그 스냅샷을 관계형 테이블로 다시 써서 데모 상태를 단순하게 유지한다.
   const snapshot = normalizeStore(store);
   database.exec("BEGIN IMMEDIATE");
   try {
@@ -176,6 +180,9 @@ export function writeStore(database, store) {
     );
     snapshot.personalReferralLinks.forEach((link) =>
       insertReferralLink(database, link),
+    );
+    snapshot.productReviews.forEach((review) =>
+      insertProductReview(database, review),
     );
     database.exec("COMMIT");
   } catch (error) {
@@ -205,11 +212,13 @@ function normalizeStore(store) {
       store?.agencySettlementLedger || defaults.agencySettlementLedger,
     personalReferralLinks:
       store?.personalReferralLinks || defaults.personalReferralLinks,
+    productReviews: store?.productReviews || defaults.productReviews,
   };
 }
 
 function clearTables(database) {
   [
+    "product_reviews",
     "personal_referral_links",
     "agency_settlement_ledger",
     "point_ledger",
@@ -504,6 +513,29 @@ function insertReferralLink(database, link) {
     );
 }
 
+function insertProductReview(database, review) {
+  database
+    .prepare(
+      `
+      INSERT INTO product_reviews
+        (id, product_id, order_id, member_id, member_name, rating, title, content, image, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .run(
+      review.id,
+      review.productId,
+      review.orderId,
+      review.memberId,
+      review.memberName || "",
+      Math.min(5, Math.max(1, Number(review.rating) || 5)),
+      review.title || "",
+      review.content || "",
+      review.image || "",
+      review.createdAt || "",
+    );
+}
+
 function mapAgency(row) {
   return {
     id: row.id,
@@ -794,5 +826,20 @@ function mapReferralLink(row) {
     unitIndex: row.unit_index,
     code: row.code,
     status: row.status,
+  };
+}
+
+function mapProductReview(row) {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    orderId: row.order_id,
+    memberId: row.member_id,
+    memberName: row.member_name || "",
+    rating: row.rating,
+    title: row.title || "",
+    content: row.content || "",
+    image: row.image || "",
+    createdAt: row.created_at || "",
   };
 }

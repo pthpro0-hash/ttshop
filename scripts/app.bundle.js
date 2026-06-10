@@ -410,6 +410,22 @@
         status: "active",
       },
     ],
+    productReviews: [
+      {
+        id: "review-001",
+        productId: "device-led",
+        orderId: "order-001",
+        memberId: "member-a",
+        memberName: "\uD64D\uAE38\uB3D9",
+        rating: 5,
+        title:
+          "\uD648\uCF00\uC5B4\uC6A9\uC73C\uB85C \uB9CC\uC871\uD569\uB2C8\uB2E4",
+        content:
+          "\uC0AC\uC6A9\uBC95\uC774 \uC5B4\uB835\uC9C0 \uC54A\uACE0 \uD328\uD0A4\uC9C0\uB3C4 \uAE54\uB054\uD574\uC11C \uAFB8\uC900\uD788 \uC4F0\uAE30 \uC88B\uC2B5\uB2C8\uB2E4.",
+        image: "",
+        createdAt: "2026-05-30",
+      },
+    ],
   };
   function normalizeDetailImages(product) {
     if (Array.isArray(product.detailImages) && product.detailImages.length) {
@@ -526,6 +542,7 @@
       snapshot.pointLedger.length * 5 +
       snapshot.agencySettlementLedger.length * 4 +
       snapshot.personalReferralLinks.length * 3 +
+      snapshot.productReviews.length * 3 +
       snapshot.products.length * 2 +
       snapshot.agencies.length +
       (snapshot.currentMemberId ? 2 : 0) +
@@ -559,6 +576,9 @@
       personalReferralLinks:
         (store == null ? void 0 : store.personalReferralLinks) ||
         cloneDefaultStore().personalReferralLinks,
+      productReviews:
+        (store == null ? void 0 : store.productReviews) ||
+        cloneDefaultStore().productReviews,
     };
   }
   async function loadStoreFromServer() {
@@ -1276,8 +1296,8 @@
           </div>
         </section>
         <nav class="profile-top-nav" aria-label="\uB0B4\uC815\uBCF4 \uBA54\uB274">
-          ${createProfileTabButton("account", "\uACC4\uC815/\uBC30\uC1A1\uC9C0", true)}
-          ${createProfileTabButton("orders", "\uAD6C\uB9E4 \uB0B4\uC5ED", false)}
+          ${createProfileTabButton("orders", "\uAD6C\uB9E4 \uB0B4\uC5ED", true)}
+          ${createProfileTabButton("account", "\uACC4\uC815/\uBC30\uC1A1\uC9C0", false)}
           ${createProfileTabButton("points", "\uD3EC\uC778\uD2B8 \uAD00\uB9AC", false)}
           ${createProfileTabButton("links", "\uCD94\uCC9C \uB9C1\uD06C", false)}
           ${createProfileTabButton("security", "\uBCF4\uC548", false)}
@@ -1290,7 +1310,7 @@
         </div>
         <div class="profile-service-layout">
           <div class="profile-tab-panels">
-            <section class="profile-tab-panel" data-profile-panel="account">
+            <section class="profile-tab-panel is-hidden" data-profile-panel="account">
               <div class="profile-section-head">
                 <div>
                   <div class="product-category">Account</div>
@@ -1391,7 +1411,7 @@
                 </div>
               </form>
             </section>
-            <section class="profile-tab-panel is-hidden" data-profile-panel="orders">
+            <section class="profile-tab-panel" data-profile-panel="orders">
               ${createProfileOrderDashboard(sortOrderHistory(orders), stats)}
               ${createExpandableProfileSection("orders", "\uAD6C\uB9E4 \uB0B4\uC5ED", sortOrderHistory(orders), createProfileOrderRow, "\uAD6C\uB9E4\uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.")}
               <section class="profile-order-detail is-hidden" id="profileOrderDetail" aria-live="polite"></section>
@@ -1602,13 +1622,22 @@
       </div>
       <div class="profile-row-actions">
         <button class="buy-button mini-button" type="button" data-profile-order-detail="${order.id}">\uC8FC\uBB38 \uC0C1\uC138</button>
-        <button class="cart-button mini-button" type="button" data-profile-tab="orders">\uBB38\uC758 \uC900\uBE44</button>
+        ${createOrderConfirmAction(order)}
       </div>
     </article>
   `;
     }
+    function createOrderConfirmAction(order) {
+      if (order.confirmedAt) {
+        return `<button class="cart-button mini-button profile-confirm-done" type="button" disabled>\uD655\uC815\uC644\uB8CC</button>`;
+      }
+      return `<button class="buy-button mini-button" type="button" data-confirm-order="${order.id}">\uAD6C\uB9E4\uD655\uC815</button>`;
+    }
     function createProfileOrderDetail(order) {
       const address = order.shippingAddress || {};
+      const reviewSection = order.confirmedAt
+        ? createOrderReviewSection(order)
+        : "";
       return `
     <div class="profile-history-head">
       <div>
@@ -1622,7 +1651,7 @@
       <div><span>\uBC30\uC1A1\uC0C1\uD0DC</span><strong>${createShippingStatusLabel(order.shippingStatus)}</strong></div>
       <div><span>\uD0DD\uBC30\uC0AC</span><strong>${order.courier || "\uCD9C\uACE0 \uC804"}</strong></div>
       <div><span>\uC1A1\uC7A5\uBC88\uD638</span><strong>${order.trackingNumber || "\uB4F1\uB85D \uB300\uAE30"}</strong></div>
-      <div><span>\uBC30\uC1A1\uC9C0</span><strong>${formatProfileAddress(address)}</strong></div>
+      <div class="profile-address-compact"><span>\uBC30\uC1A1\uC9C0</span><strong>${formatProfileAddress(address)}</strong></div>
       <div><span>\uC0C1\uD488\uAE08\uC561</span><strong>${formatMoney(order.paidProductAmount)}</strong></div>
       <div><span>\uBC30\uC1A1\uBE44</span><strong>${order.shippingAmount ? formatMoney(order.shippingAmount) : "\uBB34\uB8CC"}</strong></div>
       <div><span>\uD3EC\uC778\uD2B8 \uC0AC\uC6A9</span><strong>${order.pointUsed ? `-${order.pointUsed.toLocaleString("ko-KR")}P` : "0P"}</strong></div>
@@ -1643,7 +1672,71 @@
         )
         .join("")}
     </div>
+    ${reviewSection}
   `;
+    }
+    function createOrderReviewSection(order) {
+      return `
+    <section class="profile-review-writer">
+      <div class="profile-history-head">
+        <div>
+          <div class="product-category">Product review</div>
+          <span>\uAD6C\uB9E4\uD655\uC815\uB41C \uC0C1\uD488\uB9CC \uB9AC\uBDF0\uB97C \uC791\uC131\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uD3C9\uC810\uC740 5\uC810 \uB9CC\uC810\uC785\uB2C8\uB2E4.</span>
+        </div>
+      </div>
+      <div class="profile-list">
+        ${(order.items || []).map((item) => createOrderReviewForm(order, item)).join("")}
+      </div>
+    </section>
+  `;
+    }
+    function createOrderReviewForm(order, item) {
+      const review = findProductReview(order.id, item.productId);
+      if (review) {
+        return `
+      <article class="profile-row profile-review-done">
+        <div>
+          <strong>${escapeHtml(item.productKo || item.productName)}</strong>
+          <span>\uC791\uC131 \uC644\uB8CC \xB7 ${review.createdAt}</span>
+        </div>
+        <div>
+          <strong>${"\u2605".repeat(review.rating)}${"\u2606".repeat(5 - review.rating)}</strong>
+          <span>${escapeHtml(review.title)}</span>
+        </div>
+      </article>
+    `;
+      }
+      return `
+    <form class="profile-review-form" data-review-form data-review-order="${order.id}" data-review-product="${item.productId}">
+      <div class="profile-review-target">
+        <strong>${escapeHtml(item.productKo || item.productName)}</strong>
+        <span>${escapeHtml(item.option || "\uAE30\uBCF8 \uC635\uC158")} \xB7 ${item.qty}\uAC1C</span>
+      </div>
+      <label>\uD3C9\uC810
+        <select class="option-select" name="rating">
+          <option value="5">\u2605\u2605\u2605\u2605\u2605 5\uC810</option>
+          <option value="4">\u2605\u2605\u2605\u2605\u2606 4\uC810</option>
+          <option value="3">\u2605\u2605\u2605\u2606\u2606 3\uC810</option>
+          <option value="2">\u2605\u2605\u2606\u2606\u2606 2\uC810</option>
+          <option value="1">\u2605\u2606\u2606\u2606\u2606 1\uC810</option>
+        </select>
+      </label>
+      <label>\uC694\uC57D \uC81C\uBAA9<input class="quantity-input" name="title" maxlength="60" placeholder="\uB9AC\uBDF0 \uC81C\uBAA9\uC744 \uC785\uB825\uD558\uC138\uC694." /></label>
+      <label class="profile-review-wide">\uC0C1\uC138 \uB9AC\uBDF0<textarea class="quantity-input" name="content" rows="4" placeholder="\uC0AC\uC6A9\uAC10, \uBC30\uC1A1, \uC81C\uD488 \uB9CC\uC871\uB3C4\uB97C \uC801\uC5B4\uC8FC\uC138\uC694."></textarea></label>
+      <label>\uC0AC\uC9C4<input class="quantity-input" name="image" type="file" accept="image/*" /></label>
+      <p class="shipment-message" data-review-message aria-live="polite"></p>
+      <button class="buy-button mini-button" type="submit">\uB9AC\uBDF0 \uB4F1\uB85D</button>
+    </form>
+  `;
+    }
+    function findProductReview(orderId, productId) {
+      const member = getCurrentMember2();
+      return (store.productReviews || []).find(
+        (review) =>
+          review.orderId === orderId &&
+          review.productId === productId &&
+          review.memberId === (member == null ? void 0 : member.id),
+      );
     }
     function createShippingStatusLabel(status) {
       const labels = {
@@ -1656,9 +1749,6 @@
       return labels[status] || createOrderStatusLabel(status);
     }
     function formatProfileAddress(address = {}) {
-      const recipient = [address.recipient, address.phone]
-        .filter(Boolean)
-        .join(" / ");
       const location = [
         address.postcode,
         address.address,
@@ -1666,7 +1756,7 @@
       ]
         .filter(Boolean)
         .join(" ");
-      return [recipient, location].filter(Boolean).join(" \xB7 ") || "-";
+      return location || "-";
     }
     function createProfilePointRow(point) {
       const typeLabel = isPendingPoint2(point)
@@ -1813,35 +1903,127 @@
         .querySelectorAll("[data-profile-order-detail]")
         .forEach((button) => {
           button.addEventListener("click", () => {
-            var _a2, _b2;
-            const order = store.orders.find(
-              (item) => item.id === button.dataset.profileOrderDetail,
-            );
-            const detail = document.querySelector("#profileOrderDetail");
-            if (!order || !detail) return;
-            detail.innerHTML = createProfileOrderDetail(order);
-            detail.classList.remove("is-hidden");
-            (_a2 = detail.querySelector("[data-profile-order-detail-close]")) ==
-            null
-              ? void 0
-              : _a2.addEventListener("click", () =>
-                  detail.classList.add("is-hidden"),
-                );
-            (_b2 = detail.querySelector("[data-confirm-order]")) == null
-              ? void 0
-              : _b2.addEventListener("click", (event) => {
-                  const orderId = event.currentTarget.dataset.confirmOrder;
-                  if (!confirmPurchase(store, orderId, "member")) return;
-                  persistStore(store);
-                  updateSessionUi();
-                  showToast(
-                    "\uAD6C\uB9E4\uD655\uC815\uC774 \uC644\uB8CC\uB418\uC5B4 \uD3EC\uC778\uD2B8\uAC00 \uC801\uB9BD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-                  );
-                  openProfile();
-                  activateProfileTab("orders");
-                });
+            openProfileOrderDetail(button.dataset.profileOrderDetail);
           });
         });
+      document.querySelectorAll("[data-confirm-order]").forEach((button) => {
+        button.addEventListener("click", () => {
+          confirmOrderAndOpenReview(button.dataset.confirmOrder);
+        });
+      });
+    }
+    function openProfileOrderDetail(orderId) {
+      const order = store.orders.find((item) => item.id === orderId);
+      const detail = document.querySelector("#profileOrderDetail");
+      if (!order || !detail) return;
+      detail.innerHTML = createProfileOrderDetail(order);
+      detail.classList.remove("is-hidden");
+      bindProfileOrderDetailEvents(detail, order.id);
+    }
+    function bindProfileOrderDetailEvents(detail, orderId) {
+      var _a, _b;
+      (_a = detail.querySelector("[data-profile-order-detail-close]")) == null
+        ? void 0
+        : _a.addEventListener("click", () => detail.classList.add("is-hidden"));
+      (_b = detail.querySelector("[data-confirm-order]")) == null
+        ? void 0
+        : _b.addEventListener("click", (event) => {
+            confirmOrderAndOpenReview(event.currentTarget.dataset.confirmOrder);
+          });
+      detail.querySelectorAll("[data-review-form]").forEach((form) => {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const saved = await saveProductReview(event.currentTarget);
+          if (!saved) return;
+          const refreshedOrder = store.orders.find(
+            (item) => item.id === orderId,
+          );
+          detail.innerHTML = createProfileOrderDetail(refreshedOrder);
+          bindProfileOrderDetailEvents(detail, orderId);
+          showToast(
+            "\uB9AC\uBDF0\uAC00 \uB4F1\uB85D\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+          );
+        });
+      });
+    }
+    function confirmOrderAndOpenReview(orderId) {
+      if (!confirmPurchase(store, orderId, "member")) return;
+      persistStore(store);
+      updateSessionUi();
+      showToast(
+        "\uAD6C\uB9E4\uD655\uC815\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uB9AC\uBDF0\uB97C \uB0A8\uACA8\uC8FC\uC138\uC694.",
+      );
+      openProfile();
+      activateProfileTab("orders");
+      openProfileOrderDetail(orderId);
+    }
+    async function saveProductReview(form) {
+      var _a, _b;
+      const member = getCurrentMember2();
+      const order = store.orders.find(
+        (item2) => item2.id === form.dataset.reviewOrder,
+      );
+      const productId = form.dataset.reviewProduct;
+      const message = form.querySelector("[data-review-message]");
+      if (!member || !(order == null ? void 0 : order.confirmedAt)) {
+        if (message)
+          message.textContent =
+            "\uAD6C\uB9E4\uD655\uC815 \uD6C4 \uB9AC\uBDF0\uB97C \uC791\uC131\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.";
+        return false;
+      }
+      if (findProductReview(order.id, productId)) {
+        if (message)
+          message.textContent =
+            "\uC774\uBBF8 \uC791\uC131\uD55C \uB9AC\uBDF0\uAC00 \uC788\uC2B5\uB2C8\uB2E4.";
+        return false;
+      }
+      const title = form.querySelector('[name="title"]').value.trim();
+      const content = form.querySelector('[name="content"]').value.trim();
+      if (!title || !content) {
+        if (message)
+          message.textContent =
+            "\uC694\uC57D \uC81C\uBAA9\uACFC \uC0C1\uC138 \uB9AC\uBDF0\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694.";
+        return false;
+      }
+      const imageFile =
+        (_b =
+          (_a = form.querySelector('[name="image"]')) == null
+            ? void 0
+            : _a.files) == null
+          ? void 0
+          : _b[0];
+      const image = imageFile ? await readImageAsDataUrl(imageFile) : "";
+      const item = (order.items || []).find(
+        (orderItem) => orderItem.productId === productId,
+      );
+      store.productReviews = store.productReviews || [];
+      store.productReviews.unshift({
+        id: `review-${Date.now()}`,
+        productId,
+        orderId: order.id,
+        memberId: member.id,
+        memberName: member.name || member.userId || "\uD68C\uC6D0",
+        rating: Math.min(
+          5,
+          Math.max(1, Number(form.querySelector('[name="rating"]').value || 5)),
+        ),
+        title,
+        content,
+        image,
+        createdAt: /* @__PURE__ */ new Date().toISOString().slice(0, 10),
+        productName: (item == null ? void 0 : item.productName) || "",
+        productKo: (item == null ? void 0 : item.productKo) || "",
+      });
+      persistStore(store);
+      return true;
+    }
+    function readImageAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || "");
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
     }
     function activateProfileTab(tab) {
       document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
@@ -5526,7 +5708,8 @@
       },
     ];
     const state = {
-      // UI-only cart state. Persisted business records are created only after Pay now.
+      // 화면에서만 유지되는 장바구니 상태.
+      // 주문/포인트/정산 같은 영구 데이터는 Pay now 이후 도메인 로직에서 생성한다.
       activeCategory: "all",
       cart: [],
       pointToUse: 0,
@@ -5627,6 +5810,7 @@
   `;
     }
     function openDetail(product) {
+      var _a;
       if (!product) return;
       const copy =
         categoryCopy[product.category] || categoryCopy["\uD654\uC7A5\uD488"];
@@ -5678,10 +5862,10 @@
         if (addToCart(product)) openCart();
       });
       ["input", "change"].forEach((eventName) => {
-        var _a;
-        (_a = document.querySelector("#optionSelect")) == null
+        var _a2;
+        (_a2 = document.querySelector("#optionSelect")) == null
           ? void 0
-          : _a.addEventListener(eventName, () => {
+          : _a2.addEventListener(eventName, () => {
               updateSelectedOptionStock(product);
             });
       });
@@ -5695,6 +5879,14 @@
           openCart();
         }
       });
+      (_a = document.querySelector("[data-product-review-toggle]")) == null
+        ? void 0
+        : _a.addEventListener("click", () => {
+            var _a2;
+            (_a2 = document.querySelector("[data-product-review-list]")) == null
+              ? void 0
+              : _a2.classList.toggle("is-hidden");
+          });
     }
     function createPriceBox(product) {
       return `
@@ -5722,18 +5914,81 @@
         <p>${copy.usage}</p>
       </div>
     </section>
-    <section class="review-strip" id="review">
-      <div>
-        <div class="review-score">4.8</div>
-        <div class="small-label">Customer review</div>
-      </div>
-      <div class="review-copy">
-        \u201C${copy.review}\u201D<br />
-        \uBBF8\uB2C8\uBA40\uD55C \uC0C1\uC138 \uAD6C\uC870 \uC548\uC5D0\uC11C \uC81C\uD488 \uD6A8\uB2A5, \uC0AC\uC6A9\uBC95, \uB9AC\uBDF0, \uAD6C\uB9E4 \uBC84\uD2BC\uC744 \uD55C \uD654\uBA74\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uAC8C \uAD6C\uC131\uD588\uC2B5\uB2C8\uB2E4.
-      </div>
-    </section>
+    ${createProductReviewSection(product, copy)}
     ${createProductDetailImageStack(product)}
   `;
+    }
+    function createProductReviewSection(product, copy) {
+      const reviews = getProductReviews(product.id);
+      const average = reviews.length
+        ? (
+            reviews.reduce(
+              (sum, review) => sum + Number(review.rating || 0),
+              0,
+            ) / reviews.length
+          ).toFixed(1)
+        : "0.0";
+      const latest = reviews[0];
+      const visibleReviews = reviews.slice(0, 3);
+      const hiddenReviews = reviews.slice(3);
+      return `
+    <section class="review-strip product-review-summary" id="review">
+      <div>
+        <div class="review-score">${reviews.length ? average : "0.0"}</div>
+        <div class="small-label">Customer review \xB7 ${reviews.length}\uAC1C</div>
+      </div>
+      <div class="review-copy">
+        ${latest ? `\uD3C9\uC810 ${createReviewStars(Math.round(Number(average)))} \xB7 \uD3C9\uADE0 ${average} / 5<br />\u201C${escapeHtml(latest.title)}\u201D` : `\u201C${copy.review}\u201D<br />\uAD6C\uB9E4\uD655\uC815 \uD6C4 \uC791\uC131\uB41C \uC0C1\uD488 \uB9AC\uBDF0\uAC00 \uC774 \uC601\uC5ED\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.`}
+        <div class="product-review-preview">
+          ${visibleReviews.map(createProductReviewPreview).join("")}
+        </div>
+        <div class="product-review-actions">
+          <button class="cart-button mini-button" type="button" data-product-review-toggle>${reviews.length ? `\uC0C1\uC138 \uB9AC\uBDF0 \uBCF4\uAE30${hiddenReviews.length ? ` \xB7 \uB354\uBCF4\uAE30 ${hiddenReviews.length}\uAC1C` : ""}` : "\uB9AC\uBDF0 \uC900\uBE44\uC911"}</button>
+        </div>
+      </div>
+    </section>
+    <section class="product-review-list is-hidden" data-product-review-list>
+      <div class="profile-history-head">
+        <div>
+          <div class="product-category">Review detail</div>
+          <span>\uD3C9\uC810 5\uC810 \uB9CC\uC810 \xB7 \uCD5C\uC2E0\uC21C</span>
+        </div>
+      </div>
+      <div class="profile-list">
+        ${reviews.length ? reviews.map(createProductReviewRow).join("") : '<div class="admin-detail-empty">\uC544\uC9C1 \uB4F1\uB85D\uB41C \uB9AC\uBDF0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.</div>'}
+      </div>
+    </section>
+  `;
+    }
+    function createProductReviewRow(review) {
+      const stars = createReviewStars(review.rating);
+      return `
+    <article class="product-review-row">
+      ${review.image ? `<figure><img src="${review.image}" alt="${escapeAttribute2(review.title)} \uB9AC\uBDF0 \uC0AC\uC9C4" /></figure>` : ""}
+      <div>
+        <strong>${escapeHtml(review.title)}</strong>
+        <span>${stars} \xB7 ${escapeHtml(review.memberName || "\uD68C\uC6D0")} \xB7 ${review.createdAt || "-"}</span>
+        <p>${escapeHtml(review.content)}</p>
+      </div>
+    </article>
+  `;
+    }
+    function createProductReviewPreview(review) {
+      return `
+    <article>
+      <strong>${createReviewStars(review.rating)} ${escapeHtml(review.title)}</strong>
+      <span>${escapeHtml(review.memberName || "\uD68C\uC6D0")} \xB7 ${review.createdAt || "-"}</span>
+    </article>
+  `;
+    }
+    function createReviewStars(rating) {
+      const normalized = Math.min(5, Math.max(1, Number(rating) || 5));
+      return "\u2605".repeat(normalized) + "\u2606".repeat(5 - normalized);
+    }
+    function getProductReviews(productId) {
+      return [...(store.productReviews || [])]
+        .filter((review) => review.productId === productId)
+        .sort((a, b) => String(b.createdAt).localeCompare(a.createdAt));
     }
     function createProductDetailImageStack(product) {
       const detailImages = getProductDetailImages(product);

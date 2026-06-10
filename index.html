@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css?v=20260604-product-groups" />
   </head>
   <body>
+    <!-- 공통 헤더: 일반 쇼핑몰 메뉴, 로그인 세션, 장바구니 진입점을 한곳에서 관리한다. -->
     <header class="site-header">
       <div class="header-inner">
         <nav class="nav-left">
@@ -40,6 +41,7 @@
       </div>
     </header>
 
+    <!-- 메인 쇼핑 화면: 히어로, 카테고리 필터, 상품 그리드, 쇼룸 섹션을 포함한다. -->
     <main class="home-view" id="homeView">
       <section class="hero" id="story">
         <div class="hero-grid">
@@ -118,6 +120,7 @@
         </div>
       </section>
 
+      <!-- 상품 목록은 scripts/ui/shop.js에서 store.products 기준으로 렌더링한다. -->
       <section class="product-grid" id="productGrid"></section>
 
       <section class="showroom" id="showroom">
@@ -148,10 +151,12 @@
       </section>
     </main>
 
+    <!-- 화면 전환용 루트 컨테이너: JS 컨트롤러가 상세/인증/관리 화면 HTML을 주입한다. -->
     <main class="detail-view is-hidden" id="detailView"></main>
     <main class="auth-view is-hidden" id="authView"></main>
     <main class="management-view is-hidden" id="managementView"></main>
 
+    <!-- 장바구니 드로어: 상품 상세의 Add to cart와 연결되며 결제 화면으로 이동한다. -->
     <div class="cart-overlay" id="cartOverlay"></div>
     <aside class="cart-drawer">
       <div class="cart-head">
@@ -177,6 +182,7 @@
     </footer>
 
     <div class="toast" id="toast">장바구니에 상품이 담겼습니다.</div>
+    <!-- app.bundle.js는 scripts/app.js와 하위 모듈을 브라우저 실행용으로 묶은 파일이다. -->
     <script src="scripts/app.bundle.js?v=20260607-shipping-tracking"></script>
   </body>
 </html>

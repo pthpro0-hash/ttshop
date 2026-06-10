@@ -8,6 +8,8 @@
   --cream: #f3eee6;
   --max: 1440px;
 }
+
+/* 전역 기본값: 모든 화면에서 박스 크기 계산과 접근성 유틸리티를 통일한다. */
 * {
   box-sizing: border-box;
 }
@@ -53,6 +55,8 @@ select {
 .is-hidden {
   display: none !important;
 }
+
+/* 공통 헤더/내비게이션: 로그인 상태, 관리자/대리점 이동, 장바구니 버튼까지 포함한다. */
 .site-header {
   position: sticky;
   top: 0;
@@ -717,6 +721,82 @@ h1 {
   font-size: 14px;
   line-height: 1.8;
 }
+.product-review-actions {
+  margin-top: 16px;
+}
+.product-review-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.product-review-preview article {
+  padding: 12px 14px;
+  border: 1px solid #ded8ce;
+  background: #fff;
+}
+.product-review-preview strong,
+.product-review-preview span {
+  display: block;
+}
+.product-review-preview strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.product-review-preview span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+.product-review-list {
+  margin-top: 14px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.product-review-row {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid #ded8ce;
+  background: #fbfaf7;
+}
+.product-review-row figure {
+  width: 132px;
+  aspect-ratio: 1;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--cream);
+}
+.product-review-row img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-review-row strong,
+.product-review-row span,
+.product-review-row p {
+  display: block;
+}
+.product-review-row strong {
+  font-size: 18px;
+  line-height: 1.35;
+}
+.product-review-row span {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+.product-review-row p {
+  margin: 12px 0 0;
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1.7;
+}
 .product-detail-image-stack {
   display: grid;
   justify-items: center;
@@ -736,6 +816,8 @@ h1 {
   max-height: 980px;
   object-fit: cover;
 }
+
+/* 로그인/회원가입 팝업: 일반 로그인과 간편 로그인 UI, 가입 폼을 같은 모달에서 전환한다. */
 .auth-view {
   position: fixed;
   inset: 0;
@@ -1179,6 +1261,8 @@ h1 {
   letter-spacing: 0;
   text-transform: uppercase;
 }
+
+/* 개인회원 내정보: 구매내역을 기본으로 보여주고 포인트, 추천 링크, 배송지를 탭으로 관리한다. */
 .profile-dialog {
   width: min(1240px, 100%);
 }
@@ -1742,6 +1826,63 @@ h1 {
   font-size: 32px;
   line-height: 1.1;
 }
+.profile-confirm-done {
+  border-color: #2d7b55 !important;
+  background: #e6f4ed !important;
+  color: #1f6847 !important;
+  cursor: default;
+}
+.profile-address-compact strong {
+  font-size: 70% !important;
+  line-height: 1.45;
+}
+.profile-review-writer {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+.profile-review-form {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 0.8fr) 120px minmax(180px, 1fr) minmax(160px, 0.9fr)
+    auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px;
+  border: 1px solid #ded8ce;
+  background: #fff;
+}
+.profile-review-form label,
+.profile-review-target {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.profile-review-target strong {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.35;
+}
+.profile-review-form .quantity-input,
+.profile-review-form .option-select {
+  min-height: 46px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+.profile-review-form textarea.quantity-input {
+  min-height: 94px;
+  padding-top: 12px;
+  resize: vertical;
+}
+.profile-review-wide {
+  grid-column: span 2;
+}
+.profile-review-done strong {
+  letter-spacing: 0;
+}
 .profile-insight-grid,
 .profile-point-ledger-summary {
   display: grid;
@@ -2026,6 +2167,8 @@ h1 {
   font-size: clamp(30px, 4vw, 54px);
   line-height: 1.05;
 }
+
+/* Admin/Agency 관리 화면: 대시보드 카드, 상세 모달, 운영 폼이 공유하는 기본 레이아웃이다. */
 .management-view {
   width: min(var(--max), calc(100% - 44px));
   margin: 0 auto;
@@ -2400,6 +2543,8 @@ body.modal-open {
   font-weight: 900;
   vertical-align: middle;
 }
+
+/* Admin 상품관리: 기본정보, 이미지, 상세이미지, 옵션 SKU, 노출/판매상태를 그룹별로 편집한다. */
 .product-admin-form {
   grid-template-columns: 1fr;
   gap: 14px;
@@ -3544,8 +3689,17 @@ footer {
   .checkout-register-grid,
   .shipment-operation-summary,
   .shipment-filter-panel,
+  .profile-review-form,
+  .product-review-row,
   .product-list-summary {
     grid-template-columns: 1fr;
+  }
+  .profile-review-wide {
+    grid-column: auto;
+  }
+  .product-review-row figure {
+    width: 100%;
+    max-width: 260px;
   }
   .checkout-register-wide {
     grid-column: auto;
